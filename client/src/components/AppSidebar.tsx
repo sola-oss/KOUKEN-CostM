@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   BarChart3,
+  Clock,
   DollarSign,
   FolderOpen,
   Home,
-  PlusCircle,
+  Package,
   Settings,
   TrendingUp,
+  Users,
 } from "lucide-react";
 
 import {
@@ -29,24 +31,34 @@ const menuItems = [
     icon: Home,
   },
   {
-    title: "経費登録",
-    url: "/expenses/new",
-    icon: PlusCircle,
-  },
-  {
-    title: "プロジェクト",
+    title: "プロジェクト管理",
     url: "/projects",
     icon: FolderOpen,
   },
   {
-    title: "分析・レポート",
-    url: "/analytics",
-    icon: BarChart3,
+    title: "作業者管理",
+    url: "/workers",
+    icon: Users,
+  },
+  {
+    title: "工数管理",
+    url: "/work-hours",
+    icon: Clock,
+  },
+  {
+    title: "材料管理",
+    url: "/materials",
+    icon: Package,
   },
   {
     title: "原価分析",
     url: "/cost-analysis",
     icon: TrendingUp,
+  },
+  {
+    title: "レポート",
+    url: "/analytics",
+    icon: BarChart3,
   },
 ];
 

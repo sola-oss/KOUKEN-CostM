@@ -8,8 +8,10 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Home from "@/pages/Home";
-import ExpenseNew from "@/pages/ExpenseNew";
 import Projects from "@/pages/Projects";
+import Workers from "@/pages/Workers";
+import WorkHours from "@/pages/WorkHours";
+import Materials from "@/pages/Materials";
 import Analytics from "@/pages/Analytics";
 import CostAnalysis from "@/pages/CostAnalysis";
 import Settings from "@/pages/Settings";
@@ -19,8 +21,10 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/expenses/new" component={ExpenseNew} />
       <Route path="/projects" component={Projects} />
+      <Route path="/workers" component={Workers} />
+      <Route path="/work-hours" component={WorkHours} />
+      <Route path="/materials" component={Materials} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/cost-analysis" component={CostAnalysis} />
       <Route path="/settings" component={Settings} />
