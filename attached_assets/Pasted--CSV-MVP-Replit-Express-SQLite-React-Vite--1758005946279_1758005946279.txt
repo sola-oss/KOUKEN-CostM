@@ -1,0 +1,120 @@
+目的：
+「受注 → 工数（実績・承認） → 月次CSV出力」だけを最小で実装したMVPを、
+Replitで動く Express + SQLite + React（Vite）構成で生成してください。
+サーバとフロントの両方を作り、READMEとseedも付けて“即起動”できる状態にします。
+
+技術スタック：
+- Backend: Node.js + Express（JSでOK。型なしでシンプルに）
+- DB: SQLite（/server/db/app.sqlite）。DAO層を切って将来Postgresにも移せる構造。
+- Frontend: React + Vite + React Router v6
+- 状態管理: TanStack Query（軽く）
+- タイムゾーン: 保存UTC / 入出力は Asia/Tokyo へ変換（dayjs + timezone）
+- セキュリティ: helmet, cors（localhostのみ許可）, 簡易rate-limit
+- 認証（MVP）: .env の APP_ACCESS_CODE による共有パスコードミドルウェア
+
+最低スコープ（画面とAPI）：
+A) 受注（Sales Orders）
+  - 画面：受注一覧（/sales-orders）、新規受注（/sales-orders/new）、受注詳細（/sales-orders/:id）
+  - API：
+    - POST   /api/sales-orders  {customer_name, order_date, due_date?, note?}
+    - GET    /api/sales-orders?from=&to=&q=&page=&page_size=
+    - GET    /api/sales-orders/:id
+    - POST   /api/sales-orders/:id/confirm  （status: draft→confirmed）
+  - sales_orders: {id, so_no, customer_name, order_date, due_date, status(draft|confirmed|closed), note, created_at, updated_at}
+
+B) 工数（Time Entries）
+  - 画面：工数入力（/time-entries） … 手入力 or start/end、一覧・編集・削除
+          承認（/time-entries/approve） … manager/adminのみ承認可能
+  - API：
+    - POST   /api/time-entries   {employee_name, sales_order_id, start_at?, end_at?, minutes?, note?}
+        → minutesが無ければ start_at/end_at から計算。status=draft で作成
+    - GET    /api/time-entries?sales_order_id=&status=&from=&to=&page=&page_size=
+    - PATCH  /api/time-entries/:id   （編集）
+    - DELETE /api/time-entries/:id
+    - PATCH  /api/time-entries/:id/approve  （status: draft→approved、approved_at/approved_by記録）
+  - time_entries: {id, employee_name, sales_order_id, start_at, end_at, minutes, note, status(draft|approved), approved_at, approved_by, created_at, updated_at}
+  - employeesテーブルは作らず、MVPは employee_name の自由入力でOK（後でマスタ化可能）
+
+C) 月次CSV出力（受注別 集計）
+  - 画面：CSV出力（/reports） … yyyymm（例 2025-09）を指定 → ダウンロードボタン
+  - API：
+    - GET /api/exports/monthly.csv?yyyymm=YYYY-MM
+      • 集計ロジック：受注別に「総工数分（分）」「工数原価（円）」を算出
+      • 工数原価 = (minutes / 60) * default_hourly_cost_rate
+      • default_hourly_cost_rate は .env に HOURLY_COST=3000（円/時）などで指定
+      • CSVヘッダ：sales_order_id,so_no,customer_name,total_minutes,labor_cost,yyyymm
+
+DB DDL（SQLite、/server/migrations/001_init.sql）：
+- sales_orders(
+    id INTEGER PRIMARY KEY,
+    so_no TEXT UNIQUE NOT NULL,
+    customer_name TEXT NOT NULL,
+    order_date TEXT NOT NULL,   -- ISO-8601(UTC)
+    due_date TEXT,
+    status TEXT CHECK(status IN ('draft','confirmed','closed')) NOT NULL DEFAULT 'draft',
+    note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+- time_entries(
+    id INTEGER PRIMARY KEY,
+    sales_order_id INTEGER NOT NULL REFERENCES sales_orders(id),
+    employee_name TEXT NOT NULL,
+    start_at TEXT,    -- ISO-8601(UTC)
+    end_at TEXT,      -- ISO-8601(UTC)
+    minutes INTEGER,  -- start/endがあればサーバで算出
+    note TEXT,
+    status TEXT CHECK(status IN ('draft','approved')) NOT NULL DEFAULT 'draft',
+    approved_at TEXT,
+    approved_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+- approvals(
+    id INTEGER PRIMARY KEY,
+    time_entry_id INTEGER NOT NULL REFERENCES time_entries(id),
+    approver TEXT NOT NULL,
+    approved_at TEXT NOT NULL
+  );
+インデックス：
+- CREATE INDEX idx_sales_orders_dates ON sales_orders(order_date, due_date);
+- CREATE INDEX idx_time_entries_sales_order ON time_entries(sales_order_id);
+- CREATE INDEX idx_time_entries_status ON time_entries(status, created_at);
+
+バックエンド要件：
+- /server/index.js : Express本体。helmet/cors/rate-limit、JSONボディ、APIルート。
+- /server/db.js : SQLite接続（better-sqlite3でもsqlite3でも可）。マイグレーション実行関数。
+- /server/dao/*.js : salesOrdersDao、timeEntriesDao、reportsDao
+- バリデーション：zod相当 or 手書きチェック（必須と型の最小検証）
+- 認証：ミドルウェア checkAccessCode（リクエストヘッダ 'x-access-code' が .env APP_ACCESS_CODE と一致しないと401）
+- エラーハンドラ：400/401/404/409/500 をJSONで返却
+- CSV出力：text/csv; charset=utf-8、LF区切り、小数点は.、金額は小数第2位丸め
+- ロギング：各APIで所要時間msをconsole.log
+
+フロント要件（最小UI、プレーンでも可）：
+- ルーティング：
+  - /sales-orders（一覧＋検索/期間フィルタ）
+  - /sales-orders/new（受注登録フォーム：顧客名・受注日・納期・メモ）
+  - /sales-orders/:id（受注詳細：受注情報＋紐づく工数一覧）
+  - /time-entries（工数入力：employee_name、受注選択、start/end か minutes、メモ）
+  - /time-entries/approve（承認画面：status=draft を複数選択→承認）
+  - /reports（yyyymm入力→CSVダウンロード）
+- AppLayoutに簡易サイドバー（上記リンク）
+- TanStack QueryでAPI呼び出し（/client/src/shared/api.ts に集約）
+- .envのAPP_ACCESS_CODEを 'x-access-code' ヘッダで付与
+- 日時入力はローカル（Asia/Tokyo）で扱い、送信時にUTCへ変換。表示時はUTC→Asia/Tokyoに変換。
+
+コマンドとREADME：
+- npm run migrate（SQLiteファイル作成＆DDL適用）
+- npm run seed（sales_orders 10件、time_entries 100件のダミーデータ投入。直近2か月）
+- npm run dev（serverとclientを並行起動）／ReplitのRunボタンでも可
+- .env サンプル：
+  APP_ACCESS_CODE=changeme
+  DB_PATH=./server/db/app.sqlite
+  HOURLY_COST=3000
+
+品質チェック：
+- 受注作成→一覧に反映→詳細で確認
+- 工数作成（minutes直接 or start/end計算）→一覧→承認→ステータス変化
+- /api/exports/monthly.csv?yyyymm=YYYY-MM でCSVを取得し、受注別の total_minutes / labor_cost が正しく出る
+- 404が出ない（全ページ遷移OK）
