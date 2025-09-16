@@ -1,70 +1,80 @@
-# Cost Management Software Design Guidelines
+# Manufacturing Work Hour Management System Design Guidelines
 
 ## Design Approach
 **Selected Approach:** Design System Approach using Material Design
-**Justification:** Cost management software is utility-focused, information-dense, and requires stability over time. Material Design provides excellent data visualization components and professional aesthetics suitable for business applications.
+**Justification:** Manufacturing work hour management is utility-focused, information-dense, and stability-valued. Material Design provides excellent data visualization components and professional aesthetics suitable for industrial business applications.
 
 ## Core Design Elements
 
 ### Color Palette
 **Primary Colors:**
-- Light mode: 25 70% 45% (deep blue-green for trust and professionalism)
-- Dark mode: 25 60% 55% (lighter variant for better contrast)
+- Light mode: 215 70% 45% (professional blue for trust and reliability)
+- Dark mode: 215 60% 55% (lighter variant for contrast)
 
 **Supporting Colors:**
-- Success: 120 45% 50% (financial gains)
-- Warning: 35 85% 55% (budget alerts)
-- Error: 0 70% 50% (overages)
-- Neutral grays: 220 10% range from 15% to 95%
+- Success/Complete: 120 50% 45% (order completion, inventory adequate)
+- Warning/Pending: 45 85% 55% (schedule delays, low inventory)
+- Error/Critical: 0 70% 50% (production issues, stock out)
+- Neutral grays: 220 8% range from 15% to 95%
+
+**Status Indicators:**
+- Blue: In progress, scheduled
+- Green: Completed, adequate stock
+- Yellow: Attention needed, low stock
+- Red: Critical issues, urgent action required
 
 ### Typography
-**Font Family:** Google Fonts - Inter (primary), Noto Sans JP (Japanese support)
+**Font Family:** Google Fonts - Inter (primary), Noto Sans JP (Japanese manufacturing terms)
 **Hierarchy:**
-- Headers: 600 weight, sizes from text-2xl to text-4xl
+- Headers: 600 weight, text-xl to text-3xl
 - Body text: 400 weight, text-base and text-sm
-- Data/numbers: 500 weight for emphasis
+- Data/numbers: 500 weight for production metrics
 - Labels: 500 weight, text-sm
+- Manufacturing codes: 400 weight, monospace font for part numbers
 
 ### Layout System
-**Spacing Units:** Tailwind units of 2, 4, 6, and 8 (p-4, m-6, h-8, etc.)
-**Grid:** 12-column grid with consistent 6-unit gaps
-**Containers:** Max-width containers with 4-unit padding on mobile, 8-unit on desktop
+**Spacing Units:** Tailwind units of 2, 4, 6, and 8
+**Grid:** 12-column responsive grid with 6-unit gaps
+**Containers:** Max-width with 4-unit mobile, 8-unit desktop padding
 
 ### Component Library
 
 **Navigation:**
-- Sidebar navigation with collapsible sections
-- Breadcrumb navigation for deep pages
-- Tab navigation for related views (monthly/quarterly reports)
+- Sidebar with collapsible manufacturing modules (受注管理、製番管理、工数入力、在庫管理、出荷管理)
+- Breadcrumb navigation for production workflows
+- Tab navigation for daily/weekly/monthly views
 
 **Data Display:**
-- Clean data tables with zebra striping
-- Card-based cost summaries with subtle shadows
-- Progress bars for budget tracking
-- Donut charts for cost category breakdowns
-- Line charts for trend analysis
+- Production tables with sortable columns and row selection
+- Dashboard cards for KPIs (生産効率、納期達成率、在庫回転率)
+- Gantt-style charts for production scheduling
+- Progress bars for order completion status
+- Real-time status badges for equipment and orders
 
 **Forms:**
-- Grouped input fields with clear labels
-- Dropdown selectors for categories
-- Date range pickers for reporting periods
-- File upload areas with drag-and-drop styling
+- Time entry forms with dropdown work categories
+- Batch input forms for multiple work hours
+- Order entry with product selection and quantity
+- Inventory adjustment forms with reason codes
 
-**Core UI Elements:**
-- Floating action button for quick expense entry
-- Toast notifications for successful submissions
-- Modal dialogs for detailed cost analysis
-- Badge components for status indicators (over budget, on track)
+**Manufacturing-Specific Components:**
+- Production line status indicators
+- Work order cards with priority levels
+- Parts inventory grid with stock level colors
+- Shipping status timeline
+- Quality control checkboxes
 
 ## Key Design Principles
 
-1. **Data Clarity:** Use consistent spacing and typography to make financial data easily scannable
-2. **Professional Aesthetic:** Clean, minimal design that builds trust with business users
-3. **Japanese Localization:** Proper font support and layout considerations for Japanese text
-4. **Responsive Design:** Ensure tables and charts work well on both desktop and mobile
-5. **Visual Hierarchy:** Use color and typography to guide users through complex financial information
+1. **Industrial Clarity:** Clean layouts optimized for fast data entry during production shifts
+2. **Status Visibility:** Clear color coding for production states and inventory levels
+3. **Japanese Manufacturing:** Support for manufacturing terminology and workflow patterns
+4. **Mobile Responsiveness:** Floor-friendly mobile views for production data entry
+5. **Data Density:** Efficiently display complex production metrics without clutter
+6. **Professional Reliability:** Conservative design that builds confidence in mission-critical operations
 
 ## Images
-**Dashboard Charts:** Use clean, minimalist chart visualizations with the primary color palette
-**Icons:** Material Design icons for categories (materials, labor, equipment, overhead)
-**No Hero Image:** This is a utility application - focus on functional layouts over marketing imagery
+**Dashboard Visualizations:** Clean production charts and KPI graphs using the blue/gray color scheme
+**Icons:** Material Design icons for manufacturing functions (工場、在庫、出荷、品質管理)
+**No Hero Image:** Pure utility application focused on production efficiency over marketing appeal
+**Status Indicators:** Color-coded visual elements for equipment status and production progress

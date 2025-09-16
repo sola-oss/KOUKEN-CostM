@@ -5,30 +5,16 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import Home from "@/pages/Home";
-import Projects from "@/pages/Projects";
-import Workers from "@/pages/Workers";
-import WorkHours from "@/pages/WorkHours";
-import Materials from "@/pages/Materials";
-import Analytics from "@/pages/Analytics";
-import CostAnalysis from "@/pages/CostAnalysis";
-import Settings from "@/pages/Settings";
+import Dashboard from "@/pages/dashboard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/projects" component={Projects} />
-      <Route path="/workers" component={Workers} />
-      <Route path="/work-hours" component={WorkHours} />
-      <Route path="/materials" component={Materials} />
-      <Route path="/analytics" component={Analytics} />
-      <Route path="/cost-analysis" component={CostAnalysis} />
-      <Route path="/settings" component={Settings} />
+      <Route path="/" component={Dashboard} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -36,23 +22,26 @@ function Router() {
 
 function App() {
   const style = {
-    "--sidebar-width": "20rem",
-    "--sidebar-width-icon": "4rem",
+    "--sidebar-width": "17rem",
+    "--sidebar-width-icon": "3rem",
   };
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <ThemeProvider defaultTheme="light" storageKey="cost-management-theme">
+        <ThemeProvider defaultTheme="light" storageKey="production-management-theme">
           <SidebarProvider style={style as CSSProperties}>
             <div className="flex h-screen w-full">
               <AppSidebar />
               <div className="flex flex-col flex-1">
-                <header className="flex items-center justify-between p-4 border-b bg-background">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                <header className="flex items-center justify-between px-4 py-3 border-b bg-background">
+                  <div className="flex items-center gap-3">
+                    <SidebarTrigger data-testid="button-sidebar-toggle" />
+                    <h1 className="text-lg font-semibold">生産管理システム</h1>
+                  </div>
                   <ThemeToggle />
                 </header>
-                <main className="flex-1 overflow-auto">
+                <main className="flex-1 overflow-auto bg-muted/10">
                   <Router />
                 </main>
               </div>
