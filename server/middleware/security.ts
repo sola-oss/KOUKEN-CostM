@@ -29,15 +29,15 @@ export const helmetConfig = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       scriptSrc: process.env.NODE_ENV === 'development' 
-        ? ["'self'", "'unsafe-eval'", "blob:"] 
+        ? ["'self'", "'unsafe-eval'", "'unsafe-inline'", "blob:", "https:"] 
         : ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: process.env.NODE_ENV === 'development'
-        ? ["'self'", "ws:", "wss:"]
+        ? ["'self'", "ws:", "wss:", "http://localhost:*", "https:"]
         : ["'self'"],
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],

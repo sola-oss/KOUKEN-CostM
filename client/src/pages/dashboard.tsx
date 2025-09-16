@@ -90,7 +90,7 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">
               確認待ちの受注
             </p>
-            {metrics?.pendingOrders > 10 && (
+            {metrics && metrics.pendingOrders > 10 && (
               <Badge variant="secondary" className="mt-2">要対応</Badge>
             )}
           </CardContent>
@@ -124,7 +124,7 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">
               承認が必要な工数入力
             </p>
-            {metrics?.pendingTimeApprovals > 500 && (
+            {metrics && metrics.pendingTimeApprovals > 500 && (
               <Badge variant="destructive" className="mt-2">至急確認</Badge>
             )}
           </CardContent>
@@ -143,7 +143,7 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">
               納期遅延の可能性
             </p>
-            {metrics?.delayedOrders > 0 && (
+            {metrics && metrics.delayedOrders > 0 && (
               <Button variant="destructive" size="sm" className="mt-2 h-7">
                 <ArrowRight className="h-3 w-3 mr-1" />
                 詳細確認
