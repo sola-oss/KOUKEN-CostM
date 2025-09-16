@@ -341,6 +341,36 @@ export const invoice_lines = sqliteTable("invoice_lines", {
   invoiceIdx: index("idx_inv_lines_invoice").on(table.invoice_id),
 }));
 
+// ========== Simple Time Tracking (MVP) ==========
+export const simple_time_entries = sqliteTable("simple_time_entries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  employee_name: text("employee_name").notNull(),
+  sales_order_id: integer("sales_order_id").notNull().references(() => sales_orders.id),
+  start_at: text("start_at"), // ISO-8601(UTC)
+  end_at: text("end_at"), // ISO-8601(UTC)
+  minutes: integer("minutes"), // Calculated from start/end or directly input
+  note: text("note"),
+  status: text("status").notNull().default('draft'), // draft -> approved
+  approved_at: text("approved_at"),
+  approved_by: text("approved_by"),
+  created_at: text("created_at").notNull().default(sql`datetime('now')`),
+  updated_at: text("updated_at").notNull().default(sql`datetime('now')`),
+}, (table) => ({
+  salesOrderIdx: index("idx_simple_time_sales_order").on(table.sales_order_id),
+  statusIdx: index("idx_simple_time_status").on(table.status),
+  employeeIdx: index("idx_simple_time_employee").on(table.employee_name),
+  createdAtIdx: index("idx_simple_time_created").on(table.created_at),
+}));
+
+export const time_approvals = sqliteTable("time_approvals", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  simple_time_entry_id: integer("simple_time_entry_id").notNull().references(() => simple_time_entries.id),
+  approver: text("approver").notNull(),
+  approved_at: text("approved_at").notNull(),
+}, (table) => ({
+  timeEntryIdx: index("idx_time_approval_entry").on(table.simple_time_entry_id),
+}));
+
 // ========== Calendar & Support Tables ==========
 export const calendars = sqliteTable("calendars", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -445,3 +475,26 @@ export const insertPurchaseOrderSchema = createInsertSchema(purchase_orders).omi
   created_at: true,
   updated_at: true,
 });
+
+export const insertSimpleTimeEntrySchema = createInsertSchema(simple_time_entries).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export const insertTimeApprovalSchema = createInsertSchema(time_approvals).omit({
+  id: true,
+});
+
+// ========== Type Definitions ==========
+export type Employee = typeof employees.$inferSelect;
+export type Customer = typeof customers.$inferSelect;
+export type SalesOrder = typeof sales_orders.$inferSelect;
+export type SimpleTimeEntry = typeof simple_time_entries.$inferSelect;
+export type TimeApproval = typeof time_approvals.$inferSelect;
+
+export type InsertEmployee = typeof insertEmployeeSchema._type;
+export type InsertCustomer = typeof insertCustomerSchema._type;
+export type InsertSalesOrder = typeof insertSalesOrderSchema._type;
+export type InsertSimpleTimeEntry = typeof insertSimpleTimeEntrySchema._type;
+export type InsertTimeApproval = typeof insertTimeApprovalSchema._type;
