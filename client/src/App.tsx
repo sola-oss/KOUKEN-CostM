@@ -9,12 +9,14 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Dashboard from "@/pages/dashboard";
+import SalesOrders from "@/pages/sales-orders";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/sales-orders" component={SalesOrders} />
       <Route component={NotFound} />
     </Switch>
   );
