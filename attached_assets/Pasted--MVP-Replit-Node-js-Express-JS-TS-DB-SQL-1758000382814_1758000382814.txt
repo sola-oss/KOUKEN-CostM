@@ -1,0 +1,84 @@
+生産業向けの工数管理アプリ（MVP）をReplitで動かす構成を作ってください。
+
+技術スタック:
+- バックエンド: Node.js + Express（JSまたはTS）
+- DB: SQLite（DAO層を分離し、将来Postgresへ移行しやすい設計）
+- フロント: React (Vite) + シンプルUI（shadcn/uiなど）
+- テスト: supertestで最小限のAPIテスト
+- タイムゾーン: 保存UTC / 入出力はAsia/Tokyo
+
+対象業務フロー（11機能）:
+1. 受注入力 / 照会
+2. 製番手配入力 / 進捗照会（カレンダー表示・ドラッグで調整）
+3. 発注確定処理 / 入荷確定入力
+4. 工程手配入力 / 作業指示確定
+5. 作業実績入力（工数・承認フロー）
+6. 出荷確定入力
+7. 売上照会（CSV出力）
+
+追加で必須とする機能:
+- 権限管理: admin / manager / worker / viewer
+- 監査ログ: 確定/承認/取消を必ず記録
+- 品目マスタ (items) とUoM
+- 顧客 (customers) / 業者 (vendors 約300件)
+- タグ(tags)とカスタム属性(custom_fields)で柔軟に分類（セグメント固定は不要）
+- 稼働カレンダー / 能力上限チェック
+- 添付ファイル (attachments) / コメント (comments)
+- ダッシュボードで未処理件数や期日超過アラートを表示
+
+DBスキーマのポイント:
+- sales_orders / lines
+- production_orders（製番） / work_orders（工程） / work_instructions（作業指示）
+- purchase_orders / lines / receipts
+- time_entries（従業員工数） / external_time_entries（外注工数）
+- shipments / shipment_lines
+- invoices / invoice_lines
+- employees / vendors / customers / items / calendars / work_centers
+- attachments / comments / activity_logs
+- projectsには segment 列を削除し、代わりに tags(JSON), custom_fields(JSON) を追加
+
+APIエンドポイント例:
+- POST /api/sales-orders, GET /api/sales-orders, POST /api/sales-orders/:id/confirm
+- POST /api/production-orders, PATCH /api/production-orders/:id/schedule
+- GET /api/production-orders/:id/progress-calendar
+- POST /api/purchase-orders, POST /api/receipts/:id/confirm
+- POST /api/work-orders, POST /api/work-instructions/:id/confirm
+- POST /api/time-entries, PATCH /api/time-entries/:id/approve
+- POST /api/shipments/:id/confirm
+- GET /api/invoices?from=&to=&customer_id=
+- GET /api/reports/projects, /api/reports/production-progress, /api/reports/sales
+- GET /api/exports/monthly.csv?yyyymm=YYYY-MM
+- GET /api/vendors?query=&page=&page_size=
+- POST /api/vendors/import-csv
+- POST /api/attachments, GET /api/comments
+
+設計要件:
+- バリデーション: zodなどで入力検証
+- 状態遷移はガード（draft→confirmed→closed など）と409エラーを返す
+- ページング: limit/offset、最大page_size=100、X-Total-Countヘッダ
+- エラー処理: 共通ハンドラで400/401/403/404/409/500をJSON返却
+- セキュリティ: helmet, cors制限, rate-limit
+- 認証: .envのAPP_ACCESS_CODEによる簡易認証（将来Authに差し替え可能）
+- CSV: UTF-8 / LF / 小数点. / 金額は小数第2位で丸め
+- Seed: 顧客50件、業者300件、受注80件、製番120件、工程360件、従業員10名、工数2,000件程度
+
+フロント（React画面例）:
+- ダッシュボード: 未承認工数・未処理受注・遅延アラート
+- 受注入力/照会: 一覧・明細編集・確定
+- 製番進捗照会: カレンダーで日程ドラッグ調整
+- 工程/作業指示: 工程一覧・作業指示作成/確定
+- 作業実績: 入力・一覧・承認
+- 発注/入荷: PO作成・確定、入荷登録・確定
+- 出荷: 出荷確定
+- 売上照会: 期間/顧客フィルタ＋CSV出力
+- マスタ管理: 顧客/業者/品目/従業員
+- 添付・コメント: 各画面にタブ表示
+
+READMEに記載すべきこと:
+- npm run migrate でDDL作成
+- npm run seed でダミーデータ投入
+- npm run dev でserver/client起動
+- 環境変数 (APP_ACCESS_CODE, DB_PATH など)
+- 将来Postgres移行ガイド（DAO差し替え）
+
+最終的に、Replitで即動かせる形（server/, client/, shared/, README付き）を出力してください。

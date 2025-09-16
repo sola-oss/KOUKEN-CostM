@@ -1,111 +1,106 @@
+// Work Hour Management System - Drizzle Schema Definitions
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 
-// プロジェクト管理
-export const projects = pgTable("projects", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+// Employees table
+export const employees = sqliteTable("employees", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  description: text("description"),
-  status: text("status").notNull().default("planning"), // planning, active, completed, on_hold
-  estimatedBudget: decimal("estimated_budget", { precision: 12, scale: 2 }),
-  estimatedHours: decimal("estimated_hours", { precision: 8, scale: 2 }),
-  clientName: text("client_name"),
-  startDate: timestamp("start_date"),
-  endDate: timestamp("end_date"),
-  createdAt: timestamp("created_at").defaultNow(),
+  role: text("role").notNull(), // 'worker' | 'manager' | 'admin'
+  email: text("email"),
+  hourly_cost_rate: real("hourly_cost_rate").notNull(),
+  is_active: integer("is_active", { mode: 'boolean' }).notNull().default(true),
+  created_at: text("created_at").notNull().default(sql`datetime('now')`),
 });
 
-// 作業者管理
-export const workers = pgTable("workers", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+// Vendors table
+export const vendors = sqliteTable("vendors", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  hourlyRate: decimal("hourly_rate", { precision: 8, scale: 2 }).notNull(),
-  role: text("role"), // engineer, operator, supervisor, etc.
-  department: text("department"),
-  isActive: text("is_active").notNull().default("true"),
-  createdAt: timestamp("created_at").defaultNow(),
+  category: text("category"),
+  address_pref: text("address_pref"),
+  phone: text("phone"),
+  email: text("email"),
+  payment_terms: text("payment_terms"),
+  is_active: integer("is_active", { mode: 'boolean' }).notNull().default(true),
+  created_at: text("created_at").notNull().default(sql`datetime('now')`),
 });
 
-// 工数管理
-export const workHours = pgTable("work_hours", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").notNull().references(() => projects.id),
-  workerId: varchar("worker_id").notNull().references(() => workers.id),
-  workDate: timestamp("work_date").notNull(),
-  startTime: timestamp("start_time"),
-  endTime: timestamp("end_time"),
-  hoursWorked: decimal("hours_worked", { precision: 8, scale: 2 }).notNull(),
-  description: text("description"),
-  taskType: text("task_type"), // design, manufacturing, assembly, testing, etc.
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// 材料費管理
-export const materials = pgTable("materials", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").notNull().references(() => projects.id),
+// Projects table
+export const projects = sqliteTable("projects", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  quantity: decimal("quantity", { precision: 10, scale: 3 }).notNull(),
-  unit: text("unit").notNull(), // kg, pieces, meters, etc.
-  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }).notNull(),
-  totalCost: decimal("total_cost", { precision: 12, scale: 2 }).notNull(),
-  supplier: text("supplier"),
-  purchaseDate: timestamp("purchase_date"),
-  createdAt: timestamp("created_at").defaultNow(),
+  customer: text("customer"),
+  segment: text("segment").notNull(), // '観光' | '住宅' | 'サウナ'
+  start_date: text("start_date"),
+  end_date: text("end_date"),
+  vendor_id: integer("vendor_id").references(() => vendors.id),
+  is_active: integer("is_active", { mode: 'boolean' }).notNull().default(true),
+  created_at: text("created_at").notNull().default(sql`datetime('now')`),
 });
 
-// その他経費
-export const expenses = pgTable("expenses", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").notNull().references(() => projects.id),
-  category: text("category").notNull(), // equipment, utilities, transport, etc.
-  description: text("description").notNull(),
-  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
-  date: timestamp("date").notNull(),
-  receipt: text("receipt"), // file path for receipt uploads
-  createdAt: timestamp("created_at").defaultNow(),
+// Work Orders table
+export const workOrders = sqliteTable("work_orders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  project_id: integer("project_id").notNull().references(() => projects.id),
+  operation: text("operation").notNull(),
+  std_minutes: integer("std_minutes").notNull().default(0),
 });
 
-// Insert schemas
+// Time Entries table
+export const timeEntries = sqliteTable("time_entries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  employee_id: integer("employee_id").notNull().references(() => employees.id),
+  work_order_id: integer("work_order_id").notNull().references(() => workOrders.id),
+  start_at: text("start_at"),
+  end_at: text("end_at"),
+  minutes: integer("minutes"),
+  note: text("note"),
+  status: text("status").notNull().default('draft'), // 'draft' | 'approved'
+  approved_at: text("approved_at"),
+  approved_by: integer("approved_by").references(() => employees.id),
+  created_at: text("created_at").notNull().default(sql`datetime('now')`),
+  updated_at: text("updated_at").notNull().default(sql`datetime('now')`),
+});
+
+// Approvals table (audit log)
+export const approvals = sqliteTable("approvals", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  time_entry_id: integer("time_entry_id").notNull().references(() => timeEntries.id),
+  approver_id: integer("approver_id").notNull().references(() => employees.id),
+  approved_at: text("approved_at").notNull(),
+});
+
+// Insert schemas for validation
+export const insertEmployeeSchema = createInsertSchema(employees).omit({
+  id: true,
+  created_at: true,
+});
+
+export const insertVendorSchema = createInsertSchema(vendors).omit({
+  id: true,
+  created_at: true,
+});
+
 export const insertProjectSchema = createInsertSchema(projects).omit({
   id: true,
-  createdAt: true,
+  created_at: true,
 });
 
-export const insertWorkerSchema = createInsertSchema(workers).omit({
+export const insertWorkOrderSchema = createInsertSchema(workOrders).omit({
   id: true,
-  createdAt: true,
 });
 
-export const insertWorkHoursSchema = createInsertSchema(workHours).omit({
+export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({
   id: true,
-  createdAt: true,
+  status: true, // Always created as 'draft'
+  approved_at: true,
+  approved_by: true,
+  created_at: true,
+  updated_at: true,
 });
 
-export const insertMaterialSchema = createInsertSchema(materials).omit({
+export const insertApprovalSchema = createInsertSchema(approvals).omit({
   id: true,
-  createdAt: true,
 });
-
-export const insertExpenseSchema = createInsertSchema(expenses).omit({
-  id: true,
-  createdAt: true,
-});
-
-// Types
-export type InsertProject = z.infer<typeof insertProjectSchema>;
-export type Project = typeof projects.$inferSelect;
-
-export type InsertWorker = z.infer<typeof insertWorkerSchema>;
-export type Worker = typeof workers.$inferSelect;
-
-export type InsertWorkHours = z.infer<typeof insertWorkHoursSchema>;
-export type WorkHours = typeof workHours.$inferSelect;
-
-export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
-export type Material = typeof materials.$inferSelect;
-
-export type InsertExpense = z.infer<typeof insertExpenseSchema>;
-export type Expense = typeof expenses.$inferSelect;
