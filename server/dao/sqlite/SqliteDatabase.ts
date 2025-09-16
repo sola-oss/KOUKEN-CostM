@@ -794,4 +794,184 @@ export class SqliteDatabase implements IDatabase {
       new_value: log.new_value ? JSON.parse(log.new_value) : null
     }));
   }
+
+  // ========== Simple Time Entries (MVP) ==========
+  async getSimpleTimeEntries(options: FilterOptions & { sales_order_id?: number, status?: string } = {}): Promise<{ data: any[]; total: number }> {
+    const { limit = 100, offset = 0, query, sales_order_id, status } = options;
+    
+    let whereConditions = ['1 = 1'];
+    let params: any[] = [];
+    
+    if (query) {
+      whereConditions.push('(ste.employee_name LIKE ? OR ste.note LIKE ?)');
+      params.push(`%${query}%`, `%${query}%`);
+    }
+    
+    if (sales_order_id) {
+      whereConditions.push('ste.sales_order_id = ?');
+      params.push(sales_order_id);
+    }
+    
+    if (status && status !== 'all') {
+      whereConditions.push('ste.status = ?');
+      params.push(status);
+    }
+    
+    const whereClause = whereConditions.join(' AND ');
+    
+    // Get total count
+    const countStmt = this.db.prepare(`
+      SELECT COUNT(*) as total
+      FROM simple_time_entries ste
+      LEFT JOIN sales_orders so ON ste.sales_order_id = so.id
+      LEFT JOIN customers c ON so.customer_id = c.id
+      WHERE ${whereClause}
+    `);
+    const { total } = countStmt.get(...params) as { total: number };
+    
+    // Get data with pagination
+    const dataStmt = this.db.prepare(`
+      SELECT 
+        ste.*,
+        so.order_no,
+        c.name as customer_name
+      FROM simple_time_entries ste
+      LEFT JOIN sales_orders so ON ste.sales_order_id = so.id
+      LEFT JOIN customers c ON so.customer_id = c.id
+      WHERE ${whereClause}
+      ORDER BY ste.created_at DESC
+      LIMIT ? OFFSET ?
+    `);
+    const data = dataStmt.all(...params, limit, offset) as any[];
+    
+    return { data, total };
+  }
+
+  async getSimpleTimeEntryById(id: number): Promise<any | null> {
+    const stmt = this.db.prepare(`
+      SELECT 
+        ste.*,
+        so.order_no,
+        c.name as customer_name
+      FROM simple_time_entries ste
+      LEFT JOIN sales_orders so ON ste.sales_order_id = so.id
+      LEFT JOIN customers c ON so.customer_id = c.id
+      WHERE ste.id = ?
+    `);
+    return stmt.get(id) as any | null;
+  }
+
+  async createSimpleTimeEntry(data: any): Promise<any> {
+    // Calculate minutes from start_at/end_at if not provided
+    let minutes = data.minutes;
+    if (!minutes && data.start_at && data.end_at) {
+      const startTime = new Date(data.start_at).getTime();
+      const endTime = new Date(data.end_at).getTime();
+      minutes = Math.round((endTime - startTime) / (1000 * 60));
+    }
+
+    const insertData = {
+      employee_name: data.employee_name,
+      sales_order_id: data.sales_order_id,
+      start_at: data.start_at,
+      end_at: data.end_at,
+      minutes: minutes,
+      note: data.note,
+      status: 'draft'
+    };
+
+    const columns = Object.keys(insertData);
+    const values = columns.map(k => insertData[k as keyof typeof insertData]);
+    const placeholders = columns.map(() => '?').join(',');
+    
+    const stmt = this.db.prepare(`
+      INSERT INTO simple_time_entries (${columns.join(',')})
+      VALUES (${placeholders})
+    `);
+    
+    const result = stmt.run(...values);
+    return this.getSimpleTimeEntryById(result.lastInsertRowid as number);
+  }
+
+  async updateSimpleTimeEntry(id: number, data: any): Promise<any | null> {
+    // Recalculate minutes if start_at/end_at changed
+    let updateData = { ...data };
+    if (updateData.start_at && updateData.end_at && !updateData.minutes) {
+      const startTime = new Date(updateData.start_at).getTime();
+      const endTime = new Date(updateData.end_at).getTime();
+      updateData.minutes = Math.round((endTime - startTime) / (1000 * 60));
+    }
+
+    const columns = Object.keys(updateData).filter(k => k !== 'id');
+    const setClause = columns.map(col => `${col} = ?`).join(', ');
+    const values = [...columns.map(k => updateData[k]), id];
+    
+    const stmt = this.db.prepare(`
+      UPDATE simple_time_entries 
+      SET ${setClause}, updated_at = datetime('now')
+      WHERE id = ?
+    `);
+    
+    const result = stmt.run(...values);
+    return result.changes > 0 ? this.getSimpleTimeEntryById(id) : null;
+  }
+
+  async deleteSimpleTimeEntry(id: number): Promise<boolean> {
+    const stmt = this.db.prepare('DELETE FROM simple_time_entries WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  async approveSimpleTimeEntry(id: number, approver: string): Promise<any | null> {
+    const approvedAt = new Date().toISOString();
+    
+    this.db.exec('BEGIN TRANSACTION');
+    try {
+      // Update time entry status
+      const updateStmt = this.db.prepare(`
+        UPDATE simple_time_entries 
+        SET status = 'approved', approved_at = ?, approved_by = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `);
+      updateStmt.run(approvedAt, approver, id);
+      
+      // Create approval record
+      const approvalStmt = this.db.prepare(`
+        INSERT INTO time_approvals (simple_time_entry_id, approver, approved_at)
+        VALUES (?, ?, ?)
+      `);
+      approvalStmt.run(id, approver, approvedAt);
+      
+      this.db.exec('COMMIT');
+      return this.getSimpleTimeEntryById(id);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async getMonthlyTimeReport(yyyymm: string): Promise<any[]> {
+    const [year, month] = yyyymm.split('-');
+    const startDate = `${year}-${month.padStart(2, '0')}-01`;
+    const endDate = `${year}-${month.padStart(2, '0')}-31`;
+    
+    const stmt = this.db.prepare(`
+      SELECT 
+        so.id as sales_order_id,
+        so.order_no as so_no,
+        c.name as customer_name,
+        SUM(ste.minutes) as total_minutes,
+        COUNT(ste.id) as entry_count
+      FROM simple_time_entries ste
+      JOIN sales_orders so ON ste.sales_order_id = so.id
+      JOIN customers c ON so.customer_id = c.id
+      WHERE ste.status = 'approved'
+        AND date(ste.created_at) >= date(?)
+        AND date(ste.created_at) <= date(?)
+      GROUP BY so.id, so.order_no, c.name
+      ORDER BY so.order_no
+    `);
+    
+    return stmt.all(startDate, endDate) as any[];
+  }
 }
