@@ -1,236 +1,334 @@
 #!/usr/bin/env tsx
-// Database seed script for work hour management system
-// Generates: 10 employees, 300 vendors, 30 projects, 90 work orders, 2000 time entries
+// Seed Script for Production Management System
+import Database from 'better-sqlite3';
+import path from 'path';
 
-import { SqliteDatabase } from '../server/dao/sqlite/database.js';
-import { nowUtc, tokyoToUtc } from '../server/utils/timezone.js';
-import { EmployeeRole, ProjectSegment } from '../shared/types.js';
+const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'data', 'production.db');
+console.log(`🌱 Seeding database: ${dbPath}`);
 
-const PREFECTURES = [
-  '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
-  '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
-  '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
-  '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
-  '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
-  '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
-  '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
-];
+const db = new Database(dbPath);
+db.pragma('foreign_keys = ON');
 
-const VENDOR_CATEGORIES = [
-  '製造業', '建設業', '運送業', '卸売業', '小売業', 'サービス業',
-  'IT関連', 'コンサルティング', '設備工事', '保守・メンテナンス'
-];
+try {
+  db.exec('BEGIN TRANSACTION');
 
-const COMPANY_SUFFIXES = ['株式会社', '有限会社', '合同会社', '合資会社'];
-const COMPANY_NAMES = [
-  'アルファ', 'ベータ', 'ガンマ', 'デルタ', 'イプシロン', 'ゼータ',
-  '東日本', '西日本', '中部', '関西', '九州', '四国', '北陸',
-  'テック', 'システム', 'エンジニアリング', 'ソリューション',
-  '工業', '産業', '製作所', '機械', '設備', '建設', '開発'
-];
+  // ========== Insert Employees ==========
+  console.log('👥 Creating employees...');
+  const employees = [
+    { name: '田中 太郎', email: 'tanaka@example.com', role: 'admin', department: '管理部', hourly_cost_rate: 5000 },
+    { name: '鈴木 花子', email: 'suzuki@example.com', role: 'manager', department: '生産管理部', hourly_cost_rate: 4000 },
+    { name: '佐藤 一郎', email: 'sato@example.com', role: 'manager', department: '品質管理部', hourly_cost_rate: 3800 },
+    { name: '山田 次郎', email: 'yamada@example.com', role: 'worker', department: '製造一課', hourly_cost_rate: 2800 },
+    { name: '中村 三郎', email: 'nakamura@example.com', role: 'worker', department: '製造一課', hourly_cost_rate: 2600 },
+    { name: '小林 四郎', email: 'kobayashi@example.com', role: 'worker', department: '製造二課', hourly_cost_rate: 2700 },
+    { name: '加藤 五郎', email: 'kato@example.com', role: 'worker', department: '製造二課', hourly_cost_rate: 2500 },
+    { name: '吉田 六郎', email: 'yoshida@example.com', role: 'worker', department: '検査課', hourly_cost_rate: 2900 },
+    { name: '山本 七子', email: 'yamamoto@example.com', role: 'worker', department: '物流課', hourly_cost_rate: 2400 },
+    { name: '木村 八郎', email: 'kimura@example.com', role: 'viewer', department: '経理部', hourly_cost_rate: 3200 },
+  ];
+  
+  const insertEmployee = db.prepare(`
+    INSERT INTO employees (name, email, role, department, hourly_cost_rate) 
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  
+  employees.forEach(emp => {
+    insertEmployee.run(emp.name, emp.email, emp.role, emp.department, emp.hourly_cost_rate);
+  });
 
-function randomChoice<T>(array: T[]): T {
-  return array[Math.floor(Math.random() * array.length)];
-}
+  // ========== Insert Work Centers ==========
+  console.log('🏭 Creating work centers...');
+  const workCenters = [
+    { code: 'WC001', name: '機械加工センター1', capacity: 8, cost: 5000 },
+    { code: 'WC002', name: '機械加工センター2', capacity: 8, cost: 4800 },
+    { code: 'WC003', name: '組立センター1', capacity: 10, cost: 3500 },
+    { code: 'WC004', name: '検査センター', capacity: 6, cost: 3000 },
+    { code: 'WC005', name: '梱包センター', capacity: 12, cost: 2500 },
+  ];
+  
+  const insertWorkCenter = db.prepare(`
+    INSERT INTO work_centers (code, name, capacity_per_day, cost_per_hour) 
+    VALUES (?, ?, ?, ?)
+  `);
+  
+  workCenters.forEach(wc => {
+    insertWorkCenter.run(wc.code, wc.name, wc.capacity, wc.cost);
+  });
 
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function generatePhoneNumber(): string {
-  const areaCode = randomChoice(['03', '06', '052', '092', '011']);
-  const number = String(randomInt(1000, 9999)) + String(randomInt(1000, 9999));
-  return `${areaCode}-${number.slice(0, 4)}-${number.slice(4)}`;
-}
-
-function generateEmail(name: string): string {
-  const domain = randomChoice(['co.jp', 'jp', 'com']);
-  const localPart = name.toLowerCase().replace(/[株式会社有限]/g, '');
-  return `info@${localPart}.${domain}`;
-}
-
-function getDateDaysAgo(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString().split('T')[0];
-}
-
-async function seedDatabase() {
-  console.log('🌱 Starting database seeding...');
-
-  const db = new SqliteDatabase();
-
-  try {
-    console.log('👥 Creating employees (10)...');
-    
-    // Create employees
-    const employeeNames = [
-      '田中太郎', '鈴木花子', '佐藤一郎', '高橋美咲', '中村健太',
-      '小林さくら', '加藤雄介', '山田恵子', '松本拓海', '井上由美'
-    ];
-
-    const employees: any[] = [];
-    for (let i = 0; i < employeeNames.length; i++) {
-      const role: EmployeeRole = i < 2 ? 'manager' : i < 8 ? 'worker' : 'admin';
-      const hourlyRate = role === 'manager' ? randomInt(4000, 6000) : 
-                        role === 'admin' ? randomInt(5000, 8000) :
-                        randomInt(2000, 4000);
-
-      const employee = await db.employees.create({
-        name: employeeNames[i],
-        role,
-        email: `${employeeNames[i].toLowerCase()}@company.co.jp`,
-        hourly_cost_rate: hourlyRate,
-        is_active: true,
-      });
-      employees.push(employee);
-    }
-
-    console.log('🏢 Creating vendors (300)...');
-
-    // Create vendors
-    const vendors: any[] = [];
-    for (let i = 0; i < 300; i++) {
-      const companyName = `${randomChoice(COMPANY_NAMES)}${randomChoice(COMPANY_SUFFIXES)}`;
-      
-      const vendor = await db.vendors.create({
-        name: companyName,
-        category: randomChoice(VENDOR_CATEGORIES),
-        address_pref: randomChoice(PREFECTURES),
-        phone: generatePhoneNumber(),
-        email: generateEmail(companyName),
-        payment_terms: randomChoice(['現金', '月末締め翌月末払い', '月末締め翌々月末払い', '都度請求']),
-        is_active: Math.random() > 0.05, // 95% active
-      });
-      vendors.push(vendor);
-    }
-
-    console.log('📋 Creating projects (30)...');
-
-    // Create projects
-    const projectNames = [
-      '温泉旅館リニューアル', '住宅展示場建設', 'サウナ施設新設', '観光案内システム',
-      '住宅街開発計画', 'プレミアムサウナ', '観光バスターミナル', '高級住宅建設',
-      'フィンランドサウナ', '観光情報アプリ', 'エコ住宅プロジェクト', '癒しのサウナ空間',
-      '観光地活性化', 'スマートホーム', 'ロウリュウサウナ', '文化観光施設',
-      '省エネ住宅設計', '都市型サウナ', '観光PR動画', 'バリアフリー住宅',
-      '水風呂付きサウナ', 'インバウンド対応', '建売住宅開発', '貸切サウナ事業',
-      'VR観光体験', 'リフォーム住宅', 'サウナ&カフェ', '観光ガイドブック',
-      'モデルハウス建設', 'サウナグッズ開発'
-    ];
-
-    const projects: any[] = [];
-    for (let i = 0; i < 30; i++) {
-      const startDate = getDateDaysAgo(randomInt(180, 30));
-      const endDate = Math.random() > 0.3 ? 
-        getDateDaysAgo(randomInt(30, -30)) : // Some projects end in future
-        null;
-
-      const project = await db.projects.create({
-        name: projectNames[i],
-        customer: randomChoice([
-          '株式会社山田工務店', '東京都', '田中建設', '観光協会',
-          'サウナ愛好会', '住宅公社', 'リゾート開発', null
-        ]),
-        segment: randomChoice(['観光', '住宅', 'サウナ'] as ProjectSegment[]),
-        start_date: startDate,
-        end_date: endDate,
-        vendor_id: Math.random() > 0.3 ? randomChoice(vendors).id : null,
-        is_active: Math.random() > 0.1, // 90% active
-      });
-      projects.push(project);
-    }
-
-    console.log('🔧 Creating work orders (90)...');
-
-    // Create work orders (3 per project on average)
-    const operations = [
-      '設計', '企画', '調査', '見積作成', '資材調達', '施工管理',
-      '品質検査', 'テスト', '文書作成', 'プレゼン準備', '営業活動',
-      '顧客対応', 'システム開発', 'デバッグ', 'デプロイ', '保守作業'
-    ];
-
-    const workOrders: any[] = [];
-    for (const project of projects) {
-      const numWorkOrders = randomInt(2, 4);
-      for (let i = 0; i < numWorkOrders; i++) {
-        const workOrder = await db.workOrders.create({
-          project_id: project.id,
-          operation: randomChoice(operations),
-          std_minutes: randomInt(60, 480), // 1-8 hours standard
-        });
-        workOrders.push(workOrder);
-      }
-    }
-
-    console.log('⏱️ Creating time entries (2000)...');
-
-    // Create time entries distributed over last 2 months
-    for (let i = 0; i < 2000; i++) {
-      const employee = randomChoice(employees);
-      const workOrder = randomChoice(workOrders);
-      
-      // Generate dates within last 60 days, weighted toward recent days
-      const daysAgo = Math.floor(Math.pow(Math.random(), 2) * 60);
-      const date = new Date();
-      date.setDate(date.getDate() - daysAgo);
-      
-      // Generate work hours (typically 9:00-18:00 JST)
-      const startHour = randomInt(8, 17);
-      const duration = randomInt(30, 240); // 30 minutes to 4 hours
-      
-      const startDateTime = new Date(date);
-      startDateTime.setHours(startHour, randomInt(0, 59), 0, 0);
-      
-      const endDateTime = new Date(startDateTime);
-      endDateTime.setMinutes(endDateTime.getMinutes() + duration);
-
-      // Convert Tokyo time to UTC for storage
-      const startAtUtc = tokyoToUtc(startDateTime.toISOString());
-      const endAtUtc = tokyoToUtc(endDateTime.toISOString());
-
-      const timeEntry = await db.timeEntries.create({
-        employee_id: employee.id,
-        work_order_id: workOrder.id,
-        start_at: startAtUtc,
-        end_at: endAtUtc,
-        note: Math.random() > 0.7 ? randomChoice([
-          '順調に進行中', '問題なく完了', 'お客様との打ち合わせあり',
-          '資料作成に時間がかかった', '予定より早く完了',
-          '追加作業が発生', 'レビュー対応', '修正作業'
-        ]) : null,
-      });
-
-      // Approve 70% of time entries
-      if (Math.random() > 0.3 && employee.role !== 'manager') {
-        const approver = employees.find(e => e.role === 'manager') || employees[0];
-        await db.timeEntries.approve(timeEntry.id, approver.id);
-      }
-    }
-
-    console.log('✅ Seeding completed successfully!');
-    
-    // Show statistics
-    const stats = await db.reports.getDashboardStats();
-    console.log('\n📊 Seeding Statistics:');
-    console.log(`  Employees: ${employees.length}`);
-    console.log(`  Vendors: ${vendors.length}`);
-    console.log(`  Projects: ${projects.length}`);
-    console.log(`  Work Orders: ${workOrders.length}`);
-    console.log(`  Total Hours Today: ${stats.todayHours}`);
-    console.log(`  Pending Approvals: ${stats.pendingApprovals}`);
-    console.log(`  Active Projects: ${stats.activeProjects}`);
-
-  } catch (error) {
-    console.error('❌ Seeding failed:', error);
-    process.exit(1);
-  } finally {
-    await db.close();
+  // ========== Insert Customers ==========
+  console.log('🏢 Creating customers...');
+  const insertCustomer = db.prepare(`
+    INSERT INTO customers (code, name, address, phone, email, contact_person, payment_terms, credit_limit, tags) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  for (let i = 1; i <= 50; i++) {
+    const types = ['製造業', '卸売業', '小売業', '商社'];
+    const terms = ['net30', 'net60', 'cod'];
+    insertCustomer.run(
+      `C${String(i).padStart(4, '0')}`,
+      `${types[i % 4]} 顧客${i}株式会社`,
+      `東京都千代田区${i}-${i}-${i}`,
+      `03-${String(1000 + i).padStart(4, '0')}-${String(1000 + i).padStart(4, '0')}`,
+      `customer${i}@example.com`,
+      `担当者${i}`,
+      terms[i % 3],
+      1000000 + (i * 50000),
+      JSON.stringify([types[i % 4], i <= 10 ? 'VIP' : 'normal'])
+    );
   }
-}
 
-// Run if called directly
-seedDatabase().catch(error => {
-  console.error('Fatal error:', error);
+  // ========== Insert Vendors ==========
+  console.log('🚚 Creating vendors...');
+  const insertVendor = db.prepare(`
+    INSERT INTO vendors (code, name, category, address, phone, email, contact_person, payment_terms, tags) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  const vendorCategories = ['原材料', '部品', '消耗品', '設備', '外注加工', 'サービス'];
+  for (let i = 1; i <= 300; i++) {
+    const category = vendorCategories[i % vendorCategories.length];
+    insertVendor.run(
+      `V${String(i).padStart(4, '0')}`,
+      `${category}業者${i}`,
+      category,
+      `東京都${['中央', '港', '新宿', '文京', '品川'][i % 5]}区${i}-${(i % 10) + 1}-${(i % 5) + 1}`,
+      `03-${String(2000 + (i % 1000)).padStart(4, '0')}-${String(3000 + (i % 1000)).padStart(4, '0')}`,
+      `vendor${i}@example.com`,
+      `営業担当${i}`,
+      i % 2 === 0 ? 'net30' : 'net45',
+      JSON.stringify([category, i <= 50 ? 'preferred' : 'standard'])
+    );
+  }
+
+  // ========== Insert Items ==========
+  console.log('📦 Creating items...');
+  const insertItem = db.prepare(`
+    INSERT INTO items (code, name, description, category, uom, unit_cost, unit_price, stock_min, stock_max, lead_time_days, tags) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  const categories = ['原材料', '部品', '半製品', '製品'];
+  const uoms = ['個', 'kg', 'm', 'L', 'セット'];
+  
+  for (let i = 1; i <= 200; i++) {
+    const category = categories[i % categories.length];
+    insertItem.run(
+      `ITEM${String(i).padStart(5, '0')}`,
+      `${category}${i}`,
+      `${category}の説明 - 仕様${i}`,
+      category,
+      uoms[i % uoms.length],
+      100 + (i * 10),
+      150 + (i * 15),
+      10 + (i % 20),
+      100 + (i % 50),
+      (i % 30) + 1,
+      JSON.stringify([category, i <= 20 ? 'high-volume' : 'standard'])
+    );
+  }
+
+  // ========== Insert Sales Orders ==========
+  console.log('📋 Creating sales orders...');
+  const insertSalesOrder = db.prepare(`
+    INSERT INTO sales_orders (order_no, customer_id, order_date, delivery_date, status, total_amount, notes, confirmed_at, confirmed_by) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  const insertSalesOrderLine = db.prepare(`
+    INSERT INTO sales_order_lines (sales_order_id, line_no, item_id, quantity, unit_price, amount, delivery_date) 
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  const today = new Date();
+  for (let i = 1; i <= 80; i++) {
+    const orderDate = new Date(today.getTime() - (90 - i) * 24 * 60 * 60 * 1000);
+    const deliveryDate = new Date(orderDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const status = i <= 20 ? 'confirmed' : i <= 40 ? 'shipped' : i <= 60 ? 'closed' : 'draft';
+    const totalAmount = 50000 + (i * 1000);
+    
+    const result = insertSalesOrder.run(
+      `SO${String(2024000 + i).padStart(8, '0')}`,
+      (i % 50) + 1, // customer_id
+      orderDate.toISOString().split('T')[0],
+      deliveryDate.toISOString().split('T')[0],
+      status,
+      totalAmount,
+      `受注メモ ${i}`,
+      status !== 'draft' ? orderDate.toISOString() : null,
+      status !== 'draft' ? 2 : null // manager id
+    );
+    
+    // Add order lines
+    const lineCount = 2 + (i % 3);
+    for (let line = 1; line <= lineCount; line++) {
+      const itemId = ((i * line) % 200) + 1;
+      const qty = 10 + (line * 5);
+      const unitPrice = 1000 + (line * 100);
+      insertSalesOrderLine.run(
+        result.lastInsertRowid,
+        line,
+        itemId,
+        qty,
+        unitPrice,
+        qty * unitPrice,
+        deliveryDate.toISOString().split('T')[0]
+      );
+    }
+  }
+
+  // ========== Insert Production Orders ==========
+  console.log('🏭 Creating production orders...');
+  const insertProductionOrder = db.prepare(`
+    INSERT INTO production_orders (production_no, sales_order_id, item_id, quantity, start_date, end_date, status, priority, notes) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  for (let i = 1; i <= 120; i++) {
+    const salesOrderId = i <= 60 ? i : null;
+    const startDate = new Date(today.getTime() - (60 - (i % 60)) * 24 * 60 * 60 * 1000);
+    const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const status = i <= 30 ? 'completed' : i <= 60 ? 'in_progress' : i <= 90 ? 'released' : 'planned';
+    
+    insertProductionOrder.run(
+      `PO${String(2024000 + i).padStart(8, '0')}`,
+      salesOrderId,
+      ((i * 2) % 200) + 1, // item_id
+      50 + (i * 2),
+      startDate.toISOString().split('T')[0],
+      endDate.toISOString().split('T')[0],
+      status,
+      i % 3,
+      `製造指示 ${i}`
+    );
+  }
+
+  // ========== Insert Work Orders ==========
+  console.log('⚙️ Creating work orders...');
+  const insertWorkOrder = db.prepare(`
+    INSERT INTO work_orders (work_order_no, production_order_id, work_center_id, operation, sequence, planned_hours, actual_hours, start_date, end_date, status) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  const operations = ['切削', '研磨', '組立', '検査', '梱包'];
+  let woCounter = 1;
+  
+  for (let poId = 1; poId <= 120; poId++) {
+    const opCount = 2 + (poId % 3);
+    const startDate = new Date(today.getTime() - (60 - (poId % 60)) * 24 * 60 * 60 * 1000);
+    
+    for (let seq = 1; seq <= opCount; seq++) {
+      const opStartDate = new Date(startDate.getTime() + (seq - 1) * 24 * 60 * 60 * 1000);
+      const opEndDate = new Date(opStartDate.getTime() + 24 * 60 * 60 * 1000);
+      const status = poId <= 30 ? 'completed' : poId <= 60 ? 'in_progress' : poId <= 90 ? 'released' : 'pending';
+      
+      insertWorkOrder.run(
+        `WO${String(2024000 + woCounter).padStart(8, '0')}`,
+        poId,
+        ((seq - 1) % 5) + 1, // work_center_id
+        operations[(seq - 1) % operations.length],
+        seq,
+        4 + (seq * 2),
+        status === 'completed' ? 4 + (seq * 1.8) : 0,
+        opStartDate.toISOString().split('T')[0],
+        opEndDate.toISOString().split('T')[0],
+        status
+      );
+      woCounter++;
+    }
+  }
+
+  // ========== Insert Purchase Orders ==========
+  console.log('🛒 Creating purchase orders...');
+  const insertPurchaseOrder = db.prepare(`
+    INSERT INTO purchase_orders (po_no, vendor_id, order_date, delivery_date, status, total_amount, notes) 
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  for (let i = 1; i <= 150; i++) {
+    const orderDate = new Date(today.getTime() - (75 - (i % 75)) * 24 * 60 * 60 * 1000);
+    const deliveryDate = new Date(orderDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const status = i <= 40 ? 'closed' : i <= 80 ? 'received' : i <= 120 ? 'confirmed' : 'draft';
+    
+    insertPurchaseOrder.run(
+      `PUR${String(2024000 + i).padStart(8, '0')}`,
+      ((i - 1) % 300) + 1, // vendor_id
+      orderDate.toISOString().split('T')[0],
+      deliveryDate.toISOString().split('T')[0],
+      status,
+      20000 + (i * 500),
+      `発注メモ ${i}`
+    );
+  }
+
+  // ========== Insert Time Entries ==========
+  console.log('⏰ Creating time entries...');
+  const insertTimeEntry = db.prepare(`
+    INSERT INTO time_entries (employee_id, work_order_id, entry_date, hours, description, status, approved_at, approved_by) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  for (let i = 1; i <= 2000; i++) {
+    const employeeId = ((i - 1) % 7) + 4; // workers only (id 4-10)
+    const workOrderId = ((i - 1) % 360) + 1;
+    const daysAgo = Math.floor((i - 1) / 20);
+    const entryDate = new Date(today.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    const hours = 2 + Math.floor(Math.random() * 6);
+    const status = i <= 500 ? 'approved' : i <= 1000 ? 'submitted' : i <= 1500 ? 'draft' : 'submitted';
+    
+    insertTimeEntry.run(
+      employeeId,
+      workOrderId,
+      entryDate.toISOString().split('T')[0],
+      hours,
+      `作業内容 ${i}`,
+      status,
+      status === 'approved' ? entryDate.toISOString() : null,
+      status === 'approved' ? 2 : null // manager id
+    );
+  }
+
+  // ========== Insert Initial Calendar Days ==========
+  console.log('📅 Creating calendar entries...');
+  const insertCalendar = db.prepare(`
+    INSERT INTO calendars (date, is_working_day, capacity_adjustment, notes) 
+    VALUES (?, ?, ?, ?)
+  `);
+  
+  for (let i = -30; i <= 365; i++) {
+    const date = new Date(today.getTime() + i * 24 * 60 * 60 * 1000);
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isHoliday = i === 1 || i === 100 || i === 200; // Some sample holidays
+    
+    insertCalendar.run(
+      date.toISOString().split('T')[0],
+      !isWeekend && !isHoliday ? 1 : 0,
+      1.0,
+      isHoliday ? '祝日' : null
+    );
+  }
+
+  db.exec('COMMIT');
+  
+  console.log('\n✅ Seed data created successfully!');
+  console.log('📊 Summary:');
+  console.log('  - Employees: 10');
+  console.log('  - Work Centers: 5');
+  console.log('  - Customers: 50');
+  console.log('  - Vendors: 300');
+  console.log('  - Items: 200');
+  console.log('  - Sales Orders: 80');
+  console.log('  - Production Orders: 120');
+  console.log('  - Work Orders: 360');
+  console.log('  - Purchase Orders: 150');
+  console.log('  - Time Entries: 2000');
+  console.log('  - Calendar Days: 396');
+  
+} catch (error) {
+  db.exec('ROLLBACK');
+  console.error('❌ Seed failed:', error);
   process.exit(1);
-});
+} finally {
+  db.close();
+}
