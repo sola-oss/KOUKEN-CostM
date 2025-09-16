@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { 
@@ -11,7 +11,9 @@ import {
   FileText,
   Package,
   Clock,
-  DollarSign
+  DollarSign,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,6 +105,8 @@ export default function SalesOrders() {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [sortField, setSortField] = useState<keyof SalesOrder | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Fetch sales orders from API
   const { data: ordersResponse, isLoading, error } = useQuery<SalesOrdersResponse>({
@@ -115,9 +119,9 @@ export default function SalesOrders() {
   // Filter orders based on search and filters
   const filteredOrders = orders.filter(order => {
     const matchesSearch = 
-      order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (order.customerName && order.customerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (order.description && order.description.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     const matchesPriority = priorityFilter === "all" || order.priority === priorityFilter;
@@ -129,6 +133,32 @@ export default function SalesOrders() {
     setSelectedOrder(order);
     setIsDetailModalOpen(true);
   };
+
+  const handleSort = (field: keyof SalesOrder) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Apply sorting to filtered orders
+  const sortedOrders = useMemo(() => {
+    if (!sortField) return filteredOrders;
+
+    return [...filteredOrders].sort((a, b) => {
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+      
+      if (aValue == null && bValue == null) return 0;
+      if (aValue == null) return sortDirection === 'asc' ? 1 : -1;
+      if (bValue == null) return sortDirection === 'asc' ? -1 : 1;
+
+      const comparison = aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredOrders, sortField, sortDirection]);
 
   if (error) {
     return (
@@ -288,7 +318,7 @@ export default function SalesOrders() {
       <Card>
         <CardHeader>
           <CardTitle>
-            受注一覧 ({filteredOrders.length}件)
+            受注一覧 ({sortedOrders.length}件)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -308,18 +338,67 @@ export default function SalesOrders() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>受注番号</TableHead>
-                  <TableHead>顧客名</TableHead>
-                  <TableHead>受注日</TableHead>
-                  <TableHead>納期</TableHead>
-                  <TableHead>ステータス</TableHead>
-                  <TableHead>優先度</TableHead>
-                  <TableHead className="text-right">受注額</TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('orderNumber')}>
+                    <div className="flex items-center gap-2">
+                      受注番号
+                      {sortField === 'orderNumber' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('customerName')}>
+                    <div className="flex items-center gap-2">
+                      顧客名
+                      {sortField === 'customerName' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('orderDate')}>
+                    <div className="flex items-center gap-2">
+                      受注日
+                      {sortField === 'orderDate' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('deliveryDate')}>
+                    <div className="flex items-center gap-2">
+                      納期
+                      {sortField === 'deliveryDate' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('status')}>
+                    <div className="flex items-center gap-2">
+                      ステータス
+                      {sortField === 'status' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('priority')}>
+                    <div className="flex items-center gap-2">
+                      優先度
+                      {sortField === 'priority' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50 text-right" onClick={() => handleSort('totalAmount')}>
+                    <div className="flex items-center justify-end gap-2">
+                      受注額
+                      {sortField === 'totalAmount' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                      )}
+                    </div>
+                  </TableHead>
                   <TableHead className="w-20">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredOrders.map((order) => (
+                {sortedOrders.map((order) => (
                   <TableRow key={order.id} data-testid={`row-order-${order.orderNumber}`}>
                     <TableCell className="font-medium">
                       {order.orderNumber}
@@ -372,7 +451,7 @@ export default function SalesOrders() {
             </Table>
           )}
 
-          {!isLoading && filteredOrders.length === 0 && (
+          {!isLoading && sortedOrders.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               条件に一致する受注が見つかりません
             </div>

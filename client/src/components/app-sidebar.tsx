@@ -183,14 +183,14 @@ export function AppSidebar() {
       <SidebarFooter className="border-t">
         <SidebarMenu>
           {bottomMenuItems.map((item) => (
-            <SidebarMenuItem key={bottomMenuItems[0].title}>
+            <SidebarMenuItem key={item.title}>
               <SidebarMenuButton 
                 asChild
-                className={location === bottomMenuItems[0].url ? 'bg-sidebar-accent' : ''}
+                className={location === item.url ? 'bg-sidebar-accent' : ''}
               >
-                <Link href={bottomMenuItems[0].url}>
-                  <Settings className="h-4 w-4" />
-                  <span>{bottomMenuItems[0].title}</span>
+                <Link href={item.url}>
+                  <item.icon className="h-4 w-4" />
+                  <span>{item.title}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
