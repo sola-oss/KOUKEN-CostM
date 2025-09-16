@@ -1,10 +1,14 @@
 import { 
   type Project, 
   type InsertProject,
+  type Worker,
+  type InsertWorker,
+  type WorkHours,
+  type InsertWorkHours,
+  type Material,
+  type InsertMaterial,
   type Expense,
-  type InsertExpense,
-  type CostCategory,
-  type InsertCostCategory
+  type InsertExpense
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -16,6 +20,32 @@ export interface IStorage {
   updateProject(id: string, updates: Partial<InsertProject>): Promise<Project | undefined>;
   deleteProject(id: string): Promise<boolean>;
 
+  // Workers
+  getWorker(id: string): Promise<Worker | undefined>;
+  getAllWorkers(): Promise<Worker[]>;
+  getActiveWorkers(): Promise<Worker[]>;
+  createWorker(worker: InsertWorker): Promise<Worker>;
+  updateWorker(id: string, updates: Partial<InsertWorker>): Promise<Worker | undefined>;
+  deleteWorker(id: string): Promise<boolean>;
+
+  // Work Hours
+  getWorkHours(id: string): Promise<WorkHours | undefined>;
+  getAllWorkHours(): Promise<WorkHours[]>;
+  getWorkHoursByProject(projectId: string): Promise<WorkHours[]>;
+  getWorkHoursByWorker(workerId: string): Promise<WorkHours[]>;
+  getWorkHoursByDate(date: Date): Promise<WorkHours[]>;
+  createWorkHours(workHours: InsertWorkHours): Promise<WorkHours>;
+  updateWorkHours(id: string, updates: Partial<InsertWorkHours>): Promise<WorkHours | undefined>;
+  deleteWorkHours(id: string): Promise<boolean>;
+
+  // Materials
+  getMaterial(id: string): Promise<Material | undefined>;
+  getAllMaterials(): Promise<Material[]>;
+  getMaterialsByProject(projectId: string): Promise<Material[]>;
+  createMaterial(material: InsertMaterial): Promise<Material>;
+  updateMaterial(id: string, updates: Partial<InsertMaterial>): Promise<Material | undefined>;
+  deleteMaterial(id: string): Promise<boolean>;
+
   // Expenses
   getExpense(id: string): Promise<Expense | undefined>;
   getAllExpenses(): Promise<Expense[]>;
@@ -23,40 +53,21 @@ export interface IStorage {
   createExpense(expense: InsertExpense): Promise<Expense>;
   updateExpense(id: string, updates: Partial<InsertExpense>): Promise<Expense | undefined>;
   deleteExpense(id: string): Promise<boolean>;
-
-  // Cost Categories
-  getCostCategory(id: string): Promise<CostCategory | undefined>;
-  getAllCostCategories(): Promise<CostCategory[]>;
-  createCostCategory(category: InsertCostCategory): Promise<CostCategory>;
-  updateCostCategory(id: string, updates: Partial<InsertCostCategory>): Promise<CostCategory | undefined>;
-  deleteCostCategory(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
   private projects: Map<string, Project>;
+  private workers: Map<string, Worker>;
+  private workHours: Map<string, WorkHours>;
+  private materials: Map<string, Material>;
   private expenses: Map<string, Expense>;
-  private costCategories: Map<string, CostCategory>;
 
   constructor() {
     this.projects = new Map();
+    this.workers = new Map();
+    this.workHours = new Map();
+    this.materials = new Map();
     this.expenses = new Map();
-    this.costCategories = new Map();
-    
-    // Initialize with default cost categories
-    this.initializeDefaultData();
-  }
-
-  private async initializeDefaultData() {
-    const defaultCategories = [
-      { name: "材料費", color: "hsl(var(--chart-1))", description: "原材料や部品にかかる費用" },
-      { name: "人件費", color: "hsl(var(--chart-2))", description: "従業員の給与や労働費" },
-      { name: "設備費", color: "hsl(var(--chart-3))", description: "機械や設備の費用" },
-      { name: "間接費", color: "hsl(var(--chart-4))", description: "その他の間接的な費用" },
-    ];
-
-    for (const category of defaultCategories) {
-      await this.createCostCategory(category);
-    }
   }
 
   // Projects
@@ -71,8 +82,15 @@ export class MemStorage implements IStorage {
   async createProject(insertProject: InsertProject): Promise<Project> {
     const id = randomUUID();
     const project: Project = { 
-      ...insertProject, 
+      ...insertProject,
       id,
+      status: insertProject.status ?? "planning",
+      description: insertProject.description ?? null,
+      estimatedBudget: insertProject.estimatedBudget ?? null,
+      estimatedHours: insertProject.estimatedHours ?? null,
+      clientName: insertProject.clientName ?? null,
+      startDate: insertProject.startDate ?? null,
+      endDate: insertProject.endDate ?? null,
       createdAt: new Date()
     };
     this.projects.set(id, project);
@@ -110,8 +128,9 @@ export class MemStorage implements IStorage {
   async createExpense(insertExpense: InsertExpense): Promise<Expense> {
     const id = randomUUID();
     const expense: Expense = { 
-      ...insertExpense, 
+      ...insertExpense,
       id,
+      receipt: insertExpense.receipt ?? null,
       createdAt: new Date()
     };
     this.expenses.set(id, expense);
@@ -131,33 +150,143 @@ export class MemStorage implements IStorage {
     return this.expenses.delete(id);
   }
 
-  // Cost Categories
-  async getCostCategory(id: string): Promise<CostCategory | undefined> {
-    return this.costCategories.get(id);
+  // Workers
+  async getWorker(id: string): Promise<Worker | undefined> {
+    return this.workers.get(id);
   }
 
-  async getAllCostCategories(): Promise<CostCategory[]> {
-    return Array.from(this.costCategories.values());
+  async getAllWorkers(): Promise<Worker[]> {
+    return Array.from(this.workers.values());
   }
 
-  async createCostCategory(insertCategory: InsertCostCategory): Promise<CostCategory> {
+  async getActiveWorkers(): Promise<Worker[]> {
+    return Array.from(this.workers.values()).filter(
+      worker => worker.isActive === "true"
+    );
+  }
+
+  async createWorker(insertWorker: InsertWorker): Promise<Worker> {
     const id = randomUUID();
-    const category: CostCategory = { ...insertCategory, id };
-    this.costCategories.set(id, category);
-    return category;
+    const worker: Worker = { 
+      ...insertWorker,
+      id,
+      isActive: insertWorker.isActive ?? "true",
+      role: insertWorker.role ?? null,
+      department: insertWorker.department ?? null,
+      createdAt: new Date()
+    };
+    this.workers.set(id, worker);
+    return worker;
   }
 
-  async updateCostCategory(id: string, updates: Partial<InsertCostCategory>): Promise<CostCategory | undefined> {
-    const category = this.costCategories.get(id);
-    if (!category) return undefined;
+  async updateWorker(id: string, updates: Partial<InsertWorker>): Promise<Worker | undefined> {
+    const worker = this.workers.get(id);
+    if (!worker) return undefined;
     
-    const updatedCategory = { ...category, ...updates };
-    this.costCategories.set(id, updatedCategory);
-    return updatedCategory;
+    const updatedWorker = { ...worker, ...updates };
+    this.workers.set(id, updatedWorker);
+    return updatedWorker;
   }
 
-  async deleteCostCategory(id: string): Promise<boolean> {
-    return this.costCategories.delete(id);
+  async deleteWorker(id: string): Promise<boolean> {
+    return this.workers.delete(id);
+  }
+
+  // Work Hours
+  async getWorkHours(id: string): Promise<WorkHours | undefined> {
+    return this.workHours.get(id);
+  }
+
+  async getAllWorkHours(): Promise<WorkHours[]> {
+    return Array.from(this.workHours.values());
+  }
+
+  async getWorkHoursByProject(projectId: string): Promise<WorkHours[]> {
+    return Array.from(this.workHours.values()).filter(
+      workHours => workHours.projectId === projectId
+    );
+  }
+
+  async getWorkHoursByWorker(workerId: string): Promise<WorkHours[]> {
+    return Array.from(this.workHours.values()).filter(
+      workHours => workHours.workerId === workerId
+    );
+  }
+
+  async getWorkHoursByDate(date: Date): Promise<WorkHours[]> {
+    const targetDate = date.toISOString().split('T')[0];
+    return Array.from(this.workHours.values()).filter(
+      workHours => workHours.workDate.toISOString().split('T')[0] === targetDate
+    );
+  }
+
+  async createWorkHours(insertWorkHours: InsertWorkHours): Promise<WorkHours> {
+    const id = randomUUID();
+    const workHours: WorkHours = { 
+      ...insertWorkHours,
+      id,
+      startTime: insertWorkHours.startTime ?? null,
+      endTime: insertWorkHours.endTime ?? null,
+      description: insertWorkHours.description ?? null,
+      taskType: insertWorkHours.taskType ?? null,
+      createdAt: new Date()
+    };
+    this.workHours.set(id, workHours);
+    return workHours;
+  }
+
+  async updateWorkHours(id: string, updates: Partial<InsertWorkHours>): Promise<WorkHours | undefined> {
+    const workHours = this.workHours.get(id);
+    if (!workHours) return undefined;
+    
+    const updatedWorkHours = { ...workHours, ...updates };
+    this.workHours.set(id, updatedWorkHours);
+    return updatedWorkHours;
+  }
+
+  async deleteWorkHours(id: string): Promise<boolean> {
+    return this.workHours.delete(id);
+  }
+
+  // Materials
+  async getMaterial(id: string): Promise<Material | undefined> {
+    return this.materials.get(id);
+  }
+
+  async getAllMaterials(): Promise<Material[]> {
+    return Array.from(this.materials.values());
+  }
+
+  async getMaterialsByProject(projectId: string): Promise<Material[]> {
+    return Array.from(this.materials.values()).filter(
+      material => material.projectId === projectId
+    );
+  }
+
+  async createMaterial(insertMaterial: InsertMaterial): Promise<Material> {
+    const id = randomUUID();
+    const material: Material = { 
+      ...insertMaterial,
+      id,
+      supplier: insertMaterial.supplier ?? null,
+      purchaseDate: insertMaterial.purchaseDate ?? null,
+      createdAt: new Date()
+    };
+    this.materials.set(id, material);
+    return material;
+  }
+
+  async updateMaterial(id: string, updates: Partial<InsertMaterial>): Promise<Material | undefined> {
+    const material = this.materials.get(id);
+    if (!material) return undefined;
+    
+    const updatedMaterial = { ...material, ...updates };
+    this.materials.set(id, updatedMaterial);
+    return updatedMaterial;
+  }
+
+  async deleteMaterial(id: string): Promise<boolean> {
+    return this.materials.delete(id);
   }
 }
 
