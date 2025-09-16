@@ -1,0 +1,89 @@
+生産業向けの工数管理アプリ（MVP）を、Replitで動く構成で一式作ってください。
+技術スタック：
+- バックエンド：Node.js + Express（TypeScriptでもJSでも可。どちらかに統一）
+- DB：SQLite（DAO層を分離して将来Postgresへ移行しやすく）
+- フロント：React（Vite）+ 最低限のUIコンポーネント（shadcn/ui または素のコンポーネント）
+- テスト：APIはsupertestで最小限
+
+要件（業務ドメイン）：
+- 対象は生産業の工数管理。案件（projects）、工程（work_orders）、従業員（employees）、工数実績（time_entries）、業者（vendors）を扱う。
+- 業者は約300件：検索・フィルタ・ページング（50件/ページ）を実装。
+- 承認フロー：time_entriesのstatusを draft → approved。上長のみ承認可。
+- 集計：案件別 / 工程別 / 担当者別 / セグメント別で、工数時間・工数原価を算出。
+  - 工数原価 = (minutes / 60) * employees.hourly_cost_rate
+- 月次CSV出力：yyyymm（例: 2025-09）を指定 → 案件別の「工数時間」「工数原価」をCSVで返すAPI。
+- タイムゾーンは Asia/Tokyo。日付計算・表示・テストで明示。
+
+API仕様（最低限）：
+- POST /api/time-entries {employee_id, work_order_id, start_at?, end_at?, minutes?, note}
+  - start/stop運用（start_at,end_at）と手入力（minutes）両対応。minutesが無ければ差分で計算。
+  - 生成時status=draft
+- PATCH /api/time-entries/:id/approve
+  - status=approved, approved_at, approved_by を記録（監査ログも作成）
+- GET /api/time-entries?project_id=&employee_id=&status=&from=&to=&page=&page_size=
+  - デフォルトpage_size=50、最大100。検証・境界チェックあり。
+- GET /api/reports/projects?from=&to=&segment=
+  - レスポンス：[{project_id, project_name, segment, total_minutes, labor_cost}]
+- GET /api/exports/monthly.csv?yyyymm=YYYY-MM
+  - CSVヘッダ：project_id,project_name,segment,total_minutes,labor_cost,yyyymm
+- GET /api/vendors?query=&category=&pref=&is_active=&page=&page_size=
+  - name/phone/emailのLIKE検索。query未指定時は新しい順。50件/ページ。
+- POST /api/vendors/import-csv
+  - ヘッダ検証、トランザクション、部分成功時のサマリ {inserted, updated, failed:[{row, reason}]}
+
+DBスキーマ（SQLite DDL）：
+- employees(id INTEGER PK, name TEXT NOT NULL, role TEXT CHECK(role IN ('worker','manager','admin')) DEFAULT 'worker', email TEXT, hourly_cost_rate REAL NOT NULL, is_active INTEGER DEFAULT 1, created_at TEXT NOT NULL)
+- vendors(id INTEGER PK, name TEXT NOT NULL, category TEXT, address_pref TEXT, phone TEXT, email TEXT, payment_terms TEXT, is_active INTEGER DEFAULT 1, created_at TEXT NOT NULL)
+- projects(id INTEGER PK, name TEXT NOT NULL, customer TEXT, segment TEXT CHECK(segment IN ('観光','住宅','サウナ')) NOT NULL, start_date TEXT, end_date TEXT, vendor_id INTEGER, is_active INTEGER DEFAULT 1, created_at TEXT NOT NULL)
+- work_orders(id INTEGER PK, project_id INTEGER NOT NULL, operation TEXT NOT NULL, std_minutes INTEGER DEFAULT 0)
+- time_entries(id INTEGER PK, employee_id INTEGER NOT NULL, work_order_id INTEGER NOT NULL, start_at TEXT, end_at TEXT, minutes INTEGER, note TEXT, status TEXT CHECK(status IN ('draft','approved')) NOT NULL DEFAULT 'draft', approved_at TEXT, approved_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)
+- approvals(id INTEGER PK, time_entry_id INTEGER NOT NULL, approver_id INTEGER NOT NULL, approved_at TEXT NOT NULL)
+
+必須インデックス：
+- vendors(name), vendors(category,is_active), vendors(created_at)
+- projects(segment,is_active), projects(created_at)
+- time_entries(employee_id,start_at), time_entries(work_order_id,created_at)
+
+設計・実装の指示：
+- DAO層を /server/dao 下に作成し、DB_PROVIDER=sqlite|postgres で切替可能に（ENV）。当面はsqlite実装のみでOKだがインターフェースは共通化。
+- バリデーションはサーバ側で必須（zod等可）。クエリのpage,page_size,期間(from,to)の妥当性を検証。
+- エラーハンドリング共通化：400/401/403/404/409/500をJSONで返すミドルウェア。
+- セキュリティ：helmet, rate-limit（IP基準の簡易レート制限）, CORS許可範囲の明示。環境変数はReplit Secrets準拠。
+- 認証（MVP）：共有パスコード（.envのAPP_ACCESS_CODE）による簡易ミドルウェアでOK。将来Authに差し替えやすい構造。
+- タイムゾーン：サーバはUTC保存、入出力はAsia/Tokyoに正規化するヘルパーを用意（dayjs+timezone等）。
+- ページング：SQLはLIMIT/OFFSET、最大page_size=100でクランプ。総件数も返せる仕組み（X-Total-Countヘッダ or ペイロード）。
+- CSV：UTF-8、CRLFではなくLF、数値は小数点（ピリオド）。金額丸めは小数第2位、合計誤差対策で小数→整数（円）に変換するオプションを将来拡張できる形に。
+- FTS（任意）：vendorsにFTS5の定義を用意し、環境変数でON/OFF切替。
+- Seedスクリプト：従業員10名、業者300件、案件30件、work_orders 90件、time_entries 2,000件を生成。時間は直近2か月に分布。
+- マイグレーション：npm run migrate でDDL→インデックス作成／npm run seed でダミーデータ投入。
+- ロギング：API応答時間(ms)と主要クエリ時間(ms)をconsoleに出力（本番は抑制できるENV）。
+
+フロント（React + Vite）：
+- 状態管理：TanStack Query。APIクライアントを /shared/api.ts に集約。Axios可。
+- 画面：
+  1) ダッシュボード：今日の自分の工数、未承認件数、案件別サマリ
+  2) 工数入力：開始/停止ボタン、手入力、一覧・編集・削除、バリデーション
+  3) 承認：フィルタ（期間/担当/案件/ステータス）、一括承認（権限ない場合は非活性）
+  4) 業者一覧：検索（name/phone/email）、フィルタ（category/pref/is_active）、50件/ページ、インクリメンタルサーチ
+  5) レポート：日付範囲、セグメント（観光/住宅/サウナ）フィルタ、表とCSV出力ボタン
+  6) 設定：従業員・案件・工程の簡易CRUD（モーダル）
+- UX：ロード中/空状態/エラーのUI、フォームはEnterで保存可能、モバイルでも操作可。
+
+プロジェクト構成（例）：
+- /server（Express, DAO, routes, middleware, tests）
+- /client（React, pages/components, hooks, api client）
+- /shared（型定義・共通ユーティリティ）
+- README：Replitでの起動手順、Secrets設定（APP_ACCESS_CODE, DB_PATHなど）、migrate/seed/起動コマンド
+
+起動方法（READMEに明記）：
+- npm run migrate
+- npm run seed
+- npm run dev（server & clientを並行起動）
+
+品質チェック（実装後に必ず自己レビュー）：
+- 例外処理と入力検証は網羅されているか
+- N+1回避・インデックス妥当性・長いトランザクションを避けているか
+- ページングの上限とソートの安全性
+- CSVの桁・小数・改行・エンコーディング
+- Asia/Tokyoの日時が期待どおりか（ユニットテスト1件以上）
+- 将来Postgres移行に備え、DAOインターフェースがDB方言に依存していないか
