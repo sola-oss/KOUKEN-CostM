@@ -10,6 +10,9 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Dashboard from "@/pages/dashboard";
 import SalesOrders from "@/pages/sales-orders";
+import TimeEntries from "@/pages/time-entries";
+import TimeEntriesApprove from "@/pages/time-entries-approve";
+import Reports from "@/pages/reports";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -17,6 +20,9 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/sales-orders" component={SalesOrders} />
+      <Route path="/time-entries" component={TimeEntries} />
+      <Route path="/time-entries/approve" component={TimeEntriesApprove} />
+      <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>
   );

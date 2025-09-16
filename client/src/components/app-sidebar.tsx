@@ -2,7 +2,7 @@
 import { 
   Home, Package, Calendar, ClipboardCheck, FileText, 
   Truck, Receipt, Users, Settings, BarChart3, 
-  ChevronRight, Building2, Clock
+  ChevronRight, Building2, Clock, Timer, CheckSquare
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
@@ -41,6 +41,16 @@ const menuItems = [
     ]
   },
   {
+    title: "工数管理",
+    icon: Clock,
+    badge: null,
+    items: [
+      { title: "工数入力", url: "/time-entries" },
+      { title: "工数承認", url: "/time-entries/approve" },
+      { title: "工数レポート", url: "/reports" }
+    ]
+  },
+  {
     title: "製番管理",
     icon: Package,
     badge: "60",
@@ -48,16 +58,6 @@ const menuItems = [
       { title: "製番一覧", url: "/production-orders" },
       { title: "製番計画", url: "/production-orders/planning" },
       { title: "進捗カレンダー", url: "/production-orders/calendar" }
-    ]
-  },
-  {
-    title: "工数管理",
-    icon: Clock,
-    badge: "1000",
-    items: [
-      { title: "工数入力", url: "/time-entries" },
-      { title: "承認待ち", url: "/time-entries/approval" },
-      { title: "外注工数", url: "/time-entries/external" }
     ]
   },
   {
