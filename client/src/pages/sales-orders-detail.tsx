@@ -53,9 +53,20 @@ export default function SalesOrderDetail() {
       refetch();
     },
     onError: (error) => {
+      let errorMessage = error.message;
+      
+      // Check for specific error codes
+      if (error.message.includes('409')) {
+        errorMessage = "すでに確定済みです";
+      } else if (error.message.includes('400')) {
+        errorMessage = "無効なリクエストです";
+      } else if (error.message.includes('500')) {
+        errorMessage = "サーバーエラーが発生しました";
+      }
+      
       toast({
         title: "エラーが発生しました",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     },

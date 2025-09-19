@@ -36,8 +36,7 @@ const menuItems = [
     badge: "20",
     items: [
       { title: "受注一覧", url: "/sales-orders" },
-      { title: "新規受注", url: "/sales-orders/new" },
-      { title: "受注確認", url: "/sales-orders/confirm" }
+      { title: "新規受注", url: "/sales-orders/new" }
     ]
   },
   {

@@ -86,6 +86,9 @@ export async function listSalesOrders(params: SalesOrderParams = {}): Promise<Sa
   const url = `/api/sales-orders${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
   
   const response = await fetch(url, {
+    headers: {
+      'x-access-code': import.meta.env.VITE_APP_ACCESS_CODE || '',
+    },
     credentials: 'include',
   });
   
@@ -104,6 +107,7 @@ export async function createSalesOrder(payload: SalesOrderPayload): Promise<Sale
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-access-code': import.meta.env.VITE_APP_ACCESS_CODE || '',
     },
     body: JSON.stringify(payload),
     credentials: 'include',
@@ -138,6 +142,9 @@ export async function getSalesOrder(id: number): Promise<SalesOrder> {
 export async function confirmSalesOrder(id: number): Promise<SalesOrder> {
   const response = await fetch(`/api/sales-orders/${id}/confirm`, {
     method: 'POST',
+    headers: {
+      'x-access-code': import.meta.env.VITE_APP_ACCESS_CODE || '',
+    },
     credentials: 'include',
   });
   
@@ -162,6 +169,9 @@ export async function listCustomers(params: CustomerParams = {}): Promise<Custom
   const url = `/api/customers${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
   
   const response = await fetch(url, {
+    headers: {
+      'x-access-code': import.meta.env.VITE_APP_ACCESS_CODE || '',
+    },
     credentials: 'include',
   });
   
