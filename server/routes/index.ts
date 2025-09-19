@@ -169,23 +169,23 @@ router.get('/api/sales-orders', async (req, res) => {
     const params: any[] = [];
     
     if (status && status !== 'all') {
-      whereClause += ' AND status = ?';
+      whereClause += ' AND so.status = ?';
       params.push(status);
     }
     
     if (from) {
-      whereClause += ' AND order_date >= ?';
+      whereClause += ' AND so.order_date >= ?';
       params.push(from);
     }
     
     if (to) {
-      whereClause += ' AND order_date <= ?';
+      whereClause += ' AND so.order_date <= ?';
       params.push(to);
     }
     
     if (q) {
-      whereClause += ' AND customer_name LIKE ?';
-      params.push(`%${q}%`);
+      whereClause += ' AND (c.name LIKE ? OR so.order_no LIKE ?)';
+      params.push(`%${q}%`, `%${q}%`);
     }
     
     // Import database here to avoid issues with SQLite connections
@@ -193,14 +193,23 @@ router.get('/api/sales-orders', async (req, res) => {
     const db = new Database('./data/production.db');
     
     // Get total count
-    const countStmt = db.prepare(`SELECT COUNT(*) as count FROM sales_orders ${whereClause}`);
+    const countStmt = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM sales_orders so
+      LEFT JOIN customers c ON so.customer_id = c.id
+      ${whereClause}
+    `);
     const total = (countStmt.get(...params) as any).count;
     
     // Get data with pagination
     const stmt = db.prepare(`
-      SELECT * FROM sales_orders 
+      SELECT 
+        so.*,
+        c.name as customer_name
+      FROM sales_orders so
+      LEFT JOIN customers c ON so.customer_id = c.id
       ${whereClause}
-      ORDER BY order_date DESC
+      ORDER BY so.order_date DESC
       LIMIT ? OFFSET ?
     `);
     
