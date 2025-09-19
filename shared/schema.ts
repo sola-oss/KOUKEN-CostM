@@ -95,13 +95,19 @@ export const work_centers = sqliteTable("work_centers", {
 }));
 
 // ========== Sales Management ==========
+// Sequences table for order number generation
+export const sequences = sqliteTable("sequences", {
+  key: text("key").primaryKey(), // e.g., 'SO-202509'  
+  value: integer("value").notNull(), // Latest sequence number
+});
+
 export const sales_orders = sqliteTable("sales_orders", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  order_no: text("order_no").notNull().unique(),
+  order_no: text("order_no").unique(), // Can be null until confirmed
   customer_id: integer("customer_id").notNull().references(() => customers.id),
   order_date: text("order_date").notNull(),
   delivery_date: text("delivery_date"),
-  status: text("status").notNull().default('draft'), // draft -> confirmed -> shipped -> closed
+  status: text("status").notNull().default('draft'), // draft -> confirmed -> closed
   total_amount: real("total_amount").notNull().default(0),
   notes: text("notes"),
   tags: text("tags"), // JSON array
@@ -111,10 +117,11 @@ export const sales_orders = sqliteTable("sales_orders", {
   created_at: text("created_at").notNull().default(sql`datetime('now')`),
   updated_at: text("updated_at").notNull().default(sql`datetime('now')`),
 }, (table) => ({
-  orderNoIdx: index("idx_sales_orders_no").on(table.order_no),
+  orderNoIdx: index("idx_sales_orders_order_no").on(table.order_no),
   customerIdx: index("idx_sales_orders_customer").on(table.customer_id),
   statusIdx: index("idx_sales_orders_status").on(table.status),
   orderDateIdx: index("idx_sales_orders_date").on(table.order_date),
+  statusDateIdx: index("idx_sales_orders_status_date").on(table.status, table.order_date),
 }));
 
 export const sales_order_lines = sqliteTable("sales_order_lines", {
@@ -447,6 +454,8 @@ export const insertItemSchema = createInsertSchema(items).omit({
   created_at: true,
 });
 
+export const insertSequenceSchema = createInsertSchema(sequences);
+
 export const insertSalesOrderSchema = createInsertSchema(sales_orders).omit({
   id: true,
   created_at: true,
@@ -489,12 +498,14 @@ export const insertTimeApprovalSchema = createInsertSchema(time_approvals).omit(
 // ========== Type Definitions ==========
 export type Employee = typeof employees.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
+export type Sequence = typeof sequences.$inferSelect;
 export type SalesOrder = typeof sales_orders.$inferSelect;
 export type SimpleTimeEntry = typeof simple_time_entries.$inferSelect;
 export type TimeApproval = typeof time_approvals.$inferSelect;
 
 export type InsertEmployee = typeof insertEmployeeSchema._type;
 export type InsertCustomer = typeof insertCustomerSchema._type;
+export type InsertSequence = typeof insertSequenceSchema._type;
 export type InsertSalesOrder = typeof insertSalesOrderSchema._type;
 export type InsertSimpleTimeEntry = typeof insertSimpleTimeEntrySchema._type;
 export type InsertTimeApproval = typeof insertTimeApprovalSchema._type;

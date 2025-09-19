@@ -1,5 +1,6 @@
 // Production Management System - Main Router
 import { Router } from 'express';
+import { insertSalesOrderSchema } from '../../shared/schema.js';
 
 const router = Router();
 
@@ -151,27 +152,68 @@ router.get('/api/employees', async (req, res) => {
 // Sales Orders
 router.get('/api/sales-orders', async (req, res) => {
   try {
-    const { SqliteDatabase } = await import('../dao/sqlite/SqliteDatabase.js');
-    const db = new SqliteDatabase();
-    const { page = '1', page_size = '50', status, customer_id } = req.query;
+    const { 
+      page = '1', 
+      page_size = '50', 
+      status, 
+      from,
+      to,
+      q
+    } = req.query;
+    
     const limit = Math.min(parseInt(page_size as string), 100);
     const offset = (parseInt(page as string) - 1) * limit;
     
-    const result = await db.getSalesOrders({ 
-      limit, 
-      offset, 
-      status: status as string,
-      customerId: customer_id ? parseInt(customer_id as string) : undefined
-    });
-    await db.close();
+    // Build WHERE clause and parameters
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+    
+    if (status && status !== 'all') {
+      whereClause += ' AND status = ?';
+      params.push(status);
+    }
+    
+    if (from) {
+      whereClause += ' AND order_date >= ?';
+      params.push(from);
+    }
+    
+    if (to) {
+      whereClause += ' AND order_date <= ?';
+      params.push(to);
+    }
+    
+    if (q) {
+      whereClause += ' AND customer_name LIKE ?';
+      params.push(`%${q}%`);
+    }
+    
+    // Import database here to avoid issues with SQLite connections
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database('./data/production.db');
+    
+    // Get total count
+    const countStmt = db.prepare(`SELECT COUNT(*) as count FROM sales_orders ${whereClause}`);
+    const total = (countStmt.get(...params) as any).count;
+    
+    // Get data with pagination
+    const stmt = db.prepare(`
+      SELECT * FROM sales_orders 
+      ${whereClause}
+      ORDER BY order_date DESC
+      LIMIT ? OFFSET ?
+    `);
+    
+    const data = stmt.all(...params, limit, offset);
+    db.close();
     
     res.json({
-      data: result.data,
+      data: data,
       meta: {
-        total: result.total,
+        total: total,
         page: parseInt(page as string),
         page_size: limit,
-        total_pages: Math.ceil(result.total / limit)
+        total_pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {
@@ -180,12 +222,58 @@ router.get('/api/sales-orders', async (req, res) => {
   }
 });
 
+// Create new sales order
+router.post('/api/sales-orders', async (req, res) => {
+  try {
+    // Validate request body using Zod schema
+    const validation = insertSalesOrderSchema.safeParse(req.body);
+    
+    if (!validation.success) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: validation.error.errors 
+      });
+    }
+    
+    const { customer_id, order_date, delivery_date, notes } = validation.data;
+    
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database('./data/production.db');
+    
+    const now = new Date().toISOString();
+    const stmt = db.prepare(`
+      INSERT INTO sales_orders (customer_id, order_date, delivery_date, notes, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'draft', ?, ?)
+    `);
+    
+    const result = stmt.run(customer_id, order_date, delivery_date || null, notes || null, now, now);
+    
+    // Get the created order
+    const createdOrder = db.prepare('SELECT * FROM sales_orders WHERE id = ?').get(result.lastInsertRowid);
+    db.close();
+    
+    res.status(201).json(createdOrder);
+  } catch (error) {
+    console.error('Create sales order error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get single sales order
 router.get('/api/sales-orders/:id', async (req, res) => {
   try {
-    const { SqliteDatabase } = await import('../dao/sqlite/SqliteDatabase.js');
-    const db = new SqliteDatabase();
-    const order = await db.getSalesOrderById(parseInt(req.params.id));
-    await db.close();
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database('./data/production.db');
+    
+    const order = db.prepare(`
+      SELECT 
+        so.*,
+        c.name as customer_name
+      FROM sales_orders so
+      LEFT JOIN customers c ON so.customer_id = c.id
+      WHERE so.id = ?
+    `).get(req.params.id);
+    db.close();
     
     if (!order) {
       return res.status(404).json({ error: 'Sales order not found' });
@@ -194,6 +282,81 @@ router.get('/api/sales-orders/:id', async (req, res) => {
     res.json(order);
   } catch (error) {
     console.error('Sales order detail error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Confirm sales order
+router.post('/api/sales-orders/:id/confirm', async (req, res) => {
+  try {
+    const orderId = parseInt(req.params.id);
+    
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database('./data/production.db');
+    
+    // Get current order
+    const currentOrder = db.prepare('SELECT * FROM sales_orders WHERE id = ?').get(orderId) as any;
+    
+    if (!currentOrder) {
+      db.close();
+      return res.status(404).json({ error: 'Sales order not found' });
+    }
+    
+    if (currentOrder.status !== 'draft') {
+      db.close();
+      return res.status(409).json({ error: 'Order is already confirmed or closed' });
+    }
+    
+    // Import the nextSoNo function before the transaction
+    const { nextSoNo } = await import('../lib/soNumber.js');
+    
+    const transaction = db.transaction(() => {
+      let orderNo = currentOrder.order_no;
+      
+      // Generate order number if not already assigned
+      if (!orderNo) {
+        orderNo = nextSoNo(db, new Date(currentOrder.order_date));
+      }
+      
+      // Update order status and order number
+      const updateStmt = db.prepare(`
+        UPDATE sales_orders 
+        SET status = 'confirmed', order_no = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `);
+      updateStmt.run(orderNo, orderId);
+      
+      // Log activity (assuming activity_logs table exists)
+      try {
+        const logStmt = db.prepare(`
+          INSERT INTO activity_logs (entity_type, entity_id, action, old_value, new_value, user_id, created_at)
+          VALUES ('sales_order', ?, 'confirm', ?, ?, 1, datetime('now'))
+        `);
+        logStmt.run(orderId, JSON.stringify({ status: 'draft' }), JSON.stringify({ status: 'confirmed', order_no: orderNo }));
+      } catch (logError) {
+        console.warn('Could not log activity:', logError);
+        // Continue - don't fail confirmation just because logging failed
+      }
+      
+      return orderNo;
+    });
+    
+    const generatedOrderNo = transaction();
+    
+    // Get updated order with customer name
+    const updatedOrder = db.prepare(`
+      SELECT 
+        so.*,
+        c.name as customer_name
+      FROM sales_orders so
+      LEFT JOIN customers c ON so.customer_id = c.id
+      WHERE so.id = ?
+    `).get(orderId);
+    db.close();
+    
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('Confirm sales order error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
