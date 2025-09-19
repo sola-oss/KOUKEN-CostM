@@ -458,6 +458,13 @@ export const insertSequenceSchema = createInsertSchema(sequences);
 
 export const insertSalesOrderSchema = createInsertSchema(sales_orders).omit({
   id: true,
+  order_no: true,
+  status: true,
+  total_amount: true,
+  tags: true,
+  custom_fields: true,
+  confirmed_at: true,
+  confirmed_by: true,
   created_at: true,
   updated_at: true,
 });
