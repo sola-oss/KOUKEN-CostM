@@ -112,10 +112,16 @@ try {
     );
     CREATE INDEX IF NOT EXISTS idx_work_centers_code ON work_centers(code);
 
+    -- ========== Sequences Table ==========
+    CREATE TABLE IF NOT EXISTS sequences (
+      key TEXT PRIMARY KEY,
+      value INTEGER NOT NULL
+    );
+
     -- ========== Sales Orders Table ==========
     CREATE TABLE IF NOT EXISTS sales_orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      order_no TEXT NOT NULL UNIQUE,
+      order_no TEXT UNIQUE, -- Can be null until confirmed
       customer_id INTEGER NOT NULL REFERENCES customers(id),
       order_date TEXT NOT NULL,
       delivery_date TEXT,

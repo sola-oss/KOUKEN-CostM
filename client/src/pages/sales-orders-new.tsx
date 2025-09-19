@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ArrowLeft, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { createSalesOrder, type SalesOrderPayload } from "@/shared/api";
+import { createSalesOrder, listCustomers, type SalesOrderPayload } from "@/shared/api";
 
 export default function NewSalesOrder() {
   const [, setLocation] = useLocation();
@@ -17,13 +18,19 @@ export default function NewSalesOrder() {
   const queryClient = useQueryClient();
 
   // Form state
-  const [customerName, setCustomerName] = useState("");
+  const [customerId, setCustomerId] = useState("");
   const [orderDate, setOrderDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [dueDate, setDueDate] = useState("");
-  const [note, setNote] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [notes, setNotes] = useState("");
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Fetch customers
+  const customersQuery = useQuery({
+    queryKey: ['customers'],
+    queryFn: () => listCustomers({ page_size: 100 }),
+  });
 
   // Create mutation
   const createMutation = useMutation({
@@ -51,16 +58,16 @@ export default function NewSalesOrder() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!customerName.trim()) {
-      newErrors.customer_name = "顧客名は必須です";
+    if (!customerId) {
+      newErrors.customer_id = "顧客は必須です";
     }
 
     if (!orderDate) {
       newErrors.order_date = "受注日は必須です";
     }
 
-    if (dueDate && orderDate && new Date(dueDate) < new Date(orderDate)) {
-      newErrors.due_date = "納期は受注日以降の日付を設定してください";
+    if (deliveryDate && orderDate && new Date(deliveryDate) < new Date(orderDate)) {
+      newErrors.delivery_date = "納期は受注日以降の日付を設定してください";
     }
 
     setErrors(newErrors);
@@ -76,10 +83,10 @@ export default function NewSalesOrder() {
     }
 
     const payload: SalesOrderPayload = {
-      customer_name: customerName.trim(),
+      customer_id: parseInt(customerId),
       order_date: orderDate,
-      due_date: dueDate || undefined,
-      note: note.trim() || undefined,
+      delivery_date: deliveryDate || undefined,
+      notes: notes.trim() || undefined,
     };
 
     createMutation.mutate(payload);
@@ -115,21 +122,31 @@ export default function NewSalesOrder() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Customer Name */}
+              {/* Customer Selection */}
               <div className="space-y-2">
-                <Label htmlFor="customer_name">
-                  顧客名 <span className="text-destructive">*</span>
+                <Label htmlFor="customer_id">
+                  顧客 <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  id="customer_name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="顧客名を入力してください"
-                  data-testid="input-customer-name"
-                  className={errors.customer_name ? "border-destructive" : ""}
-                />
-                {errors.customer_name && (
-                  <p className="text-sm text-destructive">{errors.customer_name}</p>
+                <Select value={customerId} onValueChange={setCustomerId}>
+                  <SelectTrigger 
+                    className={errors.customer_id ? "border-destructive" : ""}
+                    data-testid="select-customer"
+                  >
+                    <SelectValue placeholder="顧客を選択してください" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customersQuery.data?.data.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id.toString()}>
+                        {customer.name} ({customer.code})
+                      </SelectItem>
+                    )) ?? []}
+                  </SelectContent>
+                </Select>
+                {customersQuery.isLoading && (
+                  <p className="text-sm text-muted-foreground">顧客一覧を読み込み中...</p>
+                )}
+                {errors.customer_id && (
+                  <p className="text-sm text-destructive">{errors.customer_id}</p>
                 )}
               </div>
 
@@ -151,34 +168,34 @@ export default function NewSalesOrder() {
                 )}
               </div>
 
-              {/* Due Date */}
+              {/* Delivery Date */}
               <div className="space-y-2">
-                <Label htmlFor="due_date">納期</Label>
+                <Label htmlFor="delivery_date">納期</Label>
                 <Input
-                  id="due_date"
+                  id="delivery_date"
                   type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  value={deliveryDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
                   placeholder="納期（任意）"
-                  data-testid="input-due-date"
-                  className={errors.due_date ? "border-destructive" : ""}
+                  data-testid="input-delivery-date"
+                  className={errors.delivery_date ? "border-destructive" : ""}
                 />
-                {errors.due_date && (
-                  <p className="text-sm text-destructive">{errors.due_date}</p>
+                {errors.delivery_date && (
+                  <p className="text-sm text-destructive">{errors.delivery_date}</p>
                 )}
               </div>
             </div>
 
-            {/* Note */}
+            {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="note">メモ</Label>
+              <Label htmlFor="notes">メモ</Label>
               <Textarea
-                id="note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
                 placeholder="メモ（任意）"
                 rows={4}
-                data-testid="textarea-note"
+                data-testid="textarea-notes"
               />
             </div>
 

@@ -7,9 +7,9 @@
  * Generates the next sales order number
  * @param {Database} db - SQLite database instance
  * @param {Date} dateUtc - UTC date for generating the number
- * @returns {Promise<string>} - Next SO number in format SO-YYYYMM-0001
+ * @returns {string} - Next SO number in format SO-YYYYMM-0001
  */
-export async function nextSoNo(db, dateUtc) {
+export function nextSoNo(db, dateUtc) {
   const year = dateUtc.getUTCFullYear();
   const month = String(dateUtc.getUTCMonth() + 1).padStart(2, '0');
   const yyyymm = `${year}${month}`;

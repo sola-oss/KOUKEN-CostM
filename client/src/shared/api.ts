@@ -1,6 +1,34 @@
 /**
- * API client functions for sales orders
+ * API client functions for sales orders and customers
  */
+
+// Customer types
+interface Customer {
+  id: number;
+  code: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface CustomerParams {
+  page?: number;
+  page_size?: number;
+  query?: string;
+}
+
+interface CustomersResponse {
+  data: Customer[];
+  meta: {
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+  };
+}
 
 // Type definitions matching the specification
 interface SalesOrderParams {
@@ -14,21 +42,22 @@ interface SalesOrderParams {
 
 interface SalesOrder {
   id: number;
-  so_no?: string;
-  customer_name: string;
+  order_no?: string;
+  customer_id: number;
+  customer_name?: string; // Joined from customers table
   order_date: string;
-  due_date?: string;
+  delivery_date?: string;
   status: 'draft' | 'confirmed' | 'closed';
-  note?: string;
+  notes?: string;
   created_at: string;
   updated_at: string;
 }
 
 interface SalesOrderPayload {
-  customer_name: string;
+  customer_id: number;
   order_date: string;
-  due_date?: string;
-  note?: string;
+  delivery_date?: string;
+  notes?: string;
 }
 
 interface SalesOrdersResponse {
@@ -120,5 +149,28 @@ export async function confirmSalesOrder(id: number): Promise<SalesOrder> {
   return response.json();
 }
 
+/**
+ * List customers with optional filtering
+ */
+export async function listCustomers(params: CustomerParams = {}): Promise<CustomersResponse> {
+  const searchParams = new URLSearchParams();
+  
+  if (params.page) searchParams.append('page', params.page.toString());
+  if (params.page_size) searchParams.append('page_size', params.page_size.toString());
+  if (params.query) searchParams.append('query', params.query);
+  
+  const url = `/api/customers${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+  
+  const response = await fetch(url, {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch customers: ${response.status} ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
 // Export types for use in other components
-export type { SalesOrder, SalesOrderPayload, SalesOrderParams, SalesOrdersResponse };
+export type { SalesOrder, SalesOrderPayload, SalesOrderParams, SalesOrdersResponse, Customer, CustomerParams, CustomersResponse };

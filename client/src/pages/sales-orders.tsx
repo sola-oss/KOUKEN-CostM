@@ -265,13 +265,13 @@ export default function SalesOrders() {
                     </TableCell>
                     <TableCell className="font-medium">{order.customer_name}</TableCell>
                     <TableCell>
-                      {order.so_no || <span className="text-muted-foreground">未採番</span>}
+                      {order.order_no || <span className="text-muted-foreground">未採番</span>}
                     </TableCell>
                     <TableCell>
-                      {order.due_date ? (
+                      {order.delivery_date ? (
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {format(new Date(order.due_date), 'yyyy/MM/dd')}
+                          {format(new Date(order.delivery_date), 'yyyy/MM/dd')}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">未設定</span>
