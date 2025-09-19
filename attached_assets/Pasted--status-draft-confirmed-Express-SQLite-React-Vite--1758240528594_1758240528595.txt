@@ -1,0 +1,94 @@
+目的：
+「新規受注（作成）→ 受注確認（status: draft→confirmed）」を最小で完成させる。
+既存の Express + SQLite + React (Vite) プロジェクトに、バックエンドAPIとフロント画面を実装する。
+
+## バックエンド（Express + SQLite）
+
+### 1) DDL 追補（/server/migrations/002_sales_sequences.sql）
+-- 受注番号の連番管理（年月ごと）※存在しなければ作成
+CREATE TABLE IF NOT EXISTS sequences (
+  key TEXT PRIMARY KEY,   -- 例: 'SO-202509'
+  value INTEGER NOT NULL  -- 直近の連番
+);
+
+-- sales_orders テーブルは既にある前提：
+-- id, so_no(UNIQUE), customer_name, order_date, due_date, status(draft|confirmed|closed), note, created_at, updated_at
+
+CREATE INDEX IF NOT EXISTS idx_sales_orders_status_date
+  ON sales_orders(status, order_date);
+
+### 2) 受注番号採番ユーティリティ（/server/lib/soNumber.js）
+- 関数: async function nextSoNo(db, dateUtc)
+  - YYYYMM = dateUtcから算出
+  - key = `SO-${YYYYMM}`
+  - トランザクション内で sequences を upsert して +1
+  - 形式: SO-YYYYMM-0001（4桁ゼロ埋め）を返す
+
+### 3) バリデーション（簡易）
+- POST /api/sales-orders:
+  - 必須: customer_name, order_date(ISO), due_date(任意)
+  - ルール: due_date < order_date は 400
+  - 生成時は status='draft'、so_no は空（NULL）
+- GET /api/sales-orders?from=&to=&q=&status=&page=&page_size=
+  - LIKE検索: customer_name LIKE
+- GET /api/sales-orders/:id
+- POST /api/sales-orders/:id/confirm
+  - 前提: 現在 status='draft'
+  - トランザクション：
+    1) so_no 未採番なら nextSoNo() で採番
+    2) status='confirmed'、updated_at=now
+    3) activity_logs に {entity_type:'sales_order', action:'confirm', before, after}
+  - レスポンス: 更新後の受注を返す
+  - 既に confirmed/closed の場合は 409 で返す
+
+### 4) 認証・ヘッダ
+- 既存の APP_ACCESS_CODE ミドルウェアを全APIに適用
+- レート制限・helmet・cors は既存を流用
+
+### 5) テスト（任意）
+- supertest で: create→confirm→二重confirmで409
+
+## フロント（React + Vite）
+
+### 6) ルート
+- /sales-orders（一覧）
+- /sales-orders/new（新規）
+- /sales-orders/:id（詳細＋「受注確認」ボタン）
+※ 404にならないよう、全ルートを router に登録済み前提。
+
+### 7) 受注一覧（/sales-orders）
+- フィルタ：期間(from/to)、検索(q: customer_name)、ステータス（All/draft/confirmed/closed）
+- テーブル：受注日、得意先、so_no、ステータス、詳細リンク
+
+### 8) 新規受注（/sales-orders/new）
+- フォーム項目：customer_name（必須）、order_date（必須、初期=今日）、due_date（任意）、note
+- バリデーション：customer_name 空は不可、due<orderはエラー表示
+- 保存成功→詳細ページへ遷移
+
+### 9) 受注詳細（/sales-orders/:id）
+- 上部に「受注番号（未採番なら ‘未採番’ 表示）」「ステータス」「受注日/納期」「顧客名」「メモ」
+- ボタン：
+  - 受注確認（status=draft の時だけ表示）
+    - confirm時にPOST /api/sales-orders/:id/confirm
+    - 成功したらトースト表示「受注を確定しました（SO番号: …）」→ 画面を再読み込み
+  - draft 以外はボタン非活性
+- 下部にこの受注に紐づく工数一覧（GET /api/time-entries?sales_order_id=…）を抜粋表示（簡易でOK）
+
+### 10) APIクライアント（/client/src/shared/api.ts）
+- listSalesOrders(params)
+- createSalesOrder(payload)
+- getSalesOrder(id)
+- confirmSalesOrder(id)
+
+### 11) UX 細部
+- 日付は入力/表示とも Asia/Tokyo、人→送信時にUTCへ、受領→表示時にJSTへ
+- ステータスは色付きチップ（draft=gray, confirmed=green）
+- confirm中はボタンにローディングスピナー
+- エラートースト（409/400/500）
+
+### 12) README 追記
+- `npm run migrate` を再実行して sequences を作成
+- 受注の作成→詳細→「受注確認」ボタンで確定→so_no が自動採番される流れを説明
+
+### 13) Seed（任意）
+- sales_orders を draft 5件、confirmed 5件作る（so_noは confirmed のみ採番）
