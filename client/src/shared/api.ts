@@ -126,6 +126,9 @@ export async function createSalesOrder(payload: SalesOrderPayload): Promise<Sale
  */
 export async function getSalesOrder(id: number): Promise<SalesOrder> {
   const response = await fetch(`/api/sales-orders/${id}`, {
+    headers: {
+      'x-access-code': import.meta.env.VITE_APP_ACCESS_CODE || '',
+    },
     credentials: 'include',
   });
   
