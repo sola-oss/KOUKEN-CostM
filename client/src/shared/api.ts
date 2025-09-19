@@ -30,7 +30,7 @@ interface CustomersResponse {
   };
 }
 
-// Type definitions matching the specification
+// Type definitions matching the simplified specification
 interface SalesOrderParams {
   from?: string;
   to?: string;
@@ -40,24 +40,53 @@ interface SalesOrderParams {
   page_size?: number;
 }
 
+interface SalesOrderLine {
+  id?: number;
+  line_no?: number;
+  item_code?: string;
+  item_name?: string;
+  qty: number;
+  uom: string;
+  line_due_date?: string;
+  unit_price?: number;
+  amount?: number;
+  tax_rate?: number;
+  partial_allowed?: boolean;
+}
+
 interface SalesOrder {
   id: number;
-  order_no?: string;
-  customer_id: number;
-  customer_name?: string; // Joined from customers table
+  so_no?: string;
+  customer_name: string; // Direct field, not joined
   order_date: string;
-  delivery_date?: string;
+  due_date?: string;
+  order_type?: string;
+  sales_rep?: string;
+  ship_to_name?: string;
+  ship_to_address?: string;
+  customer_contact?: string;
+  customer_email?: string;
+  tags?: string | string[];
+  note?: string;
   status: 'draft' | 'confirmed' | 'closed';
-  notes?: string;
   created_at: string;
   updated_at: string;
+  lines?: SalesOrderLine[];
 }
 
 interface SalesOrderPayload {
-  customer_id: number;
+  customer_name: string;
   order_date: string;
-  delivery_date?: string;
-  notes?: string;
+  due_date?: string;
+  order_type?: string;
+  sales_rep?: string;
+  ship_to_name?: string;
+  ship_to_address?: string;
+  customer_contact?: string;
+  customer_email?: string;
+  tags?: string[];
+  note?: string;
+  lines?: SalesOrderLine[];
 }
 
 interface SalesOrdersResponse {
@@ -102,7 +131,7 @@ export async function listSalesOrders(params: SalesOrderParams = {}): Promise<Sa
 /**
  * Create a new sales order
  */
-export async function createSalesOrder(payload: SalesOrderPayload): Promise<SalesOrder> {
+export async function createSalesOrder(payload: SalesOrderPayload): Promise<{ id: number }> {
   const response = await fetch('/api/sales-orders', {
     method: 'POST',
     headers: {
@@ -186,4 +215,4 @@ export async function listCustomers(params: CustomerParams = {}): Promise<Custom
 }
 
 // Export types for use in other components
-export type { SalesOrder, SalesOrderPayload, SalesOrderParams, SalesOrdersResponse, Customer, CustomerParams, CustomersResponse };
+export type { SalesOrder, SalesOrderLine, SalesOrderPayload, SalesOrderParams, SalesOrdersResponse, Customer, CustomerParams, CustomersResponse };
