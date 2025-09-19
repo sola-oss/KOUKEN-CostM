@@ -149,12 +149,28 @@ router.get('/api/employees', async (req, res) => {
   }
 });
 
-// Sales Orders
-router.get('/api/sales-orders', async (req, res) => {
+// Access code validation middleware for sales orders
+const validateAccessCode = (req: any, res: any, next: any) => {
+  const accessCode = req.headers['x-access-code'];
+  const expectedCode = process.env.APP_ACCESS_CODE;
+  
+  if (!expectedCode) {
+    return res.status(500).json({ error: 'Server configuration error' });
+  }
+  
+  if (!accessCode || accessCode !== expectedCode) {
+    return res.status(401).json({ error: 'Invalid access code' });
+  }
+  
+  next();
+};
+
+// Sales Orders (Simplified Version)
+router.get('/api/sales-orders', validateAccessCode, async (req, res) => {
   try {
     const { 
       page = '1', 
-      page_size = '50', 
+      page_size = '20', 
       status, 
       from,
       to,
@@ -169,23 +185,23 @@ router.get('/api/sales-orders', async (req, res) => {
     const params: any[] = [];
     
     if (status && status !== 'all') {
-      whereClause += ' AND so.status = ?';
+      whereClause += ' AND status = ?';
       params.push(status);
     }
     
     if (from) {
-      whereClause += ' AND so.order_date >= ?';
+      whereClause += ' AND order_date >= ?';
       params.push(from);
     }
     
     if (to) {
-      whereClause += ' AND so.order_date <= ?';
+      whereClause += ' AND order_date <= ?';
       params.push(to);
     }
     
     if (q) {
-      whereClause += ' AND (c.name LIKE ? OR so.order_no LIKE ?)';
-      params.push(`%${q}%`, `%${q}%`);
+      whereClause += ' AND customer_name LIKE ?';
+      params.push(`%${q}%`);
     }
     
     // Import database here to avoid issues with SQLite connections
@@ -195,27 +211,24 @@ router.get('/api/sales-orders', async (req, res) => {
     // Get total count
     const countStmt = db.prepare(`
       SELECT COUNT(*) as count 
-      FROM sales_orders so
-      LEFT JOIN customers c ON so.customer_id = c.id
+      FROM sales_orders_min
       ${whereClause}
     `);
     const total = (countStmt.get(...params) as any).count;
     
     // Get data with pagination
     const stmt = db.prepare(`
-      SELECT 
-        so.*,
-        c.name as customer_name
-      FROM sales_orders so
-      LEFT JOIN customers c ON so.customer_id = c.id
+      SELECT *
+      FROM sales_orders_min
       ${whereClause}
-      ORDER BY so.order_date DESC
+      ORDER BY order_date DESC
       LIMIT ? OFFSET ?
     `);
     
     const data = stmt.all(...params, limit, offset);
     db.close();
     
+    res.set('X-Total-Count', total.toString());
     res.json({
       data: data,
       meta: {
@@ -231,64 +244,151 @@ router.get('/api/sales-orders', async (req, res) => {
   }
 });
 
-// Create new sales order
-router.post('/api/sales-orders', async (req, res) => {
+// Create new sales order (Simplified Version)
+router.post('/api/sales-orders', validateAccessCode, async (req, res) => {
   try {
-    // Validate request body using Zod schema
-    const validation = insertSalesOrderSchema.safeParse(req.body);
+    // Custom validation according to specification
+    const { 
+      customer_name, 
+      order_date, 
+      due_date, 
+      order_type, 
+      sales_rep,
+      ship_to_name, 
+      ship_to_address, 
+      customer_contact, 
+      customer_email,
+      tags, 
+      note,
+      lines = []
+    } = req.body;
     
-    if (!validation.success) {
-      return res.status(400).json({ 
-        error: 'Validation failed',
-        details: validation.error.errors 
-      });
+    // Required field validation
+    if (!customer_name) {
+      return res.status(400).json({ error: 'customer_name is required' });
     }
     
-    const { customer_id, order_date, delivery_date, notes } = validation.data;
+    if (!order_date) {
+      return res.status(400).json({ error: 'order_date is required' });
+    }
+    
+    // Date validation
+    if (due_date && order_date && new Date(due_date) < new Date(order_date)) {
+      return res.status(400).json({ error: 'due_date must be on or after order_date' });
+    }
+    
+    // Lines validation (if provided)
+    if (lines.length > 0) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        // Either item_code or item_name required
+        if (!line.item_code && !line.item_name) {
+          return res.status(400).json({ 
+            error: `Line ${i + 1}: Either item_code or item_name is required` 
+          });
+        }
+        
+        // qty and uom required
+        if (!line.qty || line.qty <= 0) {
+          return res.status(400).json({ 
+            error: `Line ${i + 1}: qty must be greater than 0` 
+          });
+        }
+        
+        if (!line.uom) {
+          return res.status(400).json({ 
+            error: `Line ${i + 1}: uom is required` 
+          });
+        }
+      }
+    }
     
     const Database = (await import('better-sqlite3')).default;
     const db = new Database('./data/production.db');
     
     const now = new Date().toISOString();
-    const stmt = db.prepare(`
-      INSERT INTO sales_orders (customer_id, order_date, delivery_date, notes, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'draft', ?, ?)
-    `);
     
-    const result = stmt.run(customer_id, order_date, delivery_date || null, notes || null, now, now);
+    // Handle tags (convert array to JSON string if needed)
+    const tagsStr = Array.isArray(tags) ? JSON.stringify(tags) : (tags || null);
     
-    // Get the created order
-    const createdOrder = db.prepare('SELECT * FROM sales_orders WHERE id = ?').get(result.lastInsertRowid);
+    // Create the sales order in a transaction
+    const transaction = db.transaction(() => {
+      // Insert sales order
+      const stmt = db.prepare(`
+        INSERT INTO sales_orders_min (
+          customer_name, order_date, due_date, order_type, sales_rep,
+          ship_to_name, ship_to_address, customer_contact, customer_email,
+          tags, note, status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
+      `);
+      
+      const result = stmt.run(
+        customer_name, order_date, due_date || null, order_type || null, sales_rep || null,
+        ship_to_name || null, ship_to_address || null, customer_contact || null, customer_email || null,
+        tagsStr, note || null, now, now
+      );
+      
+      const salesOrderId = result.lastInsertRowid;
+      
+      // Insert order lines if provided
+      if (lines.length > 0) {
+        const lineStmt = db.prepare(`
+          INSERT INTO sales_order_lines_min (
+            sales_order_id, line_no, item_code, item_name, qty, uom,
+            line_due_date, unit_price, amount, tax_rate, partial_allowed, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        lines.forEach((line: any, index: number) => {
+          lineStmt.run(
+            salesOrderId, index + 1, line.item_code || null, line.item_name || null,
+            line.qty, line.uom, line.line_due_date || null, line.unit_price || null,
+            line.amount || null, line.tax_rate || null, line.partial_allowed || 0, now
+          );
+        });
+      }
+      
+      return salesOrderId;
+    });
+    
+    const createdId = transaction();
     db.close();
     
-    res.status(201).json(createdOrder);
+    // Return just the ID as specified
+    res.status(201).json({ id: createdId });
   } catch (error) {
     console.error('Create sales order error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Get single sales order
-router.get('/api/sales-orders/:id', async (req, res) => {
+// Get single sales order (Simplified Version)
+router.get('/api/sales-orders/:id', validateAccessCode, async (req, res) => {
   try {
     const Database = (await import('better-sqlite3')).default;
     const db = new Database('./data/production.db');
     
     const order = db.prepare(`
-      SELECT 
-        so.*,
-        c.name as customer_name
-      FROM sales_orders so
-      LEFT JOIN customers c ON so.customer_id = c.id
-      WHERE so.id = ?
+      SELECT * FROM sales_orders_min WHERE id = ?
     `).get(req.params.id);
-    db.close();
     
     if (!order) {
+      db.close();
       return res.status(404).json({ error: 'Sales order not found' });
     }
     
-    res.json(order);
+    // Get order lines if they exist
+    const lines = db.prepare(`
+      SELECT * FROM sales_order_lines_min WHERE sales_order_id = ? ORDER BY line_no
+    `).all(req.params.id);
+    
+    db.close();
+    
+    res.json({
+      ...order,
+      lines: lines || []
+    });
   } catch (error) {
     console.error('Sales order detail error:', error);
     res.status(500).json({ error: 'Internal server error' });
