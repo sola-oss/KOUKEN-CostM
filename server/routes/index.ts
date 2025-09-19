@@ -395,16 +395,16 @@ router.get('/api/sales-orders/:id', validateAccessCode, async (req, res) => {
   }
 });
 
-// Confirm sales order
-router.post('/api/sales-orders/:id/confirm', async (req, res) => {
+// Confirm sales order (Simplified Version)
+router.post('/api/sales-orders/:id/confirm', validateAccessCode, async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
     
     const Database = (await import('better-sqlite3')).default;
     const db = new Database('./data/production.db');
     
-    // Get current order
-    const currentOrder = db.prepare('SELECT * FROM sales_orders WHERE id = ?').get(orderId) as any;
+    // Get current order from simplified table
+    const currentOrder = db.prepare('SELECT * FROM sales_orders_min WHERE id = ?').get(orderId) as any;
     
     if (!currentOrder) {
       db.close();
@@ -420,46 +420,29 @@ router.post('/api/sales-orders/:id/confirm', async (req, res) => {
     const { nextSoNo } = await import('../lib/soNumber.js');
     
     const transaction = db.transaction(() => {
-      let orderNo = currentOrder.order_no;
+      let soNo = currentOrder.so_no;
       
       // Generate order number if not already assigned
-      if (!orderNo) {
-        orderNo = nextSoNo(db, new Date(currentOrder.order_date));
+      if (!soNo) {
+        soNo = nextSoNo(db, new Date(currentOrder.order_date));
       }
       
       // Update order status, order number, and audit fields
       const updateStmt = db.prepare(`
-        UPDATE sales_orders 
-        SET status = 'confirmed', order_no = ?, confirmed_at = datetime('now'), confirmed_by = 1, updated_at = datetime('now')
+        UPDATE sales_orders_min 
+        SET status = 'confirmed', so_no = ?, updated_at = datetime('now')
         WHERE id = ?
       `);
-      updateStmt.run(orderNo, orderId);
+      updateStmt.run(soNo, orderId);
       
-      // Log activity (assuming activity_logs table exists)
-      try {
-        const logStmt = db.prepare(`
-          INSERT INTO activity_logs (entity_type, entity_id, action, old_value, new_value, user_id, created_at)
-          VALUES ('sales_order', ?, 'confirm', ?, ?, 1, datetime('now'))
-        `);
-        logStmt.run(orderId, JSON.stringify({ status: 'draft' }), JSON.stringify({ status: 'confirmed', order_no: orderNo }));
-      } catch (logError) {
-        console.warn('Could not log activity:', logError);
-        // Continue - don't fail confirmation just because logging failed
-      }
-      
-      return orderNo;
+      return soNo;
     });
     
-    const generatedOrderNo = transaction();
+    const generatedSoNo = transaction();
     
-    // Get updated order with customer name
+    // Get updated order (no need for join since customer_name is direct field)
     const updatedOrder = db.prepare(`
-      SELECT 
-        so.*,
-        c.name as customer_name
-      FROM sales_orders so
-      LEFT JOIN customers c ON so.customer_id = c.id
-      WHERE so.id = ?
+      SELECT * FROM sales_orders_min WHERE id = ?
     `).get(orderId);
     db.close();
     
