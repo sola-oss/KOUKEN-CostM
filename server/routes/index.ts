@@ -327,10 +327,10 @@ router.post('/api/sales-orders/:id/confirm', async (req, res) => {
         orderNo = nextSoNo(db, new Date(currentOrder.order_date));
       }
       
-      // Update order status and order number
+      // Update order status, order number, and audit fields
       const updateStmt = db.prepare(`
         UPDATE sales_orders 
-        SET status = 'confirmed', order_no = ?, updated_at = datetime('now')
+        SET status = 'confirmed', order_no = ?, confirmed_at = datetime('now'), confirmed_by = 1, updated_at = datetime('now')
         WHERE id = ?
       `);
       updateStmt.run(orderNo, orderId);
