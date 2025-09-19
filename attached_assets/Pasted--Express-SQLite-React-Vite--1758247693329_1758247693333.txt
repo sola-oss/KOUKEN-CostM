@@ -1,0 +1,102 @@
+目的：
+「新規受注を作成して保存 → 受注一覧に戻って反映を確認」する最小フローを実装する。
+既存の Express + SQLite + React(Vite) プロジェクトに追加/更新する。
+
+技術方針：
+- Backend: Node.js + Express
+- DB: SQLite（/server/db/app.sqlite）
+- Frontend: React + Vite + React Router v6、TanStack Query
+- タイムゾーン：保存UTC / 入出力は Asia/Tokyo（dayjs + timezone）
+- 認証：.env(APP_ACCESS_CODE)とフロント(VITE_APP_ACCESS_CODE)を 'x-access-code' で送信
+
+## 1) DBマイグレーション（/server/migrations/002_sales_min.sql）
+- sales_orders（受注ヘッダ）
+  id PK, so_no UNIQUE NULL, customer_name NOT NULL, order_date TEXT NOT NULL, due_date TEXT,
+  order_type TEXT, sales_rep TEXT, ship_to_name TEXT, ship_to_address TEXT,
+  customer_contact TEXT, customer_email TEXT, tags TEXT, note TEXT,
+  status CHECK(status IN ('draft','confirmed','closed')) DEFAULT 'draft',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+- sales_order_lines（受注明細）
+  id PK, sales_order_id FK NOT NULL, line_no INTEGER NOT NULL,
+  item_code TEXT, item_name TEXT, qty REAL NOT NULL, uom TEXT NOT NULL,
+  line_due_date TEXT, unit_price REAL, amount REAL, tax_rate REAL,
+  partial_allowed INTEGER DEFAULT 0, created_at TEXT NOT NULL
+- 主要INDEX:
+  CREATE INDEX IF NOT EXISTS idx_so_status_date ON sales_orders(status, order_date);
+  CREATE INDEX IF NOT EXISTS idx_sol_so ON sales_order_lines(sales_order_id);
+
+## 2) API（/server/routes/salesOrders.js など）
+- POST /api/sales-orders
+  受け取るJSON：
+  {
+    customer_name, order_date(JST可), due_date?, order_type?, sales_rep?,
+    ship_to_name?, ship_to_address?, customer_contact?, customer_email?,
+    tags?(array or string), note?,
+    lines: [{item_code?, item_name?, qty, uom, line_due_date?, unit_price?, amount?, tax_rate?, partial_allowed?}]
+  }
+  バリデーション：
+  - customer_name 必須
+  - order_date 必須（受領時にUTC ISOへ正規化）
+  - lines は1行以上、各行は (item_code または item_name) のどちらか必須、qty>0、uom必須
+  - due_date < order_date の場合は400
+  実装：
+  - status='draft' で作成（so_no は未採番のまま）
+  - tags はJSON文字列で保存（配列が来たら stringify）
+  - 作成後、{id} を返す
+
+- GET /api/sales-orders?from=&to=&q=&status=&page=&page_size=
+  - order_date で期間フィルタ、q は customer_name LIKE
+  - デフォルト page_size=20、最大100、X-Total-Count を返す
+  - レスポンスはヘッダのみ（明細は返さない）
+
+共通：helmet/cors/rate-limit、APP_ACCESS_CODEチェック、エラーハンドラ（400/401/404/409/500）
+
+## 3) フロント（routes・ページ・APIクライアント）
+- ルート：
+  /sales-orders        … 一覧
+  /sales-orders/new    … 新規受注
+
+- APIクライアント（/client/src/shared/api.ts）：
+  listSalesOrders(params)  -> GET /api/sales-orders
+  createSalesOrder(body)   -> POST /api/sales-orders
+  すべてのリクエストに 'x-access-code': import.meta.env.VITE_APP_ACCESS_CODE を付与
+
+- 受注一覧（/client/src/pages/sales/SalesOrderList.tsx）：
+  テーブル列：受注日(表示JST)、取引先名、so_no（未採番時は“未採番”表示）、ステータス、備考
+  フィルタ：期間(from/to)、キーワード(q)、ステータス（All/draft/confirmed/closed）
+  ページング：ページ/件数（20件/ページ）
+
+- 新規受注（/client/src/pages/sales/SalesOrderNew.tsx）：
+  ヘッダ項目：
+    customer_name, order_date(初期=今日JST), due_date(任意), order_type, sales_rep,
+    ship_to_name, ship_to_address, customer_contact, customer_email,
+    tags（カンマ区切り→配列化）, note
+  明細テーブル（行追加/削除）：
+    item_code / item_name（どちらか必須）, qty（>0）, uom（必須）, line_due_date（任意）
+    unit_price/amount/tax_rate/partial_allowed は入力欄を非表示 or 「詳細」トグルで隠す（送信は可）
+  バリデーションエラーはフォーム上に表示。
+  保存成功時：
+    -> **/sales-orders に navigate（一覧へ遷移）**
+    -> 成功トースト「受注を保存しました（下書き）」表示
+
+- 日付処理：
+  入力はJST、送信直前にUTCに変換してPOST。一覧表示はUTC→JST変換。
+
+- UI（最低限でOK）：
+  サイドバーに「受注一覧」「新規受注」リンク
+  ボタン：保存、明細行追加、行削除
+  ローディング＆エラートースト
+
+## 4) Seed / README
+- npm run migrate でDDL適用
+- npm run seed で受注（draft 5件 + 明細）を投入
+- READMEに操作手順を記載：
+  1) 新規受注を入力して保存
+  2) 自動で「受注一覧」へ遷移し、今作った受注が先頭に表示されること
+  3) 現時点では「受注確認（採番）」は未実装でもよい（後で追加）
+
+## 5) 受け入れ基準（手動テスト）
+- 新規受注で必須未入力時にエラーが出る
+- 保存成功後に **/sales-orders** へ遷移する
+- 一覧に作成したレコードが表示され、so_no は “未採番”、status は “draft”
+- フィルタ/検索が効く（customer_name の部分一致）
