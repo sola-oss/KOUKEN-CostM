@@ -1,9 +1,9 @@
-// Minimal Sales Order Management System - PostgreSQL Schema
+// Minimal Sales Order Schema (PostgreSQL)
 import { sql } from "drizzle-orm";
 import { pgTable, text, integer, serial, varchar, decimal, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
-// ========== Simplified Sales Order Tables (PostgreSQL) ==========
+// ========== Simplified Sales Order Tables ==========
 export const sales_orders_min = pgTable("sales_orders_min", {
   id: serial("id").primaryKey(),
   so_no: varchar("so_no", { length: 50 }), // Can be null until confirmed
@@ -40,7 +40,7 @@ export const sales_order_lines_min = pgTable("sales_order_lines_min", {
   itemCodeIdx: index("idx_sales_order_lines_min_item_code").on(table.item_code),
 }));
 
-// ========== Simplified Sales Order Schemas ==========
+// ========== Zod Validation Schemas ==========
 export const insertSalesOrderMinSchema = createInsertSchema(sales_orders_min).omit({
   id: true,
   so_no: true,
@@ -57,7 +57,7 @@ export const insertSalesOrderLineMinSchema = createInsertSchema(sales_order_line
   created_at: true,
 });
 
-// ========== Simplified Type Definitions ==========
+// ========== Type Definitions ==========
 export type SalesOrderMin = typeof sales_orders_min.$inferSelect;
 export type SalesOrderLineMin = typeof sales_order_lines_min.$inferSelect;
 export type InsertSalesOrderMin = typeof insertSalesOrderMinSchema._type;

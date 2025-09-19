@@ -154,11 +154,14 @@ const validateAccessCode = (req: any, res: any, next: any) => {
   const accessCode = req.headers['x-access-code'];
   const expectedCode = process.env.APP_ACCESS_CODE;
   
+  
   if (!expectedCode) {
+    console.error('Server configuration error: APP_ACCESS_CODE not set');
     return res.status(500).json({ error: 'Server configuration error' });
   }
   
   if (!accessCode || accessCode !== expectedCode) {
+    console.error('Access code validation failed');
     return res.status(401).json({ error: 'Invalid access code' });
   }
   
@@ -180,53 +183,58 @@ router.get('/api/sales-orders', validateAccessCode, async (req, res) => {
     const limit = Math.min(parseInt(page_size as string), 100);
     const offset = (parseInt(page as string) - 1) * limit;
     
-    // Build WHERE clause and parameters
-    let whereClause = 'WHERE 1=1';
+    // Build WHERE clause and parameters (PostgreSQL syntax)
+    let whereConditions: string[] = [];
     const params: any[] = [];
+    let paramIndex = 1;
     
     if (status && status !== 'all') {
-      whereClause += ' AND status = ?';
+      whereConditions.push(`status = $${paramIndex}`);
       params.push(status);
+      paramIndex++;
     }
     
     if (from) {
-      whereClause += ' AND order_date >= ?';
+      whereConditions.push(`order_date >= $${paramIndex}`);
       params.push(from);
+      paramIndex++;
     }
     
     if (to) {
-      whereClause += ' AND order_date <= ?';
+      whereConditions.push(`order_date <= $${paramIndex}`);
       params.push(to);
+      paramIndex++;
     }
     
     if (q) {
-      whereClause += ' AND customer_name LIKE ?';
+      whereConditions.push(`customer_name ILIKE $${paramIndex}`);
       params.push(`%${q}%`);
+      paramIndex++;
     }
     
-    // Import database here to avoid issues with SQLite connections
-    const Database = (await import('better-sqlite3')).default;
-    const db = new Database('./data/production.db');
+    const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
+    
+    // Import PostgreSQL database client
+    const { sql } = await import('../lib/database.js');
     
     // Get total count
-    const countStmt = db.prepare(`
+    const countQuery = `
       SELECT COUNT(*) as count 
       FROM sales_orders_min
       ${whereClause}
-    `);
-    const total = (countStmt.get(...params) as any).count;
+    `;
+    const countResult = await sql(countQuery, params);
+    const total = parseInt(countResult[0].count);
     
     // Get data with pagination
-    const stmt = db.prepare(`
+    const dataQuery = `
       SELECT *
       FROM sales_orders_min
       ${whereClause}
       ORDER BY order_date DESC
-      LIMIT ? OFFSET ?
-    `);
-    
-    const data = stmt.all(...params, limit, offset);
-    db.close();
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    const data = await sql(dataQuery, [...params, limit, offset]);
     
     res.set('X-Total-Count', total.toString());
     res.json({
@@ -304,56 +312,55 @@ router.post('/api/sales-orders', validateAccessCode, async (req, res) => {
       }
     }
     
-    const Database = (await import('better-sqlite3')).default;
-    const db = new Database('./data/production.db');
+    // Import PostgreSQL database client
+    const { sql } = await import('../lib/database.js');
     
     const now = new Date().toISOString();
     
-    // Handle tags (convert array to JSON string if needed)
-    const tagsStr = Array.isArray(tags) ? JSON.stringify(tags) : (tags || null);
+    // Simplified fields for minimal system (remove fields not in our PostgreSQL schema)
+    // Insert sales order and get the returned ID
+    const insertQuery = `
+      INSERT INTO sales_orders_min (
+        customer_name, order_date, due_date, note, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING id
+    `;
     
-    // Create the sales order in a transaction
-    const transaction = db.transaction(() => {
-      // Insert sales order
-      const stmt = db.prepare(`
-        INSERT INTO sales_orders_min (
-          customer_name, order_date, due_date, order_type, sales_rep,
-          ship_to_name, ship_to_address, customer_contact, customer_email,
-          tags, note, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
-      `);
-      
-      const result = stmt.run(
-        customer_name, order_date, due_date || null, order_type || null, sales_rep || null,
-        ship_to_name || null, ship_to_address || null, customer_contact || null, customer_email || null,
-        tagsStr, note || null, now, now
-      );
-      
-      const salesOrderId = result.lastInsertRowid;
-      
-      // Insert order lines if provided
-      if (lines.length > 0) {
-        const lineStmt = db.prepare(`
+    const orderResult = await sql(insertQuery, [
+      customer_name, 
+      order_date, 
+      due_date || null, 
+      note || null
+    ]);
+    
+    const salesOrderId = orderResult[0].id;
+    
+    // Insert order lines if provided
+    if (lines.length > 0) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lineInsertQuery = `
           INSERT INTO sales_order_lines_min (
             sales_order_id, line_no, item_code, item_name, qty, uom,
-            line_due_date, unit_price, amount, tax_rate, partial_allowed, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
+            unit_price, line_amount, note, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+        `;
         
-        lines.forEach((line: any, index: number) => {
-          lineStmt.run(
-            salesOrderId, index + 1, line.item_code || null, line.item_name || null,
-            line.qty, line.uom, line.line_due_date || null, line.unit_price || null,
-            line.amount || null, line.tax_rate || null, line.partial_allowed || 0, now
-          );
-        });
+        await sql(lineInsertQuery, [
+          salesOrderId, 
+          i + 1, 
+          line.item_code || null, 
+          line.item_name || null,
+          line.qty, 
+          line.uom, 
+          line.unit_price || 0, 
+          line.line_amount || 0, 
+          line.note || null
+        ]);
       }
-      
-      return salesOrderId;
-    });
+    }
     
-    const createdId = transaction();
-    db.close();
+    const createdId = salesOrderId;
     
     // Return just the ID as specified
     res.status(201).json({ id: createdId });
