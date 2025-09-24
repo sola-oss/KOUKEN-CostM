@@ -8,25 +8,26 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import Dashboard from "@/pages/dashboard";
-import SalesOrders from "@/pages/sales-orders";
-import NewSalesOrder from "@/pages/sales-orders-new";
-import SalesOrderDetail from "@/pages/sales-orders-detail";
-import TimeEntries from "@/pages/time-entries";
-import TimeEntriesApprove from "@/pages/time-entries-approve";
-import Reports from "@/pages/reports";
+// Production Management MVP - Main Pages
+import Dashboard from "@/pages/production/dashboard";
+import Orders from "@/pages/production/orders";
+import WorkHours from "@/pages/production/work-hours";
+import Procurement from "@/pages/production/procurement";
+import Calendar from "@/pages/production/calendar";
+import Reports from "@/pages/production/reports";
+import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/sales-orders" component={SalesOrders} />
-      <Route path="/sales-orders/new" component={NewSalesOrder} />
-      <Route path="/sales-orders/:id" component={SalesOrderDetail} />
-      <Route path="/time-entries" component={TimeEntries} />
-      <Route path="/time-entries/approve" component={TimeEntriesApprove} />
+      <Route path="/orders" component={Orders} />
+      <Route path="/work-hours" component={WorkHours} />
+      <Route path="/procurement" component={Procurement} />
+      <Route path="/calendar" component={Calendar} />
       <Route path="/reports" component={Reports} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -49,7 +50,7 @@ function App() {
                 <header className="flex items-center justify-between px-4 py-3 border-b bg-background">
                   <div className="flex items-center gap-3">
                     <SidebarTrigger data-testid="button-sidebar-toggle" />
-                    <h1 className="text-lg font-semibold">生産管理システム</h1>
+                    <h1 className="text-lg font-semibold">生産管理ミニMVP</h1>
                   </div>
                   <ThemeToggle />
                 </header>

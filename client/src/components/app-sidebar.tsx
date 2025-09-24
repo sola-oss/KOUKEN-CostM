@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 
-// Menu structure for production management system
+// Production Management MVP - Simplified 6-Screen Navigation
 const menuItems = [
   {
     title: "ダッシュボード",
@@ -32,70 +32,33 @@ const menuItems = [
   },
   {
     title: "受注管理",
-    icon: FileText,
-    badge: "20",
-    items: [
-      { title: "受注一覧", url: "/sales-orders" },
-      { title: "新規受注", url: "/sales-orders/new" }
-    ]
-  },
-  {
-    title: "工数管理",
-    icon: Clock,
-    badge: null,
-    items: [
-      { title: "工数入力", url: "/time-entries" },
-      { title: "工数承認", url: "/time-entries/approve" },
-      { title: "工数レポート", url: "/reports" }
-    ]
-  },
-  {
-    title: "製番管理",
+    url: "/orders",
     icon: Package,
-    badge: "60",
-    items: [
-      { title: "製番一覧", url: "/production-orders" },
-      { title: "製番計画", url: "/production-orders/planning" },
-      { title: "進捗カレンダー", url: "/production-orders/calendar" }
-    ]
+    badge: null
   },
   {
-    title: "発注・入荷",
+    title: "工数管理", 
+    url: "/work-hours",
+    icon: Clock,
+    badge: null
+  },
+  {
+    title: "調達管理",
+    url: "/procurement",
     icon: ClipboardCheck,
-    items: [
-      { title: "発注一覧", url: "/purchase-orders" },
-      { title: "入荷処理", url: "/receipts" },
-      { title: "在庫確認", url: "/inventory" }
-    ]
+    badge: null
   },
   {
-    title: "出荷・売上",
-    icon: Truck,
-    items: [
-      { title: "出荷一覧", url: "/shipments" },
-      { title: "出荷処理", url: "/shipments/new" },
-      { title: "請求書", url: "/invoices" }
-    ]
-  },
-  {
-    title: "マスタ管理",
-    icon: Building2,
-    items: [
-      { title: "顧客管理", url: "/customers" },
-      { title: "業者管理", url: "/vendors" },
-      { title: "品目管理", url: "/items" },
-      { title: "従業員管理", url: "/employees" },
-      { title: "カレンダー設定", url: "/calendars" }
-    ]
+    title: "進捗カレンダー",
+    url: "/calendar",
+    icon: Calendar,
+    badge: null
   },
   {
     title: "レポート",
+    url: "/reports",
     icon: BarChart3,
-    items: [
-      { title: "生産進捗レポート", url: "/reports/production" },
-      { title: "売上レポート", url: "/reports/sales" },
-      { title: "月次CSV出力", url: "/reports/export" }
-    ]
+    badge: null
   }
 ];
 
@@ -116,8 +79,8 @@ export function AppSidebar() {
         <div className="flex items-center gap-2 px-2 py-4">
           <Package className="h-6 w-6 text-primary" />
           <div className="flex flex-col">
-            <span className="text-sm font-semibold">生産管理システム</span>
-            <span className="text-xs text-muted-foreground">Production Management</span>
+            <span className="text-sm font-semibold">生産管理ミニMVP</span>
+            <span className="text-xs text-muted-foreground">Production Management MVP</span>
           </div>
         </div>
       </SidebarHeader>
