@@ -1,0 +1,74 @@
+バグ: 「受注一覧が表示されない」問題を緊急復旧してください。
+
+方針（強制復旧）:
+- DBを一旦 **SQLite 固定**に戻し、必ずデータが見える状態にする。
+- sales_orders の **DDL/ルート/シード** を保証。
+- フロントの一覧ページで **エラー時はバナー表示**、フィルタ初期値は「直近90日、status=all」にする。
+- 401/404/500 の場合は明示メッセージを出す（無音で空にしない）。
+
+### 1) 環境変数（.env / Replit Secrets）
+DB_PROVIDER=sqlite
+DB_PATH=./server/db/app.sqlite
+APP_ACCESS_CODE=changeme
+VITE_APP_ACCESS_CODE=changeme
+
+### 2) マイグレーション（存在保証）
+/server/migrations/001_init.sql に以下があるか確認し、無ければ作成:
+- sales_orders(
+    id INTEGER PRIMARY KEY,
+    so_no TEXT UNIQUE,
+    customer_name TEXT NOT NULL,
+    order_date TEXT NOT NULL,
+    due_date TEXT,
+    order_type TEXT,
+    sales_rep TEXT,
+    ship_to_name TEXT,
+    ship_to_address TEXT,
+    customer_contact TEXT,
+    customer_email TEXT,
+    tags TEXT,
+    note TEXT,
+    status TEXT CHECK(status IN ('draft','confirmed','closed')) NOT NULL DEFAULT 'draft',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+- sales_order_lines(
+    id INTEGER PRIMARY KEY,
+    sales_order_id INTEGER NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
+    line_no INTEGER NOT NULL,
+    item_code TEXT,
+    item_name TEXT,
+    qty REAL NOT NULL,
+    uom TEXT NOT NULL,
+    line_due_date TEXT,
+    unit_price REAL,
+    amount REAL,
+    tax_rate REAL,
+    partial_allowed INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+- INDEX:
+  CREATE INDEX IF NOT EXISTS idx_so_status_date ON sales_orders(status, order_date);
+  CREATE INDEX IF NOT EXISTS idx_sol_so ON sales_order_lines(sales_order_id);
+
+### 3) DB初期化
+- サーバ起動時に DB_PROVIDER=sqlite の場合は DB_PATH を作成し、全マイグレーションを適用する関数を呼ぶ。
+- 既に PostgreSQL 切替コードがあっても OK。今回は sqlite 分岐を必ず通す。
+
+### 4) API ルート（存在保証）
+/server/routes/salesOrders.js:
+- GET /api/sales-orders?from=&to=&q=&status=&page=&page_size=
+  実装: 
+    * from/to 未指定なら「今日から過去90日」をデフォルト。
+    * status 未指定なら ALL。
+    * レスポンス: { items:[...], total } かつ X-Total-Count ヘッダ。
+- POST /api/sales-orders 既存を維持。
+- 認証: すべてのルートで 'x-access-code' == APP_ACCESS_CODE を必須。
+
+### 5) シード（存在保証）
+npm run seed で直近60日内のダミー受注を最低10件投入（draft 5 / confirmed 5）。
+- customer_name だけ埋まっていればOK。明細は1行で良い。
+- 実行手順を README に追記。
+
+### 6) フロント（一覧ページ修正）
+/client/src/pages/sale

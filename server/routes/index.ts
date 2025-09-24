@@ -1,6 +1,6 @@
 // Production Management System - Main Router
 import { Router } from 'express';
-import { insertSalesOrderSchema } from '../../shared/schema.js';
+import { insertSalesOrderMinSchema } from '../../shared/schema.js';
 
 const router = Router();
 

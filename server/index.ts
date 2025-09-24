@@ -31,6 +31,18 @@ app.use(rateLimitConfig);
 app.use('/api', apiRateLimitConfig);
 
 (async () => {
+  // Initialize SQLite database if configured
+  if (process.env.DB_PROVIDER === 'sqlite') {
+    try {
+      const { sqliteInitializer } = await import('./lib/sqlite-init.js');
+      await sqliteInitializer.initialize();
+      console.log('✓ SQLite database initialized successfully');
+    } catch (error) {
+      console.error('✗ Failed to initialize SQLite database:', error);
+      process.exit(1);
+    }
+  }
+
   const server = await registerRoutes(app);
 
   // importantly only setup vite in development and after
