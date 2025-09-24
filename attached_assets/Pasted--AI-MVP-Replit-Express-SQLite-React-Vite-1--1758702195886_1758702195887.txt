@@ -1,0 +1,162 @@
+目的：
+あなた（AI）に、次の要件で「生産管理ミニMVP」を Replit 上に
+Express + SQLite + React(Vite) で実装してほしい。
+
+■ メニュー（左）
+1) ダッシュボード
+2) 受注管理（案件登録）
+3) 工数管理（スタッフ入力/管理者集計）
+4) 手配管理（購買＋製造）
+5) 進捗カレンダー
+6) レポート/CSV出力
+
+■ データ構造（SQLite DDL）
+-- 受注（orders）
+orders(
+  order_id INTEGER PRIMARY KEY,
+  product_name TEXT NOT NULL,
+  qty REAL NOT NULL,
+  due_date TEXT NOT NULL,          -- UTC ISO
+  sales REAL NOT NULL,             -- 売上（合計）
+  material_unit_cost REAL NOT NULL,-- 材料単価（1個あたり）
+  std_time_per_unit REAL NOT NULL, -- 標準工数[h/個]
+  wage_rate REAL NOT NULL,         -- 時給[円/h]
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- 手配（procurements）… 購買(purchase) と 製造(manufacture) を統合
+procurements(
+  id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  kind TEXT CHECK(kind IN ('purchase','manufacture')) NOT NULL,
+  item_name TEXT,
+  qty REAL,
+  eta TEXT,                        -- 予定日(UTC)
+  status TEXT,                     -- 'planned'|'ordered'|'received'|'done' など
+  vendor TEXT,                     -- kind=purchase 用（任意）
+  unit_price REAL,                 -- kind=purchase 用（入荷時に金額算出）
+  received_at TEXT,                -- kind=purchase 用（UTC）
+  std_time_per_unit REAL,          -- kind=manufacture 用 [h/個]
+  act_time_per_unit REAL,          -- kind=manufacture 用 [h/個]
+  worker TEXT,                     -- kind=manufacture 用（任意）
+  completed_at TEXT,               -- kind=manufacture 用（UTC）
+  created_at TEXT NOT NULL
+);
+
+-- 工数入力（workers_log）… スタッフ用の簡易打刻
+workers_log(
+  id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  qty REAL NOT NULL,
+  act_time_per_unit REAL NOT NULL, -- [h/個]
+  worker TEXT NOT NULL,
+  date TEXT NOT NULL,              -- 作業日(UTC)
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_due ON orders(due_date);
+CREATE INDEX IF NOT EXISTS idx_proc_orders ON procurements(order_id, kind, status);
+CREATE INDEX IF NOT EXISTS idx_wlog_order ON workers_log(order_id, date);
+
+■ 集計ルール（サーバで実装し、API化）
+- 材料費 = (orders.qty * orders.material_unit_cost)
+         + Σ[purchase where status='received'](qty * unit_price)
+- 労務費 = orders.wage_rate * (
+            orders.qty * A   -- A=「受注レベルの実績工数[h/個]」。なければ0扱い
+            + Σ[manufacture](qty * act_time_per_unit)
+            + Σ[workers_log](qty * act_time_per_unit)
+          )
+  ※ 今回 A は 0 とし、manufacture と workers_log の合算を“実績”とみなして可視化。
+- 粗利 = sales - (材料費 + 労務費)
+- 工数差異% = ((実績工数[h/個] - 標準工数[h/個]) / 標準工数) * 100
+  実績工数[h/個] = ( Σ[manufacture](qty*act_time_per_unit) + Σ[workers_log](qty*act_time_per_unit) ) / orders.qty
+
+■ API（最低限）
+[受注]
+- POST   /api/orders
+  {product_name, qty, due_date(JST可), sales, material_unit_cost, std_time_per_unit, wage_rate}
+- GET    /api/orders?from=&to=&q=&page=&page_size=
+  → 一覧はヘッダ + 計算済みKPI（材料費/労務費/粗利/工数差異%）を含める
+- GET    /api/orders/:id  → ヘッダ + 紐づく手配/工数ログ + 計算済みKPI
+- PATCH  /api/orders/:id  → 最小編集（価格や納期など）
+- DELETE /api/orders/:id  → 論理削除ではなく物理削除でOK（MVP）
+
+[手配]
+- POST   /api/procurements
+- GET    /api/procurements?order_id=&kind=&status=
+- PATCH  /api/procurements/:id
+- DELETE /api/procurements/:id
+
+[工数ログ]
+- POST   /api/workers-log
+- GET    /api/workers-log?order_id=&from=&to=&worker=
+- DELETE /api/workers-log/:id
+
+[ダッシュボードKPI]
+- GET    /api/kpi/summary?from=&to=
+  → 総売上/総粗利/総工数(標準/実績)・平均工数差異%、手配進捗率（購買入荷率、製造完成率）
+
+[進捗カレンダー用]
+- GET    /api/calendar?from=&to=
+  → 各 order の due_date、手配(eta/received_at/completed_at) を返し、色分け条件はフロントで判定
+    未着手/進行中=黄、入荷済or完成=緑、遅延=赤
+
+[CSV]
+- GET    /api/exports/orders.csv?from=&to=
+  → 列：order_id,product_name,qty,due_date,sales,material_unit_cost,std_time_per_unit,wage_rate,
+         material_cost,labor_cost,gross_profit,actual_time_per_unit,variance_pct
+
+■ サーバ実装の注意
+- Node + Express。helmet/cors/簡易rate-limit。保存はUTC、入出力は Asia/Tokyo（dayjs+timezoneで変換）。
+- DAO層を分離（/server/dao）。計算関数は /server/services/metrics.ts に集約。
+- エラーは JSON {error,message} で 400/404/500。
+- 認証は不要（MVP）。.env に DB_PATH のみ。
+
+■ フロント（React + Vite）
+- ルーティング：
+  /dashboard
+  /orders（一覧＋「新規」）
+  /orders/new（案件登録フォーム）
+  /worklogs (スタッフ入力/管理者一覧タブ)
+  /procurements（注文/製造タブ＋フィルタ）
+  /calendar
+  /reports
+- 共通：TanStack Query。最低限のCSSでOK。スマホ対応（worklogs フォームは1画面完結）。
+- 画面要件：
+  [ダッシュボード]
+   - カードでKPI：総売上・総粗利・総工数（標準/実績）・平均工数差異、手配進捗率（購買入荷率/製造完成率）
+   - カレンダーのサマリ（今週の納期件数、遅延件数）
+  [受注管理]
+   - 新規フォーム：product_name, qty, due_date(カレンダー入力), sales, material_unit_cost, std_time_per_unit, wage_rate
+   - 一覧テーブル：受注日不要。列=案件名, 納期, 数量, 売上, 材料費, 労務費, 粗利, 工数差異%（計算済）
+   - 行クリックで詳細（右ペイン表示でも別ページでも可）
+  [工数管理]
+   - スタッフ用（スマホ）：order選択(プルダウン), qty, act_time_per_unit[h/個], worker, 送信
+   - 管理者用（PC）：案件別に 標準vs実績、差異% を表示。期間フィルタあり。
+  [手配管理]
+   - タブ：購買/製造。フィルタ：order, status。
+   - 購買：発注先(vendor), qty, unit_price, eta, status, received_at
+   - 製造：qty, std_time_per_unit, act_time_per_unit, worker, completed_at
+   - 入力が保存されると、案件の材料費/労務費に自動反映（計算はサーバ）
+  [進捗カレンダー]
+   - orderのdue_date と 手配eta/完了日を一つの月/週表示に重ねる
+   - 色分け（黄/緑/赤）は上記ルールで
+  [レポート/CSV]
+   - 期間を指定して CSV ダウンロード
+
+■ Seed & README
+- npm run migrate でDDL適用、npm run seed でダミーデータ：
+  orders 10件、procurements(purchase/manufacture) 合計20件、workers_log 30件
+- READMEに「集計ロジック・色分け条件・CSV列」を明記。
+
+■ 受け入れテスト（手動でOK）
+- 受注を新規登録→一覧に反映。
+- workers_log にスマホ風フォームから投入→受注一覧の労務費/工数差異に反映。
+- 購買の入荷済（status='received'）を登録→材料費に反映。
+- 製造の実績工数を登録→労務費・実績工数[h/個]に反映。
+- ダッシュボードにKPIが出る。
+- 進捗カレンダーに due/eta/完了が色分け表示。
+- CSVがダウンロードでき、合計が画面と一致。
+
+実装は「最小で動くこと」を最優先。UIはシンプルでよい。
