@@ -197,7 +197,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-efficiency-rate">
-              {formatPercentage(Math.abs(kpi?.avg_variance_pct ?? 0) / 100)}
+              {Math.abs(kpi?.avg_variance_pct ?? 0).toFixed(1)}%
             </div>
             <p className="text-xs text-muted-foreground">
               標準時間に対する実績
@@ -213,7 +213,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-orders-completion">
-              {formatPercentage((kpi?.purchase_completion_rate ?? 0) + (kpi?.manufacture_completion_rate ?? 0)) / 2}
+              {(((kpi?.purchase_completion_rate ?? 0) + (kpi?.manufacture_completion_rate ?? 0)) / 2).toFixed(1)}%
             </div>
             <p className="text-xs text-muted-foreground">
               受注の完了状況

@@ -1,18 +1,38 @@
 // Production Management MVP - Orders Management
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Plus, Package, DollarSign, Calendar, Users } from "lucide-react";
-import { listOrders, type Order } from "@/shared/production-api";
+import { listOrders, createOrder, type Order, type OrderPayload } from "@/shared/production-api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+// Form validation schema with type coercion
+const orderFormSchema = z.object({
+  product_name: z.string().min(1, "製品名は必須です").max(100, "製品名は100文字以内で入力してください"),
+  qty: z.coerce.number().min(1, "数量は1以上である必要があります").max(10000, "数量は10000以下である必要があります"),
+  due_date: z.string().min(1, "納期は必須です"),
+  sales: z.coerce.number().min(0, "売上は0以上である必要があります").max(100000000, "売上は1億円以下である必要があります"),
+  material_unit_cost: z.coerce.number().min(0, "材料単価は0以上である必要があります").max(1000000, "材料単価は100万円以下である必要があります"),
+  std_time_per_unit: z.coerce.number().min(0, "標準作業時間は0以上である必要があります").max(1000, "標準作業時間は1000時間以下である必要があります"),
+  wage_rate: z.coerce.number().min(0, "賃金レートは0以上である必要があります").max(10000, "賃金レートは10000円以下である必要があります")
+});
+
+type OrderFormData = z.infer<typeof orderFormSchema>;
 
 export default function Orders() {
   const { toast } = useToast();
   const [page, setPage] = useState(1);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const { data: ordersResponse, isLoading, error } = useQuery({
     queryKey: ['orders', page],
@@ -20,6 +40,45 @@ export default function Orders() {
   });
 
   const orders = ordersResponse?.data || [];
+
+  // Form setup
+  const form = useForm<OrderFormData>({
+    resolver: zodResolver(orderFormSchema),
+    defaultValues: {
+      product_name: "",
+      qty: 1,
+      due_date: "",
+      sales: 0,
+      material_unit_cost: 0,
+      std_time_per_unit: 0,
+      wage_rate: 0
+    }
+  });
+
+  // Create order mutation
+  const createOrderMutation = useMutation({
+    mutationFn: (data: OrderPayload) => createOrder(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setIsDialogOpen(false);
+      form.reset();
+      toast({
+        title: "成功",
+        description: "新規受注が正常に作成されました",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error.message || "受注の作成に失敗しました",
+      });
+    }
+  });
+
+  const onSubmit = (data: OrderFormData) => {
+    createOrderMutation.mutate(data);
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("ja-JP", {
@@ -88,10 +147,180 @@ export default function Orders() {
             製品受注の管理と進捗追跡
           </p>
         </div>
-        <Button data-testid="button-add-order">
-          <Plus className="mr-2 h-4 w-4" />
-          新規受注
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-add-order">
+              <Plus className="mr-2 h-4 w-4" />
+              新規受注
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>新規受注作成</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="product_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>製品名 <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="例: 精密部品A" 
+                            {...field}
+                            data-testid="input-product-name"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="qty"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>数量 <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="1" 
+                            {...field}
+                            data-testid="input-qty"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="due_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>納期 <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="date" 
+                            {...field}
+                            data-testid="input-due-date"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="sales"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>売上 (円) <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="100000" 
+                            {...field}
+                            data-testid="input-sales"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="material_unit_cost"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>材料単価 (円)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.01"
+                            placeholder="5000" 
+                            {...field}
+                            data-testid="input-material-cost"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="std_time_per_unit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>標準作業時間 (時間)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.1"
+                            placeholder="2.5" 
+                            {...field}
+                            data-testid="input-std-time"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="wage_rate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>賃金レート (円/時)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.01"
+                            placeholder="2000" 
+                            {...field}
+                            data-testid="input-wage-rate"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsDialogOpen(false)}
+                    data-testid="button-cancel-order"
+                  >
+                    キャンセル
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={createOrderMutation.isPending}
+                    data-testid="button-submit-order"
+                  >
+                    {createOrderMutation.isPending ? "作成中..." : "受注作成"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Orders Grid */}
@@ -128,12 +357,12 @@ export default function Orders() {
               </div>
               <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                 <div>
-                  <p className="text-xs text-muted-foreground">材料単価</p>
-                  <p className="font-medium">{formatCurrency(order.material_unit_cost)}</p>
+                  <p className="text-xs text-muted-foreground">材料費</p>
+                  <p className="font-medium">{formatCurrency(order.material_cost)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">時給</p>
-                  <p className="font-medium">{formatCurrency(order.wage_rate)}</p>
+                  <p className="text-xs text-muted-foreground">労務費</p>
+                  <p className="font-medium">{formatCurrency(order.labor_cost)}</p>
                 </div>
               </div>
               <div className="pt-2">

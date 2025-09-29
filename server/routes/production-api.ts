@@ -179,11 +179,26 @@ router.post('/api/orders', async (req, res) => {
     };
 
     const orderId = await dao.createOrder(orderData);
+    
+    // Fetch the created order to return full object
+    const result = await dao.getOrderById(orderId);
+    
+    if (!result.order) {
+      return res.status(500).json({ 
+        error: 'Internal server error',
+        message: 'Failed to fetch created order'
+      });
+    }
 
-    res.status(201).json({ 
-      order_id: orderId,
-      message: 'Order created successfully' 
-    });
+    // Convert dates to JST for response
+    const createdOrder = {
+      ...result.order,
+      due_date: toJST(result.order.due_date),
+      created_at: toJST(result.order.created_at),
+      updated_at: toJST(result.order.updated_at)
+    };
+
+    res.status(201).json(createdOrder);
 
   } catch (error) {
     console.error('Order creation error:', error);
