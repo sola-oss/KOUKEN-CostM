@@ -38,9 +38,10 @@ export interface Order {
   qty: number;
   due_date: string;
   sales: number;
-  material_unit_cost: number;
+  estimated_material_cost: number;
   std_time_per_unit: number;
-  wage_rate: number;
+  status: 'pending' | 'in_progress' | 'completed';
+  customer_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -50,9 +51,10 @@ export interface OrderPayload {
   qty: number;
   due_date: string;
   sales: number;
-  material_unit_cost: number;
+  estimated_material_cost: number;
   std_time_per_unit: number;
-  wage_rate: number;
+  status?: 'pending' | 'in_progress' | 'completed';
+  customer_name?: string;
 }
 
 // Procurement Types  

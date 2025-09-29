@@ -2,6 +2,7 @@
 import { sql } from "drizzle-orm";
 import { sqliteTable, integer, text, real, index } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
 
 // ========== Production Management Tables ==========
 
@@ -62,6 +63,10 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   order_id: true,
   created_at: true,
   updated_at: true,
+}).extend({
+  due_date: z.string().min(1, "納期は必須です"),
+  status: z.enum(['pending', 'in_progress', 'completed']).default('pending'),
+  customer_name: z.string().optional()
 });
 
 export const insertProcurementSchema = createInsertSchema(procurements).omit({

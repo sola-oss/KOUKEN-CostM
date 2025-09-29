@@ -22,9 +22,10 @@ const orderFormSchema = z.object({
   qty: z.coerce.number().min(1, "数量は1以上である必要があります").max(10000, "数量は10000以下である必要があります"),
   due_date: z.string().min(1, "納期は必須です"),
   sales: z.coerce.number().min(0, "売上は0以上である必要があります").max(100000000, "売上は1億円以下である必要があります"),
-  material_unit_cost: z.coerce.number().min(0, "材料単価は0以上である必要があります").max(1000000, "材料単価は100万円以下である必要があります"),
+  estimated_material_cost: z.coerce.number().min(0, "見込み材料費は0以上である必要があります").max(10000000, "見込み材料費は1000万円以下である必要があります"),
   std_time_per_unit: z.coerce.number().min(0, "標準作業時間は0以上である必要があります").max(1000, "標準作業時間は1000時間以下である必要があります"),
-  wage_rate: z.coerce.number().min(0, "賃金レートは0以上である必要があります").max(10000, "賃金レートは10000円以下である必要があります")
+  status: z.enum(['pending', 'in_progress', 'completed']).default('pending'),
+  customer_name: z.string().optional()
 });
 
 type OrderFormData = z.infer<typeof orderFormSchema>;
@@ -49,9 +50,10 @@ export default function Orders() {
       qty: 1,
       due_date: "",
       sales: 0,
-      material_unit_cost: 0,
+      estimated_material_cost: 0,
       std_time_per_unit: 0,
-      wage_rate: 0
+      status: 'pending' as const,
+      customer_name: ""
     }
   });
 
@@ -238,20 +240,20 @@ export default function Orders() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="material_unit_cost"
+                    name="estimated_material_cost"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>材料単価 (円)</FormLabel>
+                        <FormLabel>見込み材料費 (円)</FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
                             step="0.01"
-                            placeholder="5000" 
+                            placeholder="50000" 
                             {...field}
-                            data-testid="input-material-cost"
+                            data-testid="input-estimated-material-cost"
                           />
                         </FormControl>
                         <FormMessage />
@@ -264,7 +266,7 @@ export default function Orders() {
                     name="std_time_per_unit"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>標準作業時間 (時間)</FormLabel>
+                        <FormLabel>標準作業時間 (時間/個)</FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
@@ -278,20 +280,43 @@ export default function Orders() {
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ステータス <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <select 
+                            {...field}
+                            className="w-full p-2 border border-input rounded-md bg-background"
+                            data-testid="select-status"
+                          >
+                            <option value="pending">未着手</option>
+                            <option value="in_progress">進行中</option>
+                            <option value="completed">完了</option>
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   
                   <FormField
                     control={form.control}
-                    name="wage_rate"
+                    name="customer_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>賃金レート (円/時)</FormLabel>
+                        <FormLabel>顧客名</FormLabel>
                         <FormControl>
                           <Input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="2000" 
+                            type="text" 
+                            placeholder="株式会社〇〇" 
                             {...field}
-                            data-testid="input-wage-rate"
+                            data-testid="input-customer-name"
                           />
                         </FormControl>
                         <FormMessage />
@@ -332,13 +357,24 @@ export default function Orders() {
                 <CardTitle className="text-lg">
                   受注 #{order.order_id}
                 </CardTitle>
-                <Badge variant="outline" className="bg-blue-50">
-                  進行中
+                <Badge 
+                  variant={order.status === 'completed' ? 'default' : order.status === 'in_progress' ? 'secondary' : 'outline'}
+                  data-testid={`badge-status-${order.order_id}`}
+                >
+                  {order.status === 'pending' ? '未着手' : order.status === 'in_progress' ? '進行中' : '完了'}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {order.product_name}
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  {order.product_name}
+                </p>
+                {order.customer_name && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    {order.customer_name}
+                  </p>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
@@ -357,17 +393,17 @@ export default function Orders() {
               </div>
               <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                 <div>
-                  <p className="text-xs text-muted-foreground">材料費</p>
-                  <p className="font-medium">{formatCurrency(order.material_cost)}</p>
+                  <p className="text-xs text-muted-foreground">見込み材料費</p>
+                  <p className="font-medium" data-testid={`text-material-cost-${order.order_id}`}>
+                    {formatCurrency(order.estimated_material_cost)}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">労務費</p>
-                  <p className="font-medium">{formatCurrency(order.labor_cost)}</p>
+                  <p className="text-xs text-muted-foreground">標準作業時間</p>
+                  <p className="font-medium" data-testid={`text-std-time-${order.order_id}`}>
+                    {order.std_time_per_unit}時間/個
+                  </p>
                 </div>
-              </div>
-              <div className="pt-2">
-                <p className="text-xs text-muted-foreground">標準作業時間</p>
-                <p className="font-medium">{order.std_time_per_unit}時間/単位</p>
               </div>
             </CardContent>
           </Card>
