@@ -6,8 +6,11 @@ import {
   insertProcurementSchema, 
   insertWorkerLogSchema,
   updateOrderSchema,
-  updateProcurementSchema
-} from '../../shared/production-schema.js';
+  updateProcurementSchema,
+  Order,
+  OrderKPI,
+  DashboardKPI
+} from '../../shared/schema.js';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import timezone from 'dayjs/plugin/timezone.js';

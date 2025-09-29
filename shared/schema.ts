@@ -1,64 +1,121 @@
-// Minimal Sales Order Management System - PostgreSQL Schema
+// Production Management Order System - PostgreSQL Schema
 import { sql } from "drizzle-orm";
 import { pgTable, text, integer, serial, varchar, decimal, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
-// ========== Simplified Sales Order Tables (PostgreSQL) ==========
-export const sales_orders_min = pgTable("sales_orders_min", {
-  id: serial("id").primaryKey(),
-  so_no: varchar("so_no", { length: 50 }), // Can be null until confirmed
-  customer_name: text("customer_name").notNull(), // Simplified: customer name as text field
-  order_date: text("order_date").notNull(),
-  due_date: text("due_date"),
-  note: text("note"),
-  status: varchar("status", { length: 20 }).notNull().default('draft'), // draft -> confirmed -> closed
-  total_amount: decimal("total_amount", { precision: 10, scale: 2 }).notNull().default('0'),
-  confirmed_at: timestamp("confirmed_at"),
+// ========== Production Order Management Tables (PostgreSQL) ==========
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),                    // 受注番号（自動採番）
+  product_name: text("product_name").notNull(),     // 製品名
+  qty: decimal("qty", { precision: 10, scale: 3 }).notNull(), // 数量
+  due_date: text("due_date").notNull(),             // 納期（ISO文字列）
+  sales: decimal("sales", { precision: 12, scale: 2 }).notNull(), // 売上（見込み含む）
+  estimated_material_cost: decimal("estimated_material_cost", { precision: 10, scale: 2 }).notNull(), // 見込み材料費（概算）
+  std_time_per_unit: decimal("std_time_per_unit", { precision: 8, scale: 2 }).notNull(), // 標準作業時間[h/個]
+  status: varchar("status", { length: 20 }).notNull().default('pending'), // ステータス: pending/in_progress/completed
+  customer_name: text("customer_name"),             // 顧客名（任意）
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
-  soNoIdx: index("idx_sales_orders_min_so_no").on(table.so_no),
-  customerNameIdx: index("idx_sales_orders_min_customer_name").on(table.customer_name),
-  statusIdx: index("idx_sales_orders_min_status").on(table.status),
-  orderDateIdx: index("idx_sales_orders_min_order_date").on(table.order_date),
+  dueDateIdx: index("idx_orders_due_date").on(table.due_date),
+  statusIdx: index("idx_orders_status").on(table.status),
+  customerNameIdx: index("idx_orders_customer_name").on(table.customer_name),
 }));
 
-export const sales_order_lines_min = pgTable("sales_order_lines_min", {
+// 手配 (Procurements) - 購買と製造の統合テーブル
+export const procurements = pgTable("procurements", {
   id: serial("id").primaryKey(),
-  sales_order_id: integer("sales_order_id").notNull().references(() => sales_orders_min.id),
-  line_no: integer("line_no").notNull(),
-  item_code: varchar("item_code", { length: 100 }),
-  item_name: text("item_name"), // Either item_code OR item_name is required
-  qty: decimal("qty", { precision: 10, scale: 3 }).notNull(),
-  uom: varchar("uom", { length: 20 }).notNull(), // Unit of measure (required)
-  unit_price: decimal("unit_price", { precision: 10, scale: 2 }).notNull().default('0'),
-  line_amount: decimal("line_amount", { precision: 10, scale: 2 }).notNull().default('0'),
-  note: text("note"),
+  order_id: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 20 }).notNull(), // 'purchase' または 'manufacture'
+  item_name: text("item_name"),
+  qty: decimal("qty", { precision: 10, scale: 3 }),
+  eta: text("eta"),                                // 予定日（ISO文字列）
+  status: varchar("status", { length: 20 }),       // 'planned'|'ordered'|'received'|'done'
+  vendor: text("vendor"),                          // 仕入先（purchase用）
+  unit_price: decimal("unit_price", { precision: 10, scale: 2 }), // 単価（purchase用）
+  received_at: text("received_at"),                // 入荷日（purchase用）
+  std_time_per_unit: decimal("std_time_per_unit", { precision: 8, scale: 2 }), // 標準時間（manufacture用）
+  act_time_per_unit: decimal("act_time_per_unit", { precision: 8, scale: 2 }), // 実績時間（manufacture用）
+  worker: text("worker"),                          // 作業者（manufacture用）
+  completed_at: text("completed_at"),              // 完了日（manufacture用）
   created_at: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
-  salesOrderIdx: index("idx_sales_order_lines_min_order").on(table.sales_order_id),
-  itemCodeIdx: index("idx_sales_order_lines_min_item_code").on(table.item_code),
+  orderKindStatusIdx: index("idx_procurements_order_kind_status").on(table.order_id, table.kind, table.status),
 }));
 
-// ========== Simplified Sales Order Schemas ==========
-export const insertSalesOrderMinSchema = createInsertSchema(sales_orders_min).omit({
+// 工数入力 (Workers Log) - スタッフ用の簡易打刻
+export const workers_log = pgTable("workers_log", {
+  id: serial("id").primaryKey(),
+  order_id: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  qty: decimal("qty", { precision: 10, scale: 3 }).notNull(),
+  act_time_per_unit: decimal("act_time_per_unit", { precision: 8, scale: 2 }).notNull(), // [h/個]
+  worker: text("worker").notNull(),
+  date: text("date").notNull(),                    // 作業日（ISO文字列）
+  created_at: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  orderDateIdx: index("idx_workers_log_order_date").on(table.order_id, table.date),
+}));
+
+// ========== Insert Schemas ==========
+export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
-  so_no: true,
-  status: true,
-  total_amount: true,
-  confirmed_at: true,
   created_at: true,
   updated_at: true,
 });
 
-export const insertSalesOrderLineMinSchema = createInsertSchema(sales_order_lines_min).omit({
+export const insertProcurementSchema = createInsertSchema(procurements).omit({
   id: true,
-  line_amount: true,
   created_at: true,
 });
 
-// ========== Simplified Type Definitions ==========
-export type SalesOrderMin = typeof sales_orders_min.$inferSelect;
-export type SalesOrderLineMin = typeof sales_order_lines_min.$inferSelect;
-export type InsertSalesOrderMin = typeof insertSalesOrderMinSchema._type;
-export type InsertSalesOrderLineMin = typeof insertSalesOrderLineMinSchema._type;
+export const insertWorkerLogSchema = createInsertSchema(workers_log).omit({
+  id: true,
+  created_at: true,
+});
+
+// Update schemas
+export const updateOrderSchema = insertOrderSchema.partial();
+export const updateProcurementSchema = insertProcurementSchema.partial();
+export const updateWorkerLogSchema = insertWorkerLogSchema.partial();
+
+// ========== Type Definitions ==========
+export type Order = typeof orders.$inferSelect;
+export type Procurement = typeof procurements.$inferSelect;
+export type WorkerLog = typeof workers_log.$inferSelect;
+export type InsertOrder = typeof insertOrderSchema._type;
+export type InsertProcurement = typeof insertProcurementSchema._type;
+export type InsertWorkerLog = typeof insertWorkerLogSchema._type;
+
+// KPI Types
+export interface OrderKPI {
+  id: number;
+  product_name: string;
+  qty: number;
+  due_date: string;
+  sales: number;
+  material_cost: number;      // 計算済み材料費
+  labor_cost: number;         // 計算済み労務費
+  gross_profit: number;       // 計算済み粗利
+  actual_time_per_unit: number; // 実績工数[h/個]
+  variance_pct: number;       // 工数差異%
+  status: string;             // ステータス
+  customer_name?: string;     // 顧客名
+}
+
+export interface DashboardKPI {
+  total_sales: number;
+  total_gross_profit: number;
+  total_std_hours: number;
+  total_actual_hours: number;
+  avg_variance_pct: number;
+  purchase_completion_rate: number;  // 購買入荷率
+  manufacture_completion_rate: number; // 製造完成率
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  type: 'order' | 'procurement' | 'worker_log';
+  status?: string;
+}

@@ -7,18 +7,20 @@ import { createInsertSchema } from "drizzle-zod";
 
 // 受注 (Orders)
 export const orders = sqliteTable("orders", {
-  order_id: integer("order_id").primaryKey(),
-  product_name: text("product_name").notNull(),
-  qty: real("qty").notNull(),
-  due_date: text("due_date").notNull(),          // UTC ISO
-  sales: real("sales").notNull(),                // 売上（合計）
-  material_unit_cost: real("material_unit_cost").notNull(), // 材料単価（1個あたり）
-  std_time_per_unit: real("std_time_per_unit").notNull(),   // 標準工数[h/個]
-  wage_rate: real("wage_rate").notNull(),        // 時給[円/h]
+  order_id: integer("order_id").primaryKey(),    // 受注番号（自動採番）
+  product_name: text("product_name").notNull(),  // 製品名
+  qty: real("qty").notNull(),                    // 数量
+  due_date: text("due_date").notNull(),          // 納期（UTC ISO）
+  sales: real("sales").notNull(),               // 売上（見込み含む）
+  estimated_material_cost: real("estimated_material_cost").notNull(), // 見込み材料費（概算）
+  std_time_per_unit: real("std_time_per_unit").notNull(),   // 標準作業時間[h/個]
+  status: text("status", { enum: ['pending', 'in_progress', 'completed'] }).notNull().default('pending'), // ステータス
+  customer_name: text("customer_name"),          // 顧客名（任意）
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),
 }, (table) => ({
   dueDateIdx: index("idx_orders_due").on(table.due_date),
+  statusIdx: index("idx_orders_status").on(table.status),
 }));
 
 // 手配 (Procurements) - 購買(purchase) と 製造(manufacture) を統合
@@ -79,8 +81,8 @@ export const updateWorkerLogSchema = insertWorkerLogSchema.partial();
 
 // Column whitelists for safe updates
 export const ALLOWED_ORDER_UPDATE_COLUMNS = [
-  'product_name', 'qty', 'due_date', 'sales', 'material_unit_cost', 
-  'std_time_per_unit', 'wage_rate'
+  'product_name', 'qty', 'due_date', 'sales', 'estimated_material_cost', 
+  'std_time_per_unit', 'status', 'customer_name'
 ] as const;
 
 export const ALLOWED_PROCUREMENT_UPDATE_COLUMNS = [

@@ -1,15 +1,15 @@
 // Production Management MVP - Metrics Calculation Service
 import Database from 'better-sqlite3';
-import type { Order, Procurement, WorkerLog, OrderKPI, DashboardKPI, CalendarEvent } from '../../shared/production-schema.js';
+import type { Order, Procurement, WorkerLog, OrderKPI, DashboardKPI, CalendarEvent } from '../../shared/schema.js';
 
 export class MetricsService {
   constructor(private db: Database.Database) {}
 
   /**
    * 集計ルール実装:
-   * - 材料費 = (orders.qty * orders.material_unit_cost) + Σ[purchase where status='received'](qty * unit_price)
-   * - 労務費 = orders.wage_rate * (orders.qty * A + Σ[manufacture](qty * act_time_per_unit) + Σ[workers_log](qty * act_time_per_unit))
-   *   ※ 今回 A は 0 とし、manufacture と workers_log の合算を"実績"とみなす
+   * - 材料費 = (orders.qty * orders.estimated_material_cost) + Σ[purchase where status='received'](qty * unit_price)
+   * - 労務費 = defaultWageRate * (Σ[manufacture](qty * act_time_per_unit) + Σ[workers_log](qty * act_time_per_unit))
+   *   ※ 賃金レートはシステム設定のデフォルト値（2000円/時）を使用
    * - 粗利 = sales - (材料費 + 労務費)
    * - 工数差異% = ((実績工数[h/個] - 標準工数[h/個]) / 標準工数) * 100
    */
@@ -26,7 +26,7 @@ export class MetricsService {
     if (!order) return null;
 
     // Calculate material cost
-    const baseMaterialCost = order.qty * order.material_unit_cost;
+    const baseMaterialCost = order.qty * order.estimated_material_cost;
     
     // Add received purchases material cost
     const purchaseMaterialCost = this.db.prepare(`
@@ -54,7 +54,8 @@ export class MetricsService {
     const actualTimePerUnit = order.qty > 0 ? totalActualHours / order.qty : 0;
 
     // Calculate labor cost
-    const laborCost = order.wage_rate * totalActualHours;
+    const defaultWageRate = 2000; // システム設定のデフォルト賃金レート（円/時）
+    const laborCost = defaultWageRate * totalActualHours;
 
     // Calculate gross profit
     const grossProfit = order.sales - (materialCost + laborCost);

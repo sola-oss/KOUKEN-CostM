@@ -5,7 +5,7 @@ import type {
   Order, Procurement, WorkerLog, 
   InsertOrder, InsertProcurement, InsertWorkerLog,
   OrderKPI, DashboardKPI, CalendarEvent 
-} from '../../shared/production-schema.js';
+} from '../../shared/schema.js';
 
 export class ProductionDAO {
   private db: Database.Database;
@@ -25,9 +25,9 @@ export class ProductionDAO {
     const now = new Date().toISOString();
     const stmt = this.db.prepare(`
       INSERT INTO orders (
-        product_name, qty, due_date, sales, material_unit_cost, 
-        std_time_per_unit, wage_rate, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        product_name, qty, due_date, sales, estimated_material_cost, 
+        std_time_per_unit, status, customer_name, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     const result = stmt.run(
@@ -35,9 +35,10 @@ export class ProductionDAO {
       orderData.qty,
       orderData.due_date,
       orderData.sales,
-      orderData.material_unit_cost,
+      orderData.estimated_material_cost,
       orderData.std_time_per_unit,
-      orderData.wage_rate,
+      orderData.status || 'pending',
+      orderData.customer_name || null,
       now,
       now
     );
@@ -93,7 +94,7 @@ export class ProductionDAO {
   }
 
   async updateOrder(orderId: number, updates: Partial<InsertOrder>): Promise<boolean> {
-    const allowedColumns = ['product_name', 'qty', 'due_date', 'sales', 'material_unit_cost', 'std_time_per_unit', 'wage_rate'];
+    const allowedColumns = ['product_name', 'qty', 'due_date', 'sales', 'estimated_material_cost', 'std_time_per_unit', 'status', 'customer_name'];
     
     // Filter to only allowed columns
     const filteredUpdates: Record<string, any> = {};
