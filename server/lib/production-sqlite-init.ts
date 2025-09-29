@@ -100,33 +100,36 @@ export class ProductionSqliteInitializer {
           qty: 100,
           due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
           sales: 150000,
-          material_unit_cost: 800,
+          estimated_material_cost: 80000,
           std_time_per_unit: 0.5,
-          wage_rate: 3000
+          status: 'completed',
+          customer_name: null
         },
         {
           product_name: 'ステンレス部品B',
           qty: 50,
           due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
           sales: 200000,
-          material_unit_cost: 1200,
+          estimated_material_cost: 60000,
           std_time_per_unit: 0.8,
-          wage_rate: 3200
+          status: 'completed',
+          customer_name: null
         },
         {
           product_name: '樹脂成型品C',
           qty: 200,
           due_date: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(), // 21 days from now
           sales: 80000,
-          material_unit_cost: 300,
+          estimated_material_cost: 30000,
           std_time_per_unit: 0.3,
-          wage_rate: 2800
+          status: 'completed',
+          customer_name: null
         }
       ];
       
       const insertOrder = db.prepare(`
-        INSERT INTO orders (product_name, qty, due_date, sales, material_unit_cost, std_time_per_unit, wage_rate, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO orders (product_name, qty, due_date, sales, estimated_material_cost, std_time_per_unit, status, customer_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const orderIds: number[] = [];
@@ -137,9 +140,10 @@ export class ProductionSqliteInitializer {
           order.qty,
           order.due_date,
           order.sales,
-          order.material_unit_cost,
+          order.estimated_material_cost,
           order.std_time_per_unit,
-          order.wage_rate,
+          order.status,
+          order.customer_name,
           now,
           now
         );

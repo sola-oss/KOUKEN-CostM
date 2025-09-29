@@ -71,6 +71,10 @@ export class MetricsService {
       qty: order.qty,
       due_date: order.due_date,
       sales: order.sales,
+      estimated_material_cost: order.estimated_material_cost,
+      std_time_per_unit: order.std_time_per_unit,
+      status: order.status,
+      customer_name: order.customer_name,
       material_cost: materialCost,
       labor_cost: laborCost,
       gross_profit: grossProfit,
@@ -194,7 +198,7 @@ export class MetricsService {
     const purchaseStats = this.db.prepare(`
       SELECT 
         COUNT(*) as total,
-        SUM(CASE WHEN status = 'received' THEN 1 ELSE 0 END) as completed
+        SUM(CASE WHEN p.status = 'received' THEN 1 ELSE 0 END) as completed
       FROM procurements p
       JOIN orders o ON p.order_id = o.order_id
       WHERE p.kind = 'purchase' ${whereClause.replace('due_date', 'o.due_date')}
@@ -203,7 +207,7 @@ export class MetricsService {
     const manufactureStats = this.db.prepare(`
       SELECT 
         COUNT(*) as total,
-        SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as completed
+        SUM(CASE WHEN p.status = 'done' THEN 1 ELSE 0 END) as completed
       FROM procurements p
       JOIN orders o ON p.order_id = o.order_id
       WHERE p.kind = 'manufacture' ${whereClause.replace('due_date', 'o.due_date')}

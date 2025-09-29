@@ -13,9 +13,10 @@ CREATE TABLE orders (
   qty REAL NOT NULL,
   due_date TEXT NOT NULL,          -- UTC ISO
   sales REAL NOT NULL,             -- 売上（合計）
-  material_unit_cost REAL NOT NULL,-- 材料単価（1個あたり）
+  estimated_material_cost REAL NOT NULL, -- 見込み材料費（概算）
   std_time_per_unit REAL NOT NULL, -- 標準工数[h/個]
-  wage_rate REAL NOT NULL,         -- 時給[円/h]
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','in_progress','completed')), -- ステータス
+  customer_name TEXT,              -- 顧客名（任意）
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

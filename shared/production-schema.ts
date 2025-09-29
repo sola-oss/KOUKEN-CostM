@@ -115,6 +115,10 @@ export interface OrderKPI {
   qty: number;
   due_date: string;
   sales: number;
+  estimated_material_cost: number; // 見込み材料費（元データ）
+  std_time_per_unit: number;   // 標準工数（元データ）
+  status: 'pending' | 'in_progress' | 'completed'; // ステータス（元データ）
+  customer_name?: string;      // 顧客名（元データ）
   material_cost: number;      // 計算済み材料費
   labor_cost: number;         // 計算済み労務費
   gross_profit: number;       // 計算済み粗利
