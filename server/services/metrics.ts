@@ -1,6 +1,6 @@
 // Production Management MVP - Metrics Calculation Service
 import Database from 'better-sqlite3';
-import type { Order, Procurement, WorkerLog, OrderKPI, DashboardKPI, CalendarEvent } from '../../shared/schema.js';
+import type { Order, Procurement, WorkerLog, OrderKPI, DashboardKPI, CalendarEvent } from '../../shared/production-schema.js';
 
 export class MetricsService {
   constructor(private db: Database.Database) {}

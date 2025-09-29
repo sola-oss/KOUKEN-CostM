@@ -5,7 +5,7 @@ import type {
   Order, Procurement, WorkerLog, 
   InsertOrder, InsertProcurement, InsertWorkerLog,
   OrderKPI, DashboardKPI, CalendarEvent 
-} from '../../shared/schema.js';
+} from '../../shared/production-schema.js';
 
 export class ProductionDAO {
   private db: Database.Database;
