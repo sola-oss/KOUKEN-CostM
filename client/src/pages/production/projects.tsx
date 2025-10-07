@@ -53,7 +53,7 @@ export default function Projects() {
 
   // Create order mutation
   const createOrderMutation = useMutation({
-    mutationFn: (data: OrderPayload) => {
+    mutationFn: (data: OrderFormData) => {
       // Add required fields with default values
       const payload: OrderPayload = {
         ...data,
