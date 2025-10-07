@@ -9,24 +9,25 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 // Production Management MVP - Main Pages
-import Dashboard from "@/pages/production/dashboard";
-import Orders from "@/pages/production/orders";
-import WorkHours from "@/pages/production/work-hours";
-import Procurement from "@/pages/production/procurement";
+import Projects from "@/pages/production/projects";
+import WorkInstructions from "@/pages/production/work-instructions";
+import WorkResults from "@/pages/production/work-results";
 import Calendar from "@/pages/production/calendar";
-import Reports from "@/pages/production/reports";
+import SummaryApproval from "@/pages/production/summary-approval";
+import CostAnalysis from "@/pages/production/cost-analysis";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/orders" component={Orders} />
-      <Route path="/work-hours" component={WorkHours} />
-      <Route path="/procurement" component={Procurement} />
+      <Route path="/" component={Projects} />
+      <Route path="/projects" component={Projects} />
+      <Route path="/work-instructions" component={WorkInstructions} />
+      <Route path="/work-results" component={WorkResults} />
       <Route path="/calendar" component={Calendar} />
-      <Route path="/reports" component={Reports} />
+      <Route path="/summary-approval" component={SummaryApproval} />
+      <Route path="/cost-analysis" component={CostAnalysis} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

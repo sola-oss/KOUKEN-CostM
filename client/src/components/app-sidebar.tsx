@@ -92,49 +92,20 @@ export function AppSidebar() {
             <SidebarMenu>
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  {item.items ? (
-                    <>
-                      <SidebarMenuButton className="w-full">
-                        <item.icon className="h-4 w-4" />
-                        <span className="flex-1">{item.title}</span>
-                        {item.badge && (
-                          <Badge variant="secondary" className="ml-auto">
-                            {item.badge}
-                          </Badge>
-                        )}
-                        <ChevronRight className="h-4 w-4" />
-                      </SidebarMenuButton>
-                      <SidebarMenuSub>
-                        {item.items.map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.url}>
-                            <SidebarMenuSubButton 
-                              asChild
-                              className={location === subItem.url ? 'bg-sidebar-accent' : ''}
-                            >
-                              <Link href={subItem.url}>
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </>
-                  ) : (
-                    <SidebarMenuButton 
-                      asChild
-                      className={location === item.url ? 'bg-sidebar-accent' : ''}
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span className="flex-1">{item.title}</span>
-                        {item.badge && (
-                          <Badge variant="secondary" className="ml-auto">
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  )}
+                  <SidebarMenuButton 
+                    asChild
+                    className={location === item.url ? 'bg-sidebar-accent' : ''}
+                  >
+                    <Link href={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span className="flex-1">{item.title}</span>
+                      {item.badge && (
+                        <Badge variant="secondary" className="ml-auto">
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </Link>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

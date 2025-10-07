@@ -155,20 +155,20 @@ export default function Procurement() {
   );
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-procurement">
+    <div className="p-6 space-y-6" data-testid="page-work-instructions">
       {/* Page Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
-            調達管理
+            作業指示
           </h1>
           <p className="text-muted-foreground">
-            購入・製造の計画と進捗管理
+            作業指示の管理と進捗
           </p>
         </div>
-        <Button data-testid="button-add-procurement">
+        <Button data-testid="button-add-work-instruction">
           <Plus className="mr-2 h-4 w-4" />
-          新規調達
+          新規作業指示
         </Button>
       </div>
 

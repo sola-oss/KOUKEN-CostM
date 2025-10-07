@@ -138,15 +138,15 @@ export default function Orders() {
   }
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-orders">
+    <div className="p-6 space-y-6" data-testid="page-projects">
       {/* Page Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
-            受注管理
+            案件管理
           </h1>
           <p className="text-muted-foreground">
-            製品受注の管理と進捗追跡
+            案件の管理と進捗追跡
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
