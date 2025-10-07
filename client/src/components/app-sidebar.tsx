@@ -22,30 +22,24 @@ import {
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 
-// Production Management MVP - Simplified 6-Screen Navigation
+// Production Management MVP - Navigation Menu
 const menuItems = [
   {
-    title: "ダッシュボード",
-    url: "/",
-    icon: Home,
-    badge: null
-  },
-  {
-    title: "受注管理",
-    url: "/orders",
+    title: "案件管理",
+    url: "/projects",
     icon: Package,
     badge: null
   },
   {
-    title: "工数管理", 
-    url: "/work-hours",
-    icon: Clock,
+    title: "作業指示",
+    url: "/work-instructions",
+    icon: ClipboardCheck,
     badge: null
   },
   {
-    title: "調達管理",
-    url: "/procurement",
-    icon: ClipboardCheck,
+    title: "作業実績入力",
+    url: "/work-results",
+    icon: Timer,
     badge: null
   },
   {
@@ -55,8 +49,14 @@ const menuItems = [
     badge: null
   },
   {
-    title: "レポート",
-    url: "/reports",
+    title: "集計・承認",
+    url: "/summary-approval",
+    icon: CheckSquare,
+    badge: null
+  },
+  {
+    title: "原価・粗利分析",
+    url: "/cost-analysis",
     icon: BarChart3,
     badge: null
   }
