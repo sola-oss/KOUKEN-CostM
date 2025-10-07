@@ -8,32 +8,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Plus, Package, DollarSign, Calendar, Users } from "lucide-react";
+import { Package, DollarSign, Calendar, Users } from "lucide-react";
 import { listOrders, createOrder, type Order, type OrderPayload } from "@/shared/production-api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-// Form validation schema with type coercion
+// Form validation schema - simplified to match user requirements
 const orderFormSchema = z.object({
-  product_name: z.string().min(1, "製品名は必須です").max(100, "製品名は100文字以内で入力してください"),
-  qty: z.coerce.number().min(1, "数量は1以上である必要があります").max(10000, "数量は10000以下である必要があります"),
+  product_name: z.string().min(1, "案件名は必須です"),
+  qty: z.coerce.number().min(1, "数量は1以上である必要があります"),
   due_date: z.string().min(1, "納期は必須です"),
-  sales: z.coerce.number().min(0, "売上は0以上である必要があります").max(100000000, "売上は1億円以下である必要があります"),
-  estimated_material_cost: z.coerce.number().min(0, "見込み材料費は0以上である必要があります").max(10000000, "見込み材料費は1000万円以下である必要があります"),
-  std_time_per_unit: z.coerce.number().min(0, "標準作業時間は0以上である必要があります").max(1000, "標準作業時間は1000時間以下である必要があります"),
-  status: z.enum(['pending', 'in_progress', 'completed']).default('pending'),
-  customer_name: z.string().optional()
+  std_time_per_unit: z.coerce.number().min(0, "標準工数は0以上である必要があります"),
+  sales: z.coerce.number().min(0, "売上金額は0以上である必要があります"),
 });
 
 type OrderFormData = z.infer<typeof orderFormSchema>;
 
-export default function Orders() {
+export default function Projects() {
   const { toast } = useToast();
   const [page, setPage] = useState(1);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("registration");
 
   const { data: ordersResponse, isLoading, error } = useQuery({
     queryKey: ['orders', page],
@@ -49,31 +46,38 @@ export default function Orders() {
       product_name: "",
       qty: 1,
       due_date: "",
-      sales: 0,
-      estimated_material_cost: 0,
       std_time_per_unit: 0,
-      status: 'pending' as const,
-      customer_name: ""
+      sales: 0,
     }
   });
 
   // Create order mutation
   const createOrderMutation = useMutation({
-    mutationFn: (data: OrderPayload) => createOrder(data),
+    mutationFn: (data: OrderPayload) => {
+      // Add required fields with default values
+      const payload: OrderPayload = {
+        ...data,
+        estimated_material_cost: 0,
+        status: 'pending',
+        customer_name: ''
+      };
+      return createOrder(payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
-      setIsDialogOpen(false);
       form.reset();
       toast({
         title: "成功",
-        description: "新規受注が正常に作成されました",
+        description: "受注が正常に登録されました",
       });
+      // Switch to list tab after successful registration
+      setActiveTab("list");
     },
     onError: (error: any) => {
       toast({
         variant: "destructive",
         title: "エラー",
-        description: error.message || "受注の作成に失敗しました",
+        description: error.message || "受注の登録に失敗しました",
       });
     }
   });
@@ -97,6 +101,7 @@ export default function Orders() {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-10 w-full max-w-md" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
             <Card key={i}>
@@ -140,47 +145,63 @@ export default function Orders() {
   return (
     <div className="p-6 space-y-6" data-testid="page-projects">
       {/* Page Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
-            案件管理
-          </h1>
-          <p className="text-muted-foreground">
-            案件の管理と進捗追跡
-          </p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-order">
-              <Plus className="mr-2 h-4 w-4" />
-              新規受注
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>新規受注作成</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
+          案件管理
+        </h1>
+        <p className="text-muted-foreground">
+          受注登録と案件の管理
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList>
+          <TabsTrigger value="registration" data-testid="tab-registration">
+            受注登録
+          </TabsTrigger>
+          <TabsTrigger value="list" data-testid="tab-list">
+            案件一覧
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Registration Form Tab */}
+        <TabsContent value="registration" className="space-y-4 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>受注登録</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  {/* 受注番号（自動採番） */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">受注番号</label>
+                    <div className="p-2 bg-muted rounded-md text-muted-foreground">
+                      自動採番されます
+                    </div>
+                  </div>
+
+                  {/* 案件名 */}
                   <FormField
                     control={form.control}
                     name="product_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>製品名 <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel>案件名 <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input 
-                            placeholder="例: 精密部品A" 
+                            placeholder="案件名を入力してください" 
                             {...field}
-                            data-testid="input-product-name"
+                            data-testid="input-project-name"
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
+
+                  {/* 数量 */}
                   <FormField
                     control={form.control}
                     name="qty"
@@ -199,9 +220,8 @@ export default function Orders() {
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 納期 */}
                   <FormField
                     control={form.control}
                     name="due_date"
@@ -219,59 +239,19 @@ export default function Orders() {
                       </FormItem>
                     )}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="sales"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>売上 (円) <span className="text-red-500">*</span></FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="100000" 
-                            {...field}
-                            data-testid="input-sales"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="estimated_material_cost"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>見込み材料費 (円)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="50000" 
-                            {...field}
-                            data-testid="input-estimated-material-cost"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
+                  {/* 標準工数 (h/個) */}
                   <FormField
                     control={form.control}
                     name="std_time_per_unit"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>標準作業時間 (時間/個)</FormLabel>
+                        <FormLabel>標準工数 (h/個) <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
                             step="0.1"
-                            placeholder="2.5" 
+                            placeholder="0" 
                             {...field}
                             data-testid="input-std-time"
                           />
@@ -280,150 +260,132 @@ export default function Orders() {
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 売上金額（単価×数量） */}
                   <FormField
                     control={form.control}
-                    name="status"
+                    name="sales"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>ステータス <span className="text-red-500">*</span></FormLabel>
-                        <FormControl>
-                          <select 
-                            {...field}
-                            className="w-full p-2 border border-input rounded-md bg-background"
-                            data-testid="select-status"
-                          >
-                            <option value="pending">未着手</option>
-                            <option value="in_progress">進行中</option>
-                            <option value="completed">完了</option>
-                          </select>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="customer_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>顧客名</FormLabel>
+                        <FormLabel>売上金額（単価×数量） <span className="text-red-500">*</span></FormLabel>
                         <FormControl>
                           <Input 
-                            type="text" 
-                            placeholder="株式会社〇〇" 
+                            type="number" 
+                            placeholder="0" 
                             {...field}
-                            data-testid="input-customer-name"
+                            data-testid="input-sales"
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsDialogOpen(false)}
-                    data-testid="button-cancel-order"
-                  >
-                    キャンセル
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={createOrderMutation.isPending}
-                    data-testid="button-submit-order"
-                  >
-                    {createOrderMutation.isPending ? "作成中..." : "受注作成"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Orders Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {orders.map((order) => (
-          <Card key={order.order_id} className="hover-elevate" data-testid={`card-order-${order.order_id}`}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">
-                  受注 #{order.order_id}
-                </CardTitle>
-                <Badge 
-                  variant={order.status === 'completed' ? 'default' : order.status === 'in_progress' ? 'secondary' : 'outline'}
-                  data-testid={`badge-status-${order.order_id}`}
-                >
-                  {order.status === 'pending' ? '未着手' : order.status === 'in_progress' ? '進行中' : '完了'}
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">
-                  {order.product_name}
-                </p>
-                {order.customer_name && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Users className="h-3 w-3" />
-                    {order.customer_name}
-                  </p>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">数量: {order.qty}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{formatCurrency(order.sales)}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">納期: {formatDate(order.due_date)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                <div>
-                  <p className="text-xs text-muted-foreground">見込み材料費</p>
-                  <p className="font-medium" data-testid={`text-material-cost-${order.order_id}`}>
-                    {formatCurrency(order.estimated_material_cost)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">標準作業時間</p>
-                  <p className="font-medium" data-testid={`text-std-time-${order.order_id}`}>
-                    {order.std_time_per_unit}時間/個
-                  </p>
-                </div>
-              </div>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => form.reset()}
+                      data-testid="button-reset"
+                    >
+                      リセット
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={createOrderMutation.isPending}
+                      data-testid="button-submit-order"
+                    >
+                      {createOrderMutation.isPending ? "登録中..." : "登録"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
             </CardContent>
           </Card>
-        ))}
-      </div>
+        </TabsContent>
 
-      {/* Empty State */}
-      {orders.length === 0 && (
-        <Card className="border-dashed border-2 border-muted">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Package className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">受注がありません</h3>
-            <p className="text-muted-foreground mb-4">新規受注を追加して始めましょう</p>
-            <Button data-testid="button-add-first-order">
-              <Plus className="mr-2 h-4 w-4" />
-              最初の受注を追加
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+        {/* Project List Tab */}
+        <TabsContent value="list" className="space-y-4 mt-6">
+          {/* Orders Grid */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {orders.map((order) => (
+              <Card key={order.order_id} className="hover-elevate" data-testid={`card-order-${order.order_id}`}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">
+                      受注 #{order.order_id}
+                    </CardTitle>
+                    <Badge 
+                      variant={order.status === 'completed' ? 'default' : order.status === 'in_progress' ? 'secondary' : 'outline'}
+                      data-testid={`badge-status-${order.order_id}`}
+                    >
+                      {order.status === 'pending' ? '未着手' : order.status === 'in_progress' ? '進行中' : '完了'}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      {order.product_name}
+                    </p>
+                    {order.customer_name && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Users className="h-3 w-3" />
+                        {order.customer_name}
+                      </p>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">数量: {order.qty}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{formatCurrency(order.sales)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">納期: {formatDate(order.due_date)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                    <div>
+                      <p className="text-xs text-muted-foreground">見込み材料費</p>
+                      <p className="font-medium" data-testid={`text-material-cost-${order.order_id}`}>
+                        {formatCurrency(order.estimated_material_cost)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">標準作業時間</p>
+                      <p className="font-medium" data-testid={`text-std-time-${order.order_id}`}>
+                        {order.std_time_per_unit}時間/個
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Empty State */}
+          {orders.length === 0 && (
+            <Card className="border-dashed border-2 border-muted">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Package className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">案件がありません</h3>
+                <p className="text-muted-foreground mb-4">受注登録タブから新規案件を追加してください</p>
+                <Button 
+                  onClick={() => setActiveTab("registration")}
+                  data-testid="button-go-to-registration"
+                >
+                  受注登録へ
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
