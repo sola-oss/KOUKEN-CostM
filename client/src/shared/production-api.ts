@@ -47,6 +47,7 @@ export interface Order {
 }
 
 export interface OrderPayload {
+  order_id?: number;
   product_name: string;
   qty: number;
   due_date: string;

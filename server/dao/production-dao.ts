@@ -23,27 +23,54 @@ export class ProductionDAO {
   
   async createOrder(orderData: InsertOrder): Promise<number> {
     const now = new Date().toISOString();
-    const stmt = this.db.prepare(`
-      INSERT INTO orders (
-        product_name, qty, due_date, sales, estimated_material_cost, 
-        std_time_per_unit, status, customer_name, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
     
-    const result = stmt.run(
-      orderData.product_name,
-      orderData.qty,
-      orderData.due_date,
-      orderData.sales,
-      orderData.estimated_material_cost,
-      orderData.std_time_per_unit,
-      orderData.status || 'pending',
-      orderData.customer_name || null,
-      now,
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    // If order_id is specified, use it; otherwise, let SQLite auto-increment
+    if (orderData.order_id !== undefined && orderData.order_id !== null) {
+      const stmt = this.db.prepare(`
+        INSERT INTO orders (
+          order_id, product_name, qty, due_date, sales, estimated_material_cost, 
+          std_time_per_unit, status, customer_name, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      stmt.run(
+        orderData.order_id,
+        orderData.product_name,
+        orderData.qty,
+        orderData.due_date,
+        orderData.sales,
+        orderData.estimated_material_cost,
+        orderData.std_time_per_unit,
+        orderData.status || 'pending',
+        orderData.customer_name || null,
+        now,
+        now
+      );
+      
+      return orderData.order_id;
+    } else {
+      const stmt = this.db.prepare(`
+        INSERT INTO orders (
+          product_name, qty, due_date, sales, estimated_material_cost, 
+          std_time_per_unit, status, customer_name, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      const result = stmt.run(
+        orderData.product_name,
+        orderData.qty,
+        orderData.due_date,
+        orderData.sales,
+        orderData.estimated_material_cost,
+        orderData.std_time_per_unit,
+        orderData.status || 'pending',
+        orderData.customer_name || null,
+        now,
+        now
+      );
+      
+      return result.lastInsertRowid as number;
+    }
   }
 
   async getOrders(options: {

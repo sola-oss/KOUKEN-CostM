@@ -60,10 +60,10 @@ export const workers_log = sqliteTable("workers_log", {
 
 // ========== Insert Schemas ==========
 export const insertOrderSchema = createInsertSchema(orders).omit({
-  order_id: true,
   created_at: true,
   updated_at: true,
 }).extend({
+  order_id: z.number().optional(),
   due_date: z.string().min(1, "納期は必須です"),
   status: z.enum(['pending', 'in_progress', 'completed']).default('pending'),
   customer_name: z.string().optional()

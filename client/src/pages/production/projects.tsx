@@ -70,8 +70,8 @@ export default function Projects() {
         status: 'pending',
         customer_name: ''
       };
-      // Include order_id only if it's provided
-      if (data.order_id && data.order_id !== "") {
+      // Include order_id only if it's provided (after transformation, it's a number or undefined)
+      if (typeof data.order_id === 'number') {
         payload.order_id = data.order_id;
       }
       return createOrder(payload);
