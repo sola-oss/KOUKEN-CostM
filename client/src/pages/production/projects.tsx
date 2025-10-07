@@ -18,6 +18,10 @@ import { useToast } from "@/hooks/use-toast";
 
 // Form validation schema - simplified to match user requirements
 const orderFormSchema = z.object({
+  order_id: z.union([
+    z.string().regex(/^\d+$/, "受注番号は数値で入力してください").transform(Number),
+    z.literal("")
+  ]).optional(),
   product_name: z.string().min(1, "案件名は必須です"),
   qty: z.coerce.number().min(1, "数量は1以上である必要があります"),
   due_date: z.string().min(1, "納期は必須です"),
@@ -43,6 +47,7 @@ export default function Projects() {
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
+      order_id: "",
       product_name: "",
       qty: 1,
       due_date: "",
@@ -55,12 +60,20 @@ export default function Projects() {
   const createOrderMutation = useMutation({
     mutationFn: (data: OrderFormData) => {
       // Add required fields with default values
-      const payload: OrderPayload = {
-        ...data,
+      const payload: any = {
+        product_name: data.product_name,
+        qty: data.qty,
+        due_date: data.due_date,
+        std_time_per_unit: data.std_time_per_unit,
+        sales: data.sales,
         estimated_material_cost: 0,
         status: 'pending',
         customer_name: ''
       };
+      // Include order_id only if it's provided
+      if (data.order_id && data.order_id !== "") {
+        payload.order_id = data.order_id;
+      }
       return createOrder(payload);
     },
     onSuccess: () => {
@@ -174,13 +187,25 @@ export default function Projects() {
             <CardContent>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  {/* 受注番号（自動採番） */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">受注番号</label>
-                    <div className="p-2 bg-muted rounded-md text-muted-foreground">
-                      自動採番されます
-                    </div>
-                  </div>
+                  {/* 受注番号 */}
+                  <FormField
+                    control={form.control}
+                    name="order_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>受注番号</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="text"
+                            placeholder="空欄で自動採番" 
+                            {...field}
+                            data-testid="input-order-id"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   {/* 案件名 */}
                   <FormField
