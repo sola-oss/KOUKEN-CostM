@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Package, Search, Plus, ArrowUpDown } from "lucide-react";
+import { Package, Search, Plus, ArrowUpDown, ArrowLeft } from "lucide-react";
 import { listOrders, createOrder, type Order, type OrderPayload } from "@/shared/production-api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -262,8 +262,17 @@ export default function Projects() {
         {/* Registration Form Tab */}
         <TabsContent value="registration" className="space-y-4 mt-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
               <CardTitle>受注登録</CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setActiveTab("list")}
+                data-testid="button-back-to-list"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                案件一覧に戻る
+              </Button>
             </CardHeader>
             <CardContent>
               <Form {...form}>
