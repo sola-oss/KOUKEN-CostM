@@ -1,5 +1,5 @@
 // Production Management MVP - Orders Management
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,6 +25,7 @@ const orderFormSchema = z.object({
     z.literal("")
   ]).optional(),
   product_name: z.string().min(1, "案件名は必須です"),
+  customer_name: z.string().optional(),
   qty: z.coerce.number().min(1, "数量は1以上である必要があります"),
   due_date: z.string().min(1, "納期は必須です"),
   std_time_per_unit: z.coerce.number().min(0, "標準工数は0以上である必要があります"),
@@ -48,6 +49,7 @@ export default function Projects() {
   const [activeTab, setActiveTab] = useState("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
+  const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<number | null>(null);
 
   const { data: ordersResponse, isLoading, error } = useQuery({
     queryKey: ['orders', page],
@@ -89,12 +91,20 @@ export default function Projects() {
     return sorted;
   }, [orders, searchQuery, sortConfig]);
 
+  // Clear highlight when search query changes
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setNewlyCreatedOrderId(null);
+    }
+  }, [searchQuery]);
+
   // Form setup
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
       order_id: "",
       product_name: "",
+      customer_name: "",
       qty: 1,
       due_date: "",
       std_time_per_unit: 0,
@@ -114,7 +124,7 @@ export default function Projects() {
         sales: data.sales,
         estimated_material_cost: 0,
         status: 'pending',
-        customer_name: ''
+        customer_name: data.customer_name || ''
       };
       // Include order_id only if it's provided (after transformation, it's a number or undefined)
       if (typeof data.order_id === 'number') {
@@ -122,13 +132,15 @@ export default function Projects() {
       }
       return createOrder(payload);
     },
-    onSuccess: () => {
+    onSuccess: (newOrder) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       form.reset();
       toast({
         title: "成功",
         description: "受注が正常に登録されました",
       });
+      // Save newly created order ID for highlighting
+      setNewlyCreatedOrderId(newOrder.order_id);
       // Return to list tab after successful registration
       setActiveTab("list");
     },
@@ -169,6 +181,7 @@ export default function Projects() {
   };
 
   const handleSort = (field: SortField) => {
+    setNewlyCreatedOrderId(null); // Clear highlight on sort
     if (sortConfig.field === field) {
       setSortConfig({ field, order: sortConfig.order === 'asc' ? 'desc' : 'asc' });
     } else {
@@ -177,6 +190,7 @@ export default function Projects() {
   };
 
   const handleRowClick = (orderId: number) => {
+    setNewlyCreatedOrderId(null); // Clear highlight on row click
     setLocation(`/project/${orderId}`);
   };
 
@@ -239,7 +253,10 @@ export default function Projects() {
         </div>
         {activeTab === "list" && (
           <Button 
-            onClick={() => setActiveTab("registration")}
+            onClick={() => {
+              setNewlyCreatedOrderId(null); // Clear highlight when opening registration form
+              setActiveTab("registration");
+            }}
             data-testid="button-new-order"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -309,6 +326,25 @@ export default function Projects() {
                             placeholder="案件名を入力してください" 
                             {...field}
                             data-testid="input-project-name"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* 顧客名 */}
+                  <FormField
+                    control={form.control}
+                    name="customer_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>顧客名</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="顧客名を入力してください" 
+                            {...field}
+                            data-testid="input-customer-name"
                           />
                         </FormControl>
                         <FormMessage />
@@ -497,7 +533,7 @@ export default function Projects() {
                     <TableRow 
                       key={order.order_id}
                       onClick={() => handleRowClick(order.order_id)}
-                      className="cursor-pointer hover-elevate"
+                      className={`cursor-pointer hover-elevate ${order.order_id === newlyCreatedOrderId ? 'bg-green-50 dark:bg-green-950/20' : ''}`}
                       data-testid={`row-order-${order.order_id}`}
                     >
                       <TableCell className="font-medium" data-testid={`cell-order-id-${order.order_id}`}>
