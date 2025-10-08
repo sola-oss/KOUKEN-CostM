@@ -58,11 +58,11 @@ export class ProductionSqliteInitializer {
       // Verify tables exist
       const tables = db.prepare(`
         SELECT name FROM sqlite_master 
-        WHERE type='table' AND name IN ('orders', 'procurements', 'workers_log')
+        WHERE type='table' AND name IN ('orders', 'procurements', 'workers_log', 'tasks')
       `).all();
       
-      if (tables.length !== 3) {
-        throw new Error(`Expected 3 tables, found ${tables.length}`);
+      if (tables.length !== 4) {
+        throw new Error(`Expected 4 tables, found ${tables.length}`);
       }
       
       console.log('✓ Production Management tables created successfully');

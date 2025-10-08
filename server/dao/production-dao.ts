@@ -2,8 +2,8 @@
 import Database from 'better-sqlite3';
 import { MetricsService } from '../services/metrics.js';
 import type { 
-  Order, Procurement, WorkerLog, 
-  InsertOrder, InsertProcurement, InsertWorkerLog,
+  Order, Procurement, WorkerLog, Task,
+  InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask,
   OrderKPI, DashboardKPI, CalendarEvent 
 } from '../../shared/production-schema.js';
 
@@ -390,6 +390,116 @@ export class ProductionDAO {
       FROM workers_log 
       ORDER BY worker ASC
     `).all() as { worker: string }[];
+  }
+
+  // ========== Tasks CRUD ==========
+  
+  async createTask(taskData: InsertTask): Promise<number> {
+    const now = new Date().toISOString();
+    
+    const stmt = this.db.prepare(`
+      INSERT INTO tasks (
+        order_id, task_name, assignee, planned_start, planned_end, 
+        std_time_per_unit, qty, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const result = stmt.run(
+      taskData.order_id,
+      taskData.task_name,
+      taskData.assignee || null,
+      taskData.planned_start,
+      taskData.planned_end,
+      taskData.std_time_per_unit,
+      taskData.qty,
+      taskData.status || 'not_started',
+      now
+    );
+    
+    return result.lastInsertRowid as number;
+  }
+
+  async getTasks(options: {
+    order_id?: number;
+    status?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}): Promise<{ tasks: Task[], total: number }> {
+    let query = `SELECT * FROM tasks WHERE 1=1`;
+    const params: any[] = [];
+    
+    if (options.order_id) {
+      query += ` AND order_id = ?`;
+      params.push(options.order_id);
+    }
+    
+    if (options.status) {
+      query += ` AND status = ?`;
+      params.push(options.status);
+    }
+    
+    if (options.from) {
+      query += ` AND planned_start >= ?`;
+      params.push(options.from);
+    }
+    
+    if (options.to) {
+      query += ` AND planned_end <= ?`;
+      params.push(options.to);
+    }
+    
+    query += ` ORDER BY planned_start ASC`;
+    
+    const countStmt = this.db.prepare(query.replace('SELECT *', 'SELECT COUNT(*) as count'));
+    const countResult = countStmt.get(...params) as { count: number };
+    const total = countResult.count;
+    
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 20;
+    const offset = (page - 1) * pageSize;
+    
+    query += ` LIMIT ? OFFSET ?`;
+    params.push(pageSize, offset);
+    
+    const tasks = this.db.prepare(query).all(...params) as Task[];
+    
+    return { tasks, total };
+  }
+
+  async getTaskById(taskId: number): Promise<Task | null> {
+    const task = this.db.prepare(`
+      SELECT * FROM tasks WHERE id = ?
+    `).get(taskId) as Task | undefined;
+    
+    return task || null;
+  }
+
+  async updateTask(taskId: number, updates: Partial<InsertTask>): Promise<boolean> {
+    const allowedColumns = ['task_name', 'assignee', 'planned_start', 'planned_end', 'std_time_per_unit', 'qty', 'status'];
+    
+    const updateCols = Object.keys(updates).filter(key => allowedColumns.includes(key));
+    
+    if (updateCols.length === 0) {
+      return false;
+    }
+    
+    const setClause = updateCols.map(col => `${col} = ?`).join(', ');
+    const values = updateCols.map(col => (updates as any)[col]);
+    
+    const stmt = this.db.prepare(`
+      UPDATE tasks SET ${setClause} WHERE id = ?
+    `);
+    
+    const result = stmt.run(...values, taskId);
+    return result.changes > 0;
+  }
+
+  async deleteTask(taskId: number): Promise<boolean> {
+    const stmt = this.db.prepare(`DELETE FROM tasks WHERE id = ?`);
+    const result = stmt.run(taskId);
+    return result.changes > 0;
   }
 
   close(): void {

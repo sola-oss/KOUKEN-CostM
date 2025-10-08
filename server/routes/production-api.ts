@@ -5,8 +5,10 @@ import {
   insertOrderSchema, 
   insertProcurementSchema, 
   insertWorkerLogSchema,
+  insertTaskSchema,
   updateOrderSchema,
-  updateProcurementSchema
+  updateProcurementSchema,
+  updateTaskSchema
 } from '../../shared/production-schema.js';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
@@ -699,6 +701,195 @@ router.get('/api/workers', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal server error',
       message: 'Failed to fetch workers'
+    });
+  }
+});
+
+// ========== Tasks API (作業計画) ==========
+
+// GET /api/tasks - List tasks
+router.get('/api/tasks', async (req, res) => {
+  try {
+    const { 
+      order_id, 
+      status, 
+      from, 
+      to, 
+      page = '1', 
+      page_size = '20' 
+    } = req.query as Record<string, string>;
+
+    const options = {
+      order_id: order_id ? parseInt(order_id) : undefined,
+      status,
+      from: from ? toUTC(from) : undefined,
+      to: to ? toUTC(to) : undefined,
+      page: parseInt(page),
+      pageSize: parseInt(page_size)
+    };
+
+    const result = await dao.getTasks(options);
+
+    // Return dates in ISO 8601 format for consistent parsing
+    const tasksWithISO = result.tasks.map(task => ({
+      ...task,
+      planned_start: task.planned_start,  // Already in ISO format from DB
+      planned_end: task.planned_end
+    }));
+
+    res.json({
+      data: tasksWithISO,
+      meta: {
+        total: result.total,
+        page: parseInt(page),
+        page_size: parseInt(page_size),
+        total_pages: Math.ceil(result.total / parseInt(page_size))
+      }
+    });
+
+  } catch (error) {
+    console.error('Tasks list error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch tasks'
+    });
+  }
+});
+
+// GET /api/tasks/:id - Get task by ID
+router.get('/api/tasks/:id', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.id);
+    const task = await dao.getTaskById(taskId);
+
+    if (!task) {
+      return res.status(404).json({ 
+        error: 'Not found',
+        message: 'Task not found' 
+      });
+    }
+
+    // Return dates in ISO format
+    const taskWithISO = {
+      ...task,
+      planned_start: task.planned_start,  // Already in ISO format from DB
+      planned_end: task.planned_end
+    };
+
+    res.json(taskWithISO);
+
+  } catch (error) {
+    console.error('Task get error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch task'
+    });
+  }
+});
+
+// POST /api/tasks - Create new task
+router.post('/api/tasks', async (req, res) => {
+  try {
+    const validatedData = insertTaskSchema.parse(req.body);
+
+    // Convert dates to UTC before storing
+    const taskData = {
+      ...validatedData,
+      planned_start: toUTC(validatedData.planned_start),
+      planned_end: toUTC(validatedData.planned_end)
+    };
+
+    const taskId = await dao.createTask(taskData);
+    const task = await dao.getTaskById(taskId);
+
+    if (task) {
+      // Return in ISO format
+      const taskWithISO = {
+        ...task,
+        planned_start: task.planned_start,  // Already in ISO format from DB
+        planned_end: task.planned_end
+      };
+      res.status(201).json(taskWithISO);
+    } else {
+      throw new Error('Failed to retrieve created task');
+    }
+
+  } catch (error: any) {
+    console.error('Task creation error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: error.errors 
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to create task'
+    });
+  }
+});
+
+// PATCH /api/tasks/:id - Update task
+router.patch('/api/tasks/:id', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.id);
+    const validatedData = updateTaskSchema.parse(req.body);
+
+    // Convert dates to UTC if present
+    const updateData: any = { ...validatedData };
+    if (updateData.planned_start) {
+      updateData.planned_start = toUTC(updateData.planned_start);
+    }
+    if (updateData.planned_end) {
+      updateData.planned_end = toUTC(updateData.planned_end);
+    }
+
+    const success = await dao.updateTask(taskId, updateData);
+
+    if (!success) {
+      return res.status(404).json({ 
+        error: 'Not found',
+        message: 'Task not found or no changes made' 
+      });
+    }
+
+    res.json({ message: 'Task updated successfully' });
+
+  } catch (error: any) {
+    console.error('Task update error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: error.errors 
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update task'
+    });
+  }
+});
+
+// DELETE /api/tasks/:id - Delete task
+router.delete('/api/tasks/:id', async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.id);
+    const success = await dao.deleteTask(taskId);
+
+    if (!success) {
+      return res.status(404).json({ 
+        error: 'Not found',
+        message: 'Task not found' 
+      });
+    }
+
+    res.json({ message: 'Task deleted successfully' });
+
+  } catch (error) {
+    console.error('Task deletion error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to delete task'
     });
   }
 });

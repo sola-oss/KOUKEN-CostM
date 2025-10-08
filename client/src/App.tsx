@@ -12,6 +12,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import Projects from "@/pages/production/projects";
 import ProjectDetail from "@/pages/production/project-detail";
 import WorkInstructions from "@/pages/production/work-instructions";
+import GanttChart from "@/pages/production/gantt-chart";
+import TaskPlanning from "@/pages/production/task-planning";
+import Procurement from "@/pages/production/procurement";
 import WorkResults from "@/pages/production/work-results";
 import Calendar from "@/pages/production/calendar";
 import SummaryApproval from "@/pages/production/summary-approval";
@@ -26,6 +29,9 @@ function Router() {
       <Route path="/projects" component={Projects} />
       <Route path="/project/:id" component={ProjectDetail} />
       <Route path="/work-instructions" component={WorkInstructions} />
+      <Route path="/gantt-chart" component={GanttChart} />
+      <Route path="/task-planning" component={TaskPlanning} />
+      <Route path="/procurement" component={Procurement} />
       <Route path="/work-results" component={WorkResults} />
       <Route path="/calendar" component={Calendar} />
       <Route path="/summary-approval" component={SummaryApproval} />

@@ -2,9 +2,11 @@
 import { 
   Home, Package, Calendar, ClipboardCheck, FileText, 
   Truck, Receipt, Users, Settings, BarChart3, 
-  ChevronRight, Building2, Clock, Timer, CheckSquare
+  ChevronRight, ChevronDown, Building2, Clock, Timer, CheckSquare,
+  GanttChart, ListChecks, ShoppingCart
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -21,6 +23,7 @@ import {
   SidebarFooter
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Production Management MVP - Navigation Menu
 const menuItems = [
@@ -28,12 +31,6 @@ const menuItems = [
     title: "案件管理",
     url: "/projects",
     icon: Package,
-    badge: null
-  },
-  {
-    title: "作業指示",
-    url: "/work-instructions",
-    icon: ClipboardCheck,
     badge: null
   },
   {
@@ -62,6 +59,25 @@ const menuItems = [
   }
 ];
 
+// Work Instructions Sub-menu
+const workInstructionsSubItems = [
+  {
+    title: "ガントチャート",
+    url: "/gantt-chart",
+    icon: GanttChart
+  },
+  {
+    title: "作業計画",
+    url: "/task-planning",
+    icon: ListChecks
+  },
+  {
+    title: "調達管理",
+    url: "/procurement",
+    icon: ShoppingCart
+  }
+];
+
 const bottomMenuItems = [
   {
     title: "設定",
@@ -72,6 +88,9 @@ const bottomMenuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const [isWorkInstructionsOpen, setIsWorkInstructionsOpen] = useState(true);
+
+  const isWorkInstructionsActive = workInstructionsSubItems.some(item => location === item.url);
 
   return (
     <Sidebar>
@@ -108,6 +127,46 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              
+              {/* Collapsible Work Instructions Menu */}
+              <Collapsible
+                open={isWorkInstructionsOpen}
+                onOpenChange={setIsWorkInstructionsOpen}
+                className="group/collapsible"
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton 
+                      className={isWorkInstructionsActive ? 'bg-sidebar-accent' : ''}
+                    >
+                      <ClipboardCheck className="h-4 w-4" />
+                      <span className="flex-1">作業指示</span>
+                      {isWorkInstructionsOpen ? (
+                        <ChevronDown className="h-4 w-4 transition-transform" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 transition-transform" />
+                      )}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {workInstructionsSubItems.map((subItem) => (
+                        <SidebarMenuSubItem key={subItem.title}>
+                          <SidebarMenuSubButton 
+                            asChild
+                            className={location === subItem.url ? 'bg-sidebar-accent' : ''}
+                          >
+                            <Link href={subItem.url}>
+                              <subItem.icon className="h-4 w-4" />
+                              <span>{subItem.title}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

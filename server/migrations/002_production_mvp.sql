@@ -51,7 +51,24 @@ CREATE TABLE workers_log (
   created_at TEXT NOT NULL
 );
 
+-- 作業計画 (Tasks) - 作業分解と担当者決定
+CREATE TABLE tasks (
+  id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  task_name TEXT NOT NULL,         -- 作業名（例：組立/塗装/検査）
+  assignee TEXT NOT NULL,          -- 担当者（必須）
+  planned_start TEXT NOT NULL,     -- 予定開始日(UTC)
+  planned_end TEXT NOT NULL,       -- 予定終了日(UTC)
+  std_time_per_unit REAL NOT NULL, -- 標準工数[h/個]
+  qty REAL NOT NULL,               -- 数量
+  status TEXT NOT NULL DEFAULT 'not_started' CHECK(status IN ('not_started','in_progress','completed')), -- ステータス
+  created_at TEXT NOT NULL
+);
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_orders_due ON orders(due_date);
 CREATE INDEX IF NOT EXISTS idx_proc_orders ON procurements(order_id, kind, status);
 CREATE INDEX IF NOT EXISTS idx_wlog_order ON workers_log(order_id, date);
+CREATE INDEX IF NOT EXISTS idx_tasks_order ON tasks(order_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_planned_start ON tasks(planned_start);
