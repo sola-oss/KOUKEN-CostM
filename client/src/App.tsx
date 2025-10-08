@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 // Production Management MVP - Main Pages
 import Projects from "@/pages/production/projects";
+import ProjectDetail from "@/pages/production/project-detail";
 import WorkInstructions from "@/pages/production/work-instructions";
 import WorkResults from "@/pages/production/work-results";
 import Calendar from "@/pages/production/calendar";
@@ -23,6 +24,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Projects} />
       <Route path="/projects" component={Projects} />
+      <Route path="/project/:id" component={ProjectDetail} />
       <Route path="/work-instructions" component={WorkInstructions} />
       <Route path="/work-results" component={WorkResults} />
       <Route path="/calendar" component={Calendar} />
