@@ -36,6 +36,7 @@ export interface Order {
   order_id: number;
   product_name: string;
   qty: number;
+  start_date: string;
   due_date: string;
   sales: number;
   estimated_material_cost: number;
@@ -50,6 +51,7 @@ export interface OrderPayload {
   order_id?: number;
   product_name: string;
   qty: number;
+  start_date: string;
   due_date: string;
   sales: number;
   estimated_material_cost: number;

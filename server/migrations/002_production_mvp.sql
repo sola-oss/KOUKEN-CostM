@@ -67,8 +67,23 @@ CREATE TABLE tasks (
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_orders_due ON orders(due_date);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_proc_orders ON procurements(order_id, kind, status);
 CREATE INDEX IF NOT EXISTS idx_wlog_order ON workers_log(order_id, date);
 CREATE INDEX IF NOT EXISTS idx_tasks_order ON tasks(order_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_planned_start ON tasks(planned_start);
+
+-- Migration: Add start_date column to orders table
+ALTER TABLE orders ADD COLUMN start_date TEXT;
+
+-- Migration: Backfill start_date with earliest task start date, or created_at if no tasks
+UPDATE orders 
+SET start_date = COALESCE(
+  (SELECT MIN(planned_start) FROM tasks WHERE tasks.order_id = orders.order_id),
+  created_at
+)
+WHERE start_date IS NULL;
+
+-- Create index for start_date after column is added
+CREATE INDEX IF NOT EXISTS idx_orders_start ON orders(start_date);

@@ -89,6 +89,7 @@ router.get('/api/orders', async (req, res) => {
     // Convert dates to JST for response
     const ordersWithJST = result.orders.map(order => ({
       ...order,
+      start_date: order.start_date ? toJST(order.start_date) : order.start_date,
       due_date: toJST(order.due_date)
     }));
 
@@ -128,6 +129,7 @@ router.get('/api/orders/:id', async (req, res) => {
     const response = {
       order: {
         ...result.order,
+        start_date: result.order.start_date ? toJST(result.order.start_date) : result.order.start_date,
         due_date: toJST(result.order.due_date),
         created_at: toJST(result.order.created_at),
         updated_at: toJST(result.order.updated_at)
@@ -177,6 +179,7 @@ router.post('/api/orders', async (req, res) => {
 
     const orderData = {
       ...validation.data,
+      start_date: validation.data.start_date ? toUTC(validation.data.start_date) : undefined,
       due_date: toUTC(validation.data.due_date)
     };
 
@@ -195,6 +198,7 @@ router.post('/api/orders', async (req, res) => {
     // Convert dates to JST for response
     const createdOrder = {
       ...result.order,
+      start_date: result.order.start_date ? toJST(result.order.start_date) : result.order.start_date,
       due_date: toJST(result.order.due_date),
       created_at: toJST(result.order.created_at),
       updated_at: toJST(result.order.updated_at)
@@ -235,7 +239,10 @@ router.patch('/api/orders/:id', async (req, res) => {
       return res.status(400).json({ error: 'No valid updates provided' });
     }
 
-    // Convert due_date to UTC if provided
+    // Convert dates to UTC if provided
+    if (updates.start_date) {
+      updates.start_date = toUTC(updates.start_date);
+    }
     if (updates.due_date) {
       updates.due_date = toUTC(updates.due_date);
     }

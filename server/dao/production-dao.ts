@@ -28,15 +28,16 @@ export class ProductionDAO {
     if (orderData.order_id !== undefined && orderData.order_id !== null) {
       const stmt = this.db.prepare(`
         INSERT INTO orders (
-          order_id, product_name, qty, due_date, sales, estimated_material_cost, 
+          order_id, product_name, qty, start_date, due_date, sales, estimated_material_cost, 
           std_time_per_unit, status, customer_name, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       stmt.run(
         orderData.order_id,
         orderData.product_name,
         orderData.qty,
+        orderData.start_date || null,
         orderData.due_date,
         orderData.sales,
         orderData.estimated_material_cost,
@@ -51,14 +52,15 @@ export class ProductionDAO {
     } else {
       const stmt = this.db.prepare(`
         INSERT INTO orders (
-          product_name, qty, due_date, sales, estimated_material_cost, 
+          product_name, qty, start_date, due_date, sales, estimated_material_cost, 
           std_time_per_unit, status, customer_name, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const result = stmt.run(
         orderData.product_name,
         orderData.qty,
+        orderData.start_date || null,
         orderData.due_date,
         orderData.sales,
         orderData.estimated_material_cost,
@@ -121,7 +123,7 @@ export class ProductionDAO {
   }
 
   async updateOrder(orderId: number, updates: Partial<InsertOrder>): Promise<boolean> {
-    const allowedColumns = ['product_name', 'qty', 'due_date', 'sales', 'estimated_material_cost', 'std_time_per_unit', 'status', 'customer_name'];
+    const allowedColumns = ['product_name', 'qty', 'start_date', 'due_date', 'sales', 'estimated_material_cost', 'std_time_per_unit', 'status', 'customer_name'];
     
     // Filter to only allowed columns
     const filteredUpdates: Record<string, any> = {};

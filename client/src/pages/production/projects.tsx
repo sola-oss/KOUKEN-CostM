@@ -27,9 +27,13 @@ const orderFormSchema = z.object({
   product_name: z.string().min(1, "案件名は必須です"),
   customer_name: z.string().optional(),
   qty: z.coerce.number().min(1, "数量は1以上である必要があります"),
+  start_date: z.string().min(1, "開始予定日は必須です"),
   due_date: z.string().min(1, "納期は必須です"),
   std_time_per_unit: z.coerce.number().min(0, "標準工数は0以上である必要があります"),
   sales: z.coerce.number().min(0, "売上金額は0以上である必要があります"),
+}).refine(data => new Date(data.start_date) <= new Date(data.due_date), {
+  message: "開始予定日は納期以前である必要があります",
+  path: ["due_date"]
 });
 
 type OrderFormData = z.infer<typeof orderFormSchema>;
@@ -106,6 +110,7 @@ export default function Projects() {
       product_name: "",
       customer_name: "",
       qty: 1,
+      start_date: "",
       due_date: "",
       std_time_per_unit: 0,
       sales: 0,
@@ -119,6 +124,7 @@ export default function Projects() {
       const payload: any = {
         product_name: data.product_name,
         qty: data.qty,
+        start_date: data.start_date,
         due_date: data.due_date,
         std_time_per_unit: data.std_time_per_unit,
         sales: data.sales,
@@ -365,6 +371,25 @@ export default function Projects() {
                             placeholder="1" 
                             {...field}
                             data-testid="input-qty"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* 開始予定日 */}
+                  <FormField
+                    control={form.control}
+                    name="start_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>開始予定日 <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="date" 
+                            {...field}
+                            data-testid="input-start-date"
                           />
                         </FormControl>
                         <FormMessage />

@@ -33,7 +33,7 @@ interface TimelineItem {
 
 interface HierarchicalRow {
   id: string;
-  type: 'header' | 'task' | 'procurement';
+  type: 'header' | 'order_period' | 'task' | 'procurement';
   order_id: number;
   order_name: string;
   row_label: string;
@@ -184,6 +184,7 @@ export default function GanttChart() {
         if (items.length === 0) return;
 
         const orderName = items[0].order_name;
+        const order = orders.find(o => o.order_id === orderId);
         
         // Add header row (transparent bar for position)
         rows.push({
@@ -198,6 +199,22 @@ export default function GanttChart() {
           status: 'header',
           isHeader: true
         });
+
+        // Add order period row (start_date to due_date)
+        if (order && order.start_date && order.due_date) {
+          rows.push({
+            id: `order-period-${orderId}`,
+            type: 'order_period',
+            order_id: orderId,
+            order_name: orderName,
+            row_label: `　├ 案件期間`,
+            row_order: rowOrder++,
+            start: order.start_date,
+            end: order.due_date,
+            status: order.status,
+            isHeader: false
+          });
+        }
 
         // Add task/procurement rows with indent
         items.forEach(item => {
@@ -308,13 +325,20 @@ export default function GanttChart() {
       marker: {
         color: hierarchicalRows.map(row => getStatusColor(row.status)),
         line: {
-          color: hierarchicalRows.map(row => row.isHeader ? 'rgba(0,0,0,0)' : 'rgba(0,0,0,0.1)'),
-          width: 1
+          color: hierarchicalRows.map(row => {
+            if (row.isHeader) return 'rgba(0,0,0,0)';
+            if (row.type === 'order_period') return 'rgba(0,0,0,0.3)'; // Darker border for order periods
+            return 'rgba(0,0,0,0.1)';
+          }),
+          width: hierarchicalRows.map(row => row.type === 'order_period' ? 2 : 1) // Thicker border for order periods
         }
       },
       text: hierarchicalRows.map(row => {
         if (row.isHeader) {
           return `${row.order_name}`;
+        }
+        if (row.type === 'order_period') {
+          return `${row.order_name}<br>案件期間<br>${format(parseISO(row.start), 'yyyy/MM/dd')} ~ ${format(parseISO(row.end), 'yyyy/MM/dd')}<br>状態: ${getStatusLabel(row.status)}`;
         }
         return `${row.order_name}<br>${row.row_label.replace('　└ ', '')}<br>${format(parseISO(row.start), 'yyyy/MM/dd')} ~ ${format(parseISO(row.end), 'yyyy/MM/dd')}<br>担当: ${row.assignee || 'なし'}<br>状態: ${getStatusLabel(row.status)}`;
       }),
@@ -400,8 +424,8 @@ export default function GanttChart() {
       const rowId = data.points[0].customdata;
       const row = hierarchicalRows.find(r => r.id === rowId);
       
-      // Don't open dialog for header rows
-      if (row && !row.isHeader && row.originalData) {
+      // Don't open dialog for header rows or order period rows
+      if (row && !row.isHeader && row.type !== 'order_period' && row.originalData) {
         // Convert hierarchical row back to timeline item for dialog
         const timelineItem: TimelineItem = {
           id: row.id,

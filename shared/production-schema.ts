@@ -11,6 +11,7 @@ export const orders = sqliteTable("orders", {
   order_id: integer("order_id").primaryKey(),    // 受注番号（自動採番）
   product_name: text("product_name").notNull(),  // 製品名
   qty: real("qty").notNull(),                    // 数量
+  start_date: text("start_date").notNull(),      // 開始予定日（UTC ISO）
   due_date: text("due_date").notNull(),          // 納期（UTC ISO）
   sales: real("sales").notNull(),               // 売上（見込み含む）
   estimated_material_cost: real("estimated_material_cost").notNull(), // 見込み材料費（概算）
@@ -22,6 +23,7 @@ export const orders = sqliteTable("orders", {
 }, (table) => ({
   dueDateIdx: index("idx_orders_due").on(table.due_date),
   statusIdx: index("idx_orders_status").on(table.status),
+  startDateIdx: index("idx_orders_start").on(table.start_date),
 }));
 
 // 手配 (Procurements) - 購買(purchase) と 製造(manufacture) を統合
@@ -82,6 +84,7 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   updated_at: true,
 }).extend({
   order_id: z.number().optional(),
+  start_date: z.string().min(1, "開始予定日は必須です"),
   due_date: z.string().min(1, "納期は必須です"),
   status: z.enum(['pending', 'in_progress', 'completed']).default('pending'),
   customer_name: z.string().optional()
@@ -117,7 +120,7 @@ export const updateTaskSchema = insertTaskSchema.partial();
 
 // Column whitelists for safe updates
 export const ALLOWED_ORDER_UPDATE_COLUMNS = [
-  'product_name', 'qty', 'due_date', 'sales', 'estimated_material_cost', 
+  'product_name', 'qty', 'start_date', 'due_date', 'sales', 'estimated_material_cost', 
   'std_time_per_unit', 'status', 'customer_name'
 ] as const;
 
@@ -151,6 +154,7 @@ export interface OrderKPI {
   order_id: number;
   product_name: string;
   qty: number;
+  start_date?: string;        // 開始予定日（元データ）
   due_date: string;
   sales: number;
   estimated_material_cost: number; // 見込み材料費（元データ）
