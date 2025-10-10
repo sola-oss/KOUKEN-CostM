@@ -10,6 +10,22 @@ The system enables businesses to track costs across multiple projects, manage wo
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### October 10, 2025 - Hierarchical Gantt Chart Implementation
+- **Feature**: Redesigned Gantt chart with hierarchical project-based grouping
+- **Implementation Details**:
+  - Added `HierarchicalRow` interface with `isHeader` flag, `row_label`, and `row_order` fields
+  - Tasks and procurements now grouped by project (order) with visual hierarchy
+  - Project headers display as "案件{id}：{name}" format
+  - Work items (tasks/procurements) indented with "　└ {name}" format using 全角スペース
+  - Transparent header bars (opacity=0.01) for Y-axis positioning without visual display
+  - Horizontal separator lines between projects for visual clarity
+  - Maintained all existing filter functionality (date range, assignee, display mode, order selection)
+- **Technical Stack**: Plotly.js with categoryorder='array' for Y-axis control
+- **Testing**: End-to-end testing completed for hierarchy display, filters, and edge cases
+- **Known Limitation**: Display mode filter test skipped due to Radix UI Select + Playwright interaction issues (functionality verified manually)
+
 ## System Architecture
 
 ### Frontend Architecture
