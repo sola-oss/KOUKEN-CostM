@@ -12,6 +12,23 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 10, 2025 - Gantt Chart Bug Fix: Order Grouping Correction
+- **Bug Fixed**: Tasks were appearing under incorrect orders due to order_id type inconsistency
+- **Root Cause**: Mixed string/number handling of order_id caused incorrect order lookups and grouping
+- **Solution Implemented**:
+  - Unified all order_id handling to string type throughout the component
+  - Created ordersMap (Map<string, Order>) for safe order name lookups with fallback "(名称不明)"
+  - Applied sidebar filter (selectedOrderIds) BEFORE hierarchy creation instead of after
+  - Explicit categoryarray ordering using numeric sort on string keys
+  - Added order_id to tooltips ("案件{id}：{name}") and work item labels ("（#{id}）")
+- **Technical Changes**:
+  - TimelineItem.order_id: string (was number)
+  - HierarchicalRow.order_id: string (was number)
+  - selectedOrderIds: Set<string> (was Set<number>)
+  - String conversion applied at all data fetch/transform points
+- **Testing**: E2E testing verified correct order grouping, filtering, tooltips, and hierarchy display
+- **Impact**: All tasks and procurements now correctly appear under their assigned orders
+
 ### October 10, 2025 - Hierarchical Gantt Chart Implementation
 - **Feature**: Redesigned Gantt chart with hierarchical project-based grouping
 - **Implementation Details**:
