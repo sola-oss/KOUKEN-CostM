@@ -12,6 +12,25 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 10, 2025 - Work Results Input (PC) Screen Implementation Complete
+- **Feature**: Implemented comprehensive work results entry screen with full CRUD functionality
+- **Implementation Details**:
+  - 2-column layout form with all required fields (date, order_id, task_name, worker, start_time, end_time, quantity, memo)
+  - Required field validation enforced on both frontend and backend (order, task, worker, start/end times)
+  - Automatic duration calculation from start/end times with overnight correction (+24h when end < start)
+  - Direct duration input mode toggle ("実績時間を手動調整")
+  - Work logs saved to SQLite work_logs table with complete audit trail
+  - Today's results table with inline edit/delete functionality
+  - "Keep order/task" toggle for continuous entry workflow
+  - Toast notifications for save/update/delete operations
+  - Time overlap warning system for same worker/date conflicts
+- **Technical Stack**:
+  - Frontend: React Hook Form with Zod validation (workLogSchema with required start_time/end_time)
+  - Backend: SQLite work_logs table with Drizzle ORM and unified insertWorkLogSchema validation
+  - API: RESTful CRUD endpoints (POST/GET/PATCH/DELETE /api/production/work-logs)
+- **Testing**: End-to-end testing completed and verified all CRUD operations, validation, duration calculation, and UI interactions
+- **Data Integrity**: Frontend and backend validation schemas synchronized to ensure start_time/end_time are always required
+
 ### October 10, 2025 - Gantt Chart Bug Fix: Order Grouping Correction
 - **Bug Fixed**: Tasks were appearing under incorrect orders due to order_id type inconsistency
 - **Root Cause**: Mixed string/number handling of order_id caused incorrect order lookups and grouping

@@ -63,8 +63,8 @@ const workLogSchema = z.object({
   order_id: z.coerce.number({ required_error: "受注番号は必須です" }),
   task_name: z.string().min(1, "作業名は必須です"),
   worker: z.string().min(1, "作業者は必須です"),
-  start_time: z.string().optional(),
-  end_time: z.string().optional(),
+  start_time: z.string().min(1, "開始時刻は必須です"),
+  end_time: z.string().min(1, "終了時刻は必須です"),
   duration_hours: z.coerce.number().gt(0, "実績時間は0より大きい値が必要です"),
   quantity: z.coerce.number().min(0, "数量は0以上である必要があります").default(0),
   memo: z.string().optional(),
@@ -122,6 +122,8 @@ export default function WorkResults() {
     defaultValues: {
       date: todayDate,
       worker: currentWorker,
+      start_time: "",
+      end_time: "",
       quantity: 0,
       duration_hours: 0,
       status: "下書き",
@@ -185,6 +187,8 @@ export default function WorkResults() {
         form.reset({
           date: todayDate,
           worker: currentWorker,
+          start_time: "",
+          end_time: "",
           quantity: 0,
           duration_hours: 0,
           status: "下書き",
@@ -194,6 +198,8 @@ export default function WorkResults() {
         form.reset({
           date: todayDate,
           worker: currentWorker,
+          start_time: "",
+          end_time: "",
           quantity: 0,
           duration_hours: 0,
           status: "下書き",
@@ -260,8 +266,8 @@ export default function WorkResults() {
       order_id: log.order_id,
       task_name: log.task_name,
       worker: log.worker,
-      start_time: log.start_time || undefined,
-      end_time: log.end_time || undefined,
+      start_time: log.start_time || "",
+      end_time: log.end_time || "",
       duration_hours: log.duration_hours,
       quantity: log.quantity,
       memo: log.memo || undefined,
@@ -407,10 +413,66 @@ export default function WorkResults() {
 
                 {/* Right column */}
                 <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="start_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>開始時刻 *</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-start-time">
+                              <SelectValue placeholder="選択" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {timeOptions.map((time) => (
+                              <SelectItem key={time} value={time}>
+                                {time}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="end_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>終了時刻 *</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-end-time">
+                              <SelectValue placeholder="選択" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {timeOptions.map((time) => (
+                              <SelectItem key={time} value={time}>
+                                {time}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   {/* Time input mode toggle */}
                   <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <Label htmlFor="duration-mode" className="cursor-pointer">
-                      実績時間を直接入力
+                    <Label htmlFor="duration-mode" className="cursor-pointer text-sm">
+                      実績時間を手動調整
                     </Label>
                     <Switch
                       id="duration-mode"
@@ -419,66 +481,6 @@ export default function WorkResults() {
                       data-testid="switch-duration-mode"
                     />
                   </div>
-
-                  {!useDurationInput ? (
-                    <>
-                      <FormField
-                        control={form.control}
-                        name="start_time"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>開始時刻</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger data-testid="select-start-time">
-                                  <SelectValue placeholder="選択" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {timeOptions.map((time) => (
-                                  <SelectItem key={time} value={time}>
-                                    {time}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="end_time"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>終了時刻</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger data-testid="select-end-time">
-                                  <SelectValue placeholder="選択" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {timeOptions.map((time) => (
-                                  <SelectItem key={time} value={time}>
-                                    {time}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </>
-                  ) : null}
 
                   <FormField
                     control={form.control}
@@ -560,6 +562,8 @@ export default function WorkResults() {
                         form.reset({
                           date: todayDate,
                           worker: currentWorker,
+                          start_time: "",
+                          end_time: "",
                           quantity: 0,
                           duration_hours: 0,
                           status: "下書き",

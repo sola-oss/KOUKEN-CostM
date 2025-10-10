@@ -139,10 +139,10 @@ export const insertWorkLogSchema = createInsertSchema(work_logs).omit({
   order_id: z.number({ required_error: "受注番号は必須です" }),
   task_name: z.string().min(1, "作業名は必須です"),
   worker: z.string().min(1, "作業者は必須です"),
+  start_time: z.string().min(1, "開始時刻は必須です"),
+  end_time: z.string().min(1, "終了時刻は必須です"),
   duration_hours: z.coerce.number().gt(0, "実績時間は0より大きい値が必要です"),
   quantity: z.coerce.number().min(0, "数量は0以上である必要があります").default(0),
-  start_time: z.string().optional(),
-  end_time: z.string().optional(),
   memo: z.string().optional(),
   status: z.string().default('下書き'),
 });
