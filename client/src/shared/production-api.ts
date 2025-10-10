@@ -222,6 +222,12 @@ export async function updateProcurement(id: number, data: Partial<ProcurementPay
   });
 }
 
+export async function deleteProcurement(id: number): Promise<{ message: string }> {
+  return apiClient<{ message: string }>(`/api/procurements/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 // Worker Logs API
 export async function listWorkerLogs(params?: {
   page?: number;
