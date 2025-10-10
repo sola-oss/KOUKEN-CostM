@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 interface TimelineItem {
   id: string;
   type: 'task' | 'procurement';
-  order_id: number;
+  order_id: string;
   order_name: string;
   name: string;
   start: string;
@@ -34,7 +34,7 @@ interface TimelineItem {
 interface HierarchicalRow {
   id: string;
   type: 'header' | 'order_period' | 'task' | 'procurement';
-  order_id: number;
+  order_id: string;
   order_name: string;
   row_label: string;
   row_order: number;
@@ -50,7 +50,7 @@ export default function GanttChart() {
   const { toast } = useToast();
   
   // State
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set());
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [selectedAssignee, setSelectedAssignee] = useState<string>("all");
   const [displayMode, setDisplayMode] = useState<'both' | 'tasks' | 'procurements'>('both');
   const [dateRange, setDateRange] = useState({
@@ -82,10 +82,19 @@ export default function GanttChart() {
   const procurements = procurementsResponse?.data || [];
   const orders = ordersResponse?.data || [];
 
+  // Create orders Map for safe lookup
+  const ordersMap = useMemo(() => {
+    const map = new Map<string, Order>();
+    orders.forEach(order => {
+      map.set(String(order.order_id), order);
+    });
+    return map;
+  }, [orders]);
+
   // Initialize with all orders selected
   useEffect(() => {
     if (orders.length > 0 && selectedOrderIds.size === 0) {
-      setSelectedOrderIds(new Set(orders.map(o => o.order_id)));
+      setSelectedOrderIds(new Set(orders.map(o => String(o.order_id))));
     }
   }, [orders]);
 
@@ -96,12 +105,13 @@ export default function GanttChart() {
     // Add tasks
     if (displayMode === 'both' || displayMode === 'tasks') {
       tasks.forEach(task => {
-        const order = orders.find(o => o.order_id === task.order_id);
+        const orderIdStr = String(task.order_id);
+        const order = ordersMap.get(orderIdStr);
         items.push({
           id: `task-${task.id}`,
           type: 'task',
-          order_id: task.order_id,
-          order_name: order?.product_name || `案件${task.order_id}`,
+          order_id: orderIdStr,
+          order_name: order?.product_name || '(名称不明)',
           name: task.task_name,
           start: task.planned_start,
           end: task.planned_end,
@@ -117,7 +127,8 @@ export default function GanttChart() {
       procurements
         .filter(p => p.kind === 'manufacture')
         .forEach(proc => {
-          const order = orders.find(o => o.order_id === proc.order_id);
+          const orderIdStr = String(proc.order_id || '0');
+          const order = ordersMap.get(orderIdStr);
           const start = proc.eta; // For manufacture, use eta as both start and end
           const end = proc.completed_at || proc.eta;
           
@@ -125,8 +136,8 @@ export default function GanttChart() {
             items.push({
               id: `proc-${proc.id}`,
               type: 'procurement',
-              order_id: proc.order_id || 0,
-              order_name: order?.product_name || `案件${proc.order_id}`,
+              order_id: orderIdStr,
+              order_name: order?.product_name || '(名称不明)',
               name: proc.item_name || '製造手配',
               start,
               end,
@@ -138,7 +149,7 @@ export default function GanttChart() {
     }
 
     return items;
-  }, [tasks, procurements, orders, displayMode]);
+  }, [tasks, procurements, ordersMap, displayMode]);
 
   // Filter timeline items
   const filteredItems = useMemo(() => {
@@ -169,7 +180,7 @@ export default function GanttChart() {
     let rowOrder = 0;
 
     // Group items by order_id
-    const itemsByOrder = new Map<number, TimelineItem[]>();
+    const itemsByOrder = new Map<string, TimelineItem[]>();
     filteredItems.forEach(item => {
       if (!itemsByOrder.has(item.order_id)) {
         itemsByOrder.set(item.order_id, []);
@@ -177,14 +188,14 @@ export default function GanttChart() {
       itemsByOrder.get(item.order_id)!.push(item);
     });
 
-    // Create hierarchical structure
+    // Create hierarchical structure - sorted by numeric order_id
     Array.from(itemsByOrder.entries())
-      .sort(([a], [b]) => a - b) // Sort by order_id
+      .sort(([a], [b]) => Number(a) - Number(b)) // Sort by order_id numerically
       .forEach(([orderId, items]) => {
         if (items.length === 0) return;
 
-        const orderName = items[0].order_name;
-        const order = orders.find(o => o.order_id === orderId);
+        const order = ordersMap.get(orderId);
+        const orderName = order?.product_name || '(名称不明)';
         
         // Add header row (transparent bar for position)
         rows.push({
@@ -216,7 +227,7 @@ export default function GanttChart() {
           });
         }
 
-        // Add task/procurement rows with indent
+        // Add task/procurement rows with indent and order_id
         items.forEach(item => {
           // Validate and fix dates
           let start = item.start;
@@ -238,13 +249,13 @@ export default function GanttChart() {
           }
 
           const label = item.type === 'procurement' 
-            ? `　└ ${item.name}（製造手配）`
-            : `　└ ${item.name}`;
+            ? `　└ ${item.name}（製造手配）（#${orderId}）`
+            : `　└ ${item.name}（#${orderId}）`;
 
           rows.push({
             id: item.id,
             type: item.type,
-            order_id: item.order_id,
+            order_id: orderId,
             order_name: item.order_name,
             row_label: label,
             row_order: rowOrder++,
@@ -259,7 +270,7 @@ export default function GanttChart() {
       });
 
     return rows;
-  }, [filteredItems]);
+  }, [filteredItems, ordersMap]);
 
   // Get unique assignees
   const assignees = useMemo(() => {
@@ -335,12 +346,13 @@ export default function GanttChart() {
       },
       text: hierarchicalRows.map(row => {
         if (row.isHeader) {
-          return `${row.order_name}`;
+          return `案件${row.order_id}：${row.order_name}`;
         }
         if (row.type === 'order_period') {
-          return `${row.order_name}<br>案件期間<br>${format(parseISO(row.start), 'yyyy/MM/dd')} ~ ${format(parseISO(row.end), 'yyyy/MM/dd')}<br>状態: ${getStatusLabel(row.status)}`;
+          return `案件${row.order_id}：${row.order_name}<br>案件期間<br>${format(parseISO(row.start), 'yyyy/MM/dd')} ~ ${format(parseISO(row.end), 'yyyy/MM/dd')}<br>状態: ${getStatusLabel(row.status)}`;
         }
-        return `${row.order_name}<br>${row.row_label.replace('　└ ', '')}<br>${format(parseISO(row.start), 'yyyy/MM/dd')} ~ ${format(parseISO(row.end), 'yyyy/MM/dd')}<br>担当: ${row.assignee || 'なし'}<br>状態: ${getStatusLabel(row.status)}`;
+        const workName = row.row_label.replace('　└ ', '').replace(/（#\d+）$/, '');
+        return `案件${row.order_id}：${row.order_name}<br>${workName}<br>${format(parseISO(row.start), 'yyyy/MM/dd')} ~ ${format(parseISO(row.end), 'yyyy/MM/dd')}<br>担当: ${row.assignee || 'なし'}<br>状態: ${getStatusLabel(row.status)}`;
       }),
       hovertemplate: '%{text}<extra></extra>',
       customdata: hierarchicalRows.map(row => row.id),
@@ -449,12 +461,12 @@ export default function GanttChart() {
     if (selectedOrderIds.size === orders.length) {
       setSelectedOrderIds(new Set());
     } else {
-      setSelectedOrderIds(new Set(orders.map(o => o.order_id)));
+      setSelectedOrderIds(new Set(orders.map(o => String(o.order_id))));
     }
   };
 
   // Toggle single order
-  const handleToggleOrder = (orderId: number) => {
+  const handleToggleOrder = (orderId: string) => {
     const newSet = new Set(selectedOrderIds);
     if (newSet.has(orderId)) {
       newSet.delete(orderId);
@@ -559,22 +571,25 @@ export default function GanttChart() {
         </div>
 
         <div className="space-y-2">
-          {orders.map(order => (
-            <div key={order.order_id} className="flex items-center space-x-2">
-              <Checkbox
-                id={`order-${order.order_id}`}
-                checked={selectedOrderIds.has(order.order_id)}
-                onCheckedChange={() => handleToggleOrder(order.order_id)}
-                data-testid={`checkbox-order-${order.order_id}`}
-              />
-              <label
-                htmlFor={`order-${order.order_id}`}
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
-                #{order.order_id} {order.product_name}
-              </label>
-            </div>
-          ))}
+          {orders.map(order => {
+            const orderIdStr = String(order.order_id);
+            return (
+              <div key={order.order_id} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`order-${order.order_id}`}
+                  checked={selectedOrderIds.has(orderIdStr)}
+                  onCheckedChange={() => handleToggleOrder(orderIdStr)}
+                  data-testid={`checkbox-order-${order.order_id}`}
+                />
+                <label
+                  htmlFor={`order-${order.order_id}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  #{order.order_id} {order.product_name}
+                </label>
+              </div>
+            );
+          })}
         </div>
       </div>
 
