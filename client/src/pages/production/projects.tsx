@@ -12,9 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Package, Search, Plus, ArrowUpDown, ArrowLeft } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Package, Search, Plus, ArrowUpDown, ArrowLeft, Edit, Trash2 } from "lucide-react";
 import { listOrders, createOrder, type Order, type OrderPayload } from "@/shared/production-api";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
@@ -54,6 +55,8 @@ export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<number | null>(null);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<number | null>(null);
 
   const { data: ordersResponse, isLoading, error } = useQuery({
     queryKey: ['orders', page],
@@ -141,6 +144,7 @@ export default function Projects() {
     onSuccess: (newOrder) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       form.reset();
+      setEditingOrder(null);
       toast({
         title: "成功",
         description: "受注が正常に登録されました",
@@ -159,8 +163,96 @@ export default function Projects() {
     }
   });
 
+  // Update order mutation
+  const updateOrderMutation = useMutation({
+    mutationFn: async ({ orderId, data }: { orderId: number; data: OrderFormData }) => {
+      const payload: any = {
+        product_name: data.product_name,
+        qty: data.qty,
+        start_date: data.start_date,
+        due_date: data.due_date,
+        std_time_per_unit: data.std_time_per_unit,
+        sales: data.sales,
+        customer_name: data.customer_name || ''
+      };
+      const response = await apiRequest('PATCH', `/api/orders/${orderId}`, payload);
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      form.reset();
+      setEditingOrder(null);
+      toast({
+        title: "成功",
+        description: "案件を更新しました",
+      });
+      setActiveTab("list");
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error.message || "案件の更新に失敗しました",
+      });
+    }
+  });
+
+  // Delete order mutation
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (orderId: number) => {
+      return await apiRequest('DELETE', `/api/orders/${orderId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({
+        title: "成功",
+        description: "案件を削除しました",
+      });
+      setDeletingOrderId(null);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error.message || "案件の削除に失敗しました",
+      });
+      setDeletingOrderId(null);
+    }
+  });
+
   const onSubmit = (data: OrderFormData) => {
-    createOrderMutation.mutate(data);
+    if (editingOrder) {
+      updateOrderMutation.mutate({ orderId: editingOrder.order_id, data });
+    } else {
+      createOrderMutation.mutate(data);
+    }
+  };
+
+  const handleEdit = (order: Order, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingOrder(order);
+    form.reset({
+      order_id: "" as any,
+      product_name: order.product_name,
+      customer_name: order.customer_name || "",
+      qty: order.qty,
+      start_date: order.start_date ? order.start_date.split('T')[0] : "",
+      due_date: order.due_date.split('T')[0],
+      std_time_per_unit: order.std_time_per_unit,
+      sales: order.sales,
+    });
+    setActiveTab("registration");
+  };
+
+  const handleDelete = (orderId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeletingOrderId(orderId);
+  };
+
+  const confirmDelete = () => {
+    if (deletingOrderId) {
+      deleteOrderMutation.mutate(deletingOrderId);
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -286,11 +378,15 @@ export default function Projects() {
         <TabsContent value="registration" className="space-y-4 mt-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-              <CardTitle>受注登録</CardTitle>
+              <CardTitle>{editingOrder ? "案件編集" : "受注登録"}</CardTitle>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setActiveTab("list")}
+                onClick={() => {
+                  setActiveTab("list");
+                  setEditingOrder(null);
+                  form.reset();
+                }}
                 data-testid="button-back-to-list"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -468,10 +564,13 @@ export default function Projects() {
                     </Button>
                     <Button 
                       type="submit" 
-                      disabled={createOrderMutation.isPending}
+                      disabled={createOrderMutation.isPending || updateOrderMutation.isPending}
                       data-testid="button-submit-order"
                     >
-                      {createOrderMutation.isPending ? "登録中..." : "登録"}
+                      {editingOrder 
+                        ? (updateOrderMutation.isPending ? "更新中..." : "更新") 
+                        : (createOrderMutation.isPending ? "登録中..." : "登録")
+                      }
                     </Button>
                   </div>
                 </form>
@@ -541,12 +640,13 @@ export default function Projects() {
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
                   </TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAndSortedOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center">
+                    <TableCell colSpan={8} className="h-32 text-center">
                       <div className="flex flex-col items-center justify-center text-muted-foreground">
                         <Package className="h-8 w-8 mb-2" />
                         <p>該当する案件がありません</p>
@@ -584,6 +684,26 @@ export default function Projects() {
                           {getStatusLabel(order.status)}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleEdit(order, e)}
+                            data-testid={`button-edit-${order.order_id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleDelete(order.order_id, e)}
+                            data-testid={`button-delete-${order.order_id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -592,6 +712,28 @@ export default function Projects() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deletingOrderId !== null} onOpenChange={(open) => !open && setDeletingOrderId(null)}>
+        <AlertDialogContent data-testid="dialog-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>案件を削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              この操作は取り消せません。案件に関連するすべてのデータが削除されます。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              削除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
