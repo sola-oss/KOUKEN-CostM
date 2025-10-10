@@ -6,9 +6,11 @@ import {
   insertProcurementSchema, 
   insertWorkerLogSchema,
   insertTaskSchema,
+  insertWorkLogSchema,
   updateOrderSchema,
   updateProcurementSchema,
-  updateTaskSchema
+  updateTaskSchema,
+  updateWorkLogSchema
 } from '../../shared/production-schema.js';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
@@ -897,6 +899,156 @@ router.delete('/api/tasks/:id', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal server error',
       message: 'Failed to delete task'
+    });
+  }
+});
+
+// ========== Work Logs API ==========
+
+// GET /api/work-logs - List work logs with filters
+router.get('/api/work-logs', async (req, res) => {
+  try {
+    const { 
+      date,
+      worker,
+      order_id,
+      status 
+    } = req.query as Record<string, string | undefined>;
+
+    const options = {
+      date: date ? toUTC(date) : undefined,
+      worker,
+      order_id: order_id ? parseInt(order_id) : undefined,
+      status
+    };
+
+    const result = await dao.getWorkLogs(options);
+
+    // Convert dates to JST for response
+    const workLogsWithJST = result.logs.map(log => ({
+      ...log,
+      date: toJST(log.date),
+      created_at: toJST(log.created_at)
+    }));
+
+    res.json({ 
+      data: workLogsWithJST,
+      total: result.total 
+    });
+
+  } catch (error) {
+    console.error('Work logs list error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch work logs'
+    });
+  }
+});
+
+// POST /api/work-logs - Create new work log
+router.post('/api/work-logs', async (req, res) => {
+  try {
+    const validatedData = insertWorkLogSchema.parse(req.body);
+
+    // Convert date to UTC
+    const workLogData = {
+      ...validatedData,
+      date: toUTC(validatedData.date)
+    };
+
+    // Check for overlap (only if start_time and end_time are provided)
+    let overlap: any[] = [];
+    if (workLogData.start_time && workLogData.end_time) {
+      overlap = await dao.checkWorkLogOverlap(
+        workLogData.worker,
+        workLogData.date,
+        workLogData.start_time,
+        workLogData.end_time
+      );
+    }
+
+    const workLogId = await dao.createWorkLog(workLogData);
+
+    res.status(201).json({ 
+      id: workLogId,
+      hasOverlap: overlap.length > 0,
+      overlappingLogs: overlap,
+      message: 'Work log created successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Work log creation error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: error.errors 
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to create work log'
+    });
+  }
+});
+
+// PATCH /api/work-logs/:id - Update work log
+router.patch('/api/work-logs/:id', async (req, res) => {
+  try {
+    const workLogId = parseInt(req.params.id);
+    const validatedData = updateWorkLogSchema.parse(req.body);
+
+    // Convert date to UTC if present
+    const updateData: any = { ...validatedData };
+    if (updateData.date) {
+      updateData.date = toUTC(updateData.date);
+    }
+
+    const success = await dao.updateWorkLog(workLogId, updateData);
+
+    if (!success) {
+      return res.status(404).json({ 
+        error: 'Not found',
+        message: 'Work log not found or no changes made' 
+      });
+    }
+
+    res.json({ message: 'Work log updated successfully' });
+
+  } catch (error: any) {
+    console.error('Work log update error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: error.errors 
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update work log'
+    });
+  }
+});
+
+// DELETE /api/work-logs/:id - Delete work log
+router.delete('/api/work-logs/:id', async (req, res) => {
+  try {
+    const workLogId = parseInt(req.params.id);
+    const success = await dao.deleteWorkLog(workLogId);
+
+    if (!success) {
+      return res.status(404).json({ 
+        error: 'Not found',
+        message: 'Work log not found' 
+      });
+    }
+
+    res.json({ message: 'Work log deleted successfully' });
+
+  } catch (error) {
+    console.error('Work log deletion error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to delete work log'
     });
   }
 });
