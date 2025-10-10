@@ -141,6 +141,36 @@ export interface TaskPayload {
   status?: 'not_started' | 'in_progress' | 'completed';
 }
 
+// Work Log Types (作業実績ログ - PC用詳細入力)
+export interface WorkLog {
+  id: number;
+  date: string;
+  order_id: number;
+  task_name: string;
+  worker: string;
+  start_time?: string;
+  end_time?: string;
+  duration_hours: number;
+  quantity: number;
+  memo?: string;
+  status: string;
+  created_at: string;
+  product_name?: string; // From JOIN with orders table
+}
+
+export interface WorkLogPayload {
+  date: string;
+  order_id: number;
+  task_name: string;
+  worker: string;
+  start_time?: string;
+  end_time?: string;
+  duration_hours: number;
+  quantity?: number;
+  memo?: string;
+  status?: string;
+}
+
 // Dashboard KPI Types - Updated to match backend schema
 export interface DashboardKPI {
   total_sales: number;
@@ -299,6 +329,55 @@ export async function updateTask(id: number, data: Partial<TaskPayload>): Promis
 
 export async function deleteTask(id: number): Promise<{ message: string }> {
   return apiClient<{ message: string }>(`/api/tasks/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// Work Logs API (作業実績ログ)
+export async function listWorkLogs(params?: {
+  date?: string;
+  worker?: string;
+  order_id?: number;
+  status?: string;
+}): Promise<{ data: WorkLog[]; total: number }> {
+  const searchParams = new URLSearchParams();
+  if (params?.date) searchParams.append('date', params.date);
+  if (params?.worker) searchParams.append('worker', params.worker);
+  if (params?.order_id) searchParams.append('order_id', params.order_id.toString());
+  if (params?.status) searchParams.append('status', params.status);
+  
+  const queryString = searchParams.toString();
+  const endpoint = queryString ? `/api/work-logs?${queryString}` : '/api/work-logs';
+  
+  return apiClient<{ data: WorkLog[]; total: number }>(endpoint);
+}
+
+export async function createWorkLog(data: WorkLogPayload): Promise<{ 
+  id: number; 
+  hasOverlap: boolean;
+  overlappingLogs: WorkLog[];
+  message: string 
+}> {
+  return apiClient<{ 
+    id: number; 
+    hasOverlap: boolean;
+    overlappingLogs: WorkLog[];
+    message: string 
+  }>('/api/work-logs', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateWorkLog(id: number, data: Partial<WorkLogPayload>): Promise<{ message: string }> {
+  return apiClient<{ message: string }>(`/api/work-logs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteWorkLog(id: number): Promise<{ message: string }> {
+  return apiClient<{ message: string }>(`/api/work-logs/${id}`, {
     method: 'DELETE',
   });
 }
