@@ -1,5 +1,5 @@
 // Production Management MVP - Gantt Chart (Project-based)
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Plot from "react-plotly.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,11 +68,11 @@ export default function GanttChart() {
   const orders = ordersResponse?.data || [];
 
   // Initialize with all orders selected
-  useMemo(() => {
+  useEffect(() => {
     if (orders.length > 0 && selectedOrderIds.size === 0) {
       setSelectedOrderIds(new Set(orders.map(o => o.order_id)));
     }
-  }, [orders, selectedOrderIds.size]);
+  }, [orders]);
 
   // Convert data to timeline items
   const timelineItems: TimelineItem[] = useMemo(() => {
