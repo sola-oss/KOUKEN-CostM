@@ -31,6 +31,21 @@ interface TimelineItem {
   originalData: Task | Procurement;
 }
 
+interface HierarchicalRow {
+  id: string;
+  type: 'header' | 'task' | 'procurement';
+  order_id: number;
+  order_name: string;
+  row_label: string;
+  row_order: number;
+  start: string;
+  end: string;
+  status: string;
+  assignee?: string;
+  originalData?: Task | Procurement;
+  isHeader: boolean;
+}
+
 export default function GanttChart() {
   const { toast } = useToast();
   
@@ -148,6 +163,87 @@ export default function GanttChart() {
     });
   }, [timelineItems, selectedOrderIds, selectedAssignee, dateRange]);
 
+  // Convert filtered items to hierarchical structure
+  const hierarchicalRows = useMemo(() => {
+    const rows: HierarchicalRow[] = [];
+    let rowOrder = 0;
+
+    // Group items by order_id
+    const itemsByOrder = new Map<number, TimelineItem[]>();
+    filteredItems.forEach(item => {
+      if (!itemsByOrder.has(item.order_id)) {
+        itemsByOrder.set(item.order_id, []);
+      }
+      itemsByOrder.get(item.order_id)!.push(item);
+    });
+
+    // Create hierarchical structure
+    Array.from(itemsByOrder.entries())
+      .sort(([a], [b]) => a - b) // Sort by order_id
+      .forEach(([orderId, items]) => {
+        if (items.length === 0) return;
+
+        const orderName = items[0].order_name;
+        
+        // Add header row (transparent bar for position)
+        rows.push({
+          id: `header-${orderId}`,
+          type: 'header',
+          order_id: orderId,
+          order_name: orderName,
+          row_label: `案件${orderId}：${orderName}`,
+          row_order: rowOrder++,
+          start: items[0].start,
+          end: items[0].start, // Same day for minimal bar
+          status: 'header',
+          isHeader: true
+        });
+
+        // Add task/procurement rows with indent
+        items.forEach(item => {
+          // Validate and fix dates
+          let start = item.start;
+          let end = item.end;
+          
+          try {
+            const startDate = parseISO(start);
+            const endDate = parseISO(end);
+            
+            // Ensure start <= end
+            if (startDate > endDate) {
+              end = start; // Set to same day
+            }
+          } catch (error) {
+            // If date parsing fails, use current date
+            const today = format(new Date(), 'yyyy-MM-dd');
+            start = today;
+            end = today;
+          }
+
+          const label = item.type === 'procurement' 
+            ? `　└ ${item.name}（製造手配）`
+            : `　└ ${item.name}`;
+
+          rows.push({
+            id: item.id,
+            type: item.type,
+            order_id: item.order_id,
+            order_name: item.order_name,
+            row_label: label,
+            row_order: rowOrder++,
+            start,
+            end,
+            status: item.status,
+            assignee: item.assignee,
+            originalData: item.originalData,
+            isHeader: false
+          });
+        });
+      });
+
+    return rows;
+  }, [filteredItems]);
+
   // Get unique assignees
   const assignees = useMemo(() => {
     const uniqueAssignees = new Set<string>();
@@ -157,8 +253,12 @@ export default function GanttChart() {
     return Array.from(uniqueAssignees);
   }, [tasks]);
 
-  // Status color mapping
+  // Status color mapping with header support
   const getStatusColor = (status: string) => {
+    if (status === 'header') {
+      return 'rgba(0,0,0,0.01)'; // Almost transparent for header
+    }
+    
     switch (status) {
       case 'not_started':
       case 'planned':
@@ -191,35 +291,84 @@ export default function GanttChart() {
     }
   };
 
-  // Prepare Plotly data
+  // Prepare Plotly data with hierarchical structure
   const plotlyData = useMemo(() => {
-    if (filteredItems.length === 0) return [];
+    if (hierarchicalRows.length === 0) return [];
 
     return [{
       type: 'bar' as const,
       orientation: 'h' as const,
-      x: filteredItems.map(item => {
-        const start = new Date(item.start);
-        const end = new Date(item.end);
+      x: hierarchicalRows.map(row => {
+        const start = new Date(row.start);
+        const end = new Date(row.end);
         return end.getTime() - start.getTime();
       }),
-      y: filteredItems.map(item => item.name),
-      base: filteredItems.map(item => new Date(item.start)),
+      y: hierarchicalRows.map(row => row.row_label),
+      base: hierarchicalRows.map(row => new Date(row.start)),
       marker: {
-        color: filteredItems.map(item => getStatusColor(item.status))
+        color: hierarchicalRows.map(row => getStatusColor(row.status)),
+        line: {
+          color: hierarchicalRows.map(row => row.isHeader ? 'rgba(0,0,0,0)' : 'rgba(0,0,0,0.1)'),
+          width: 1
+        }
       },
-      text: filteredItems.map(item => 
-        `${item.order_name}<br>${item.name}<br>${format(parseISO(item.start), 'yyyy/MM/dd')} ~ ${format(parseISO(item.end), 'yyyy/MM/dd')}<br>担当: ${item.assignee || 'なし'}<br>状態: ${getStatusLabel(item.status)}`
-      ),
+      text: hierarchicalRows.map(row => {
+        if (row.isHeader) {
+          return `${row.order_name}`;
+        }
+        return `${row.order_name}<br>${row.row_label.replace('　└ ', '')}<br>${format(parseISO(row.start), 'yyyy/MM/dd')} ~ ${format(parseISO(row.end), 'yyyy/MM/dd')}<br>担当: ${row.assignee || 'なし'}<br>状態: ${getStatusLabel(row.status)}`;
+      }),
       hovertemplate: '%{text}<extra></extra>',
-      customdata: filteredItems.map(item => item.id)
+      customdata: hierarchicalRows.map(row => row.id),
+      showlegend: false
     }];
-  }, [filteredItems]);
+  }, [hierarchicalRows]);
 
-  // Plotly layout
+  // Plotly layout with hierarchical Y-axis and separators
   const plotlyLayout = useMemo(() => {
     const today = new Date();
     
+    // Create category array for Y-axis ordering
+    const categoryArray = hierarchicalRows
+      .sort((a, b) => a.row_order - b.row_order)
+      .map(row => row.row_label);
+
+    // Create shapes for today's line and order separators
+    const shapes: any[] = [
+      // Today's vertical line
+      {
+        type: 'line' as const,
+        x0: today,
+        x1: today,
+        y0: 0,
+        y1: 1,
+        yref: 'paper' as const,
+        line: {
+          color: '#EF4444',
+          width: 2,
+          dash: 'dash' as const
+        }
+      }
+    ];
+
+    // Add horizontal separator lines after each order header
+    hierarchicalRows.forEach((row, index) => {
+      if (row.isHeader && index > 0) {
+        shapes.push({
+          type: 'line' as const,
+          x0: 0,
+          x1: 1,
+          xref: 'paper' as const,
+          y0: categoryArray.length - index - 0.5,
+          y1: categoryArray.length - index - 0.5,
+          line: {
+            color: '#D1D5DB',
+            width: 1
+          }
+        });
+      }
+    });
+
     return {
       xaxis: {
         type: 'date' as const,
@@ -231,37 +380,42 @@ export default function GanttChart() {
         range: [dateRange.start, dateRange.end]
       },
       yaxis: {
-        title: { text: 'タスク' },
-        autorange: 'reversed' as const
+        title: { text: '' },
+        autorange: 'reversed' as const,
+        categoryorder: 'array' as const,
+        categoryarray: categoryArray,
+        tickfont: { size: 12 }
       },
-      shapes: [
-        {
-          type: 'line' as const,
-          x0: today,
-          x1: today,
-          y0: 0,
-          y1: 1,
-          yref: 'paper' as const,
-          line: {
-            color: '#EF4444',
-            width: 2,
-            dash: 'dash' as const
-          }
-        }
-      ],
-      margin: { l: 200, r: 50, t: 50, b: 80 },
-      height: Math.max(400, filteredItems.length * 40 + 100),
-      hovermode: 'closest' as const
+      shapes,
+      margin: { l: 250, r: 50, t: 50, b: 80 },
+      height: Math.max(400, hierarchicalRows.length * 35 + 100),
+      hovermode: 'closest' as const,
+      bargap: 0.15
     };
-  }, [dateRange, filteredItems.length]);
+  }, [dateRange, hierarchicalRows]);
 
   // Handle bar click
   const handlePlotClick = (data: any) => {
     if (data.points && data.points[0]) {
-      const itemId = data.points[0].customdata;
-      const item = filteredItems.find(i => i.id === itemId);
-      if (item) {
-        setEditDialog({ open: true, item });
+      const rowId = data.points[0].customdata;
+      const row = hierarchicalRows.find(r => r.id === rowId);
+      
+      // Don't open dialog for header rows
+      if (row && !row.isHeader && row.originalData) {
+        // Convert hierarchical row back to timeline item for dialog
+        const timelineItem: TimelineItem = {
+          id: row.id,
+          type: row.type as 'task' | 'procurement',
+          order_id: row.order_id,
+          order_name: row.order_name,
+          name: row.row_label.replace('　└ ', '').replace('（製造手配）', ''),
+          start: row.start,
+          end: row.end,
+          status: row.status,
+          assignee: row.assignee,
+          originalData: row.originalData
+        };
+        setEditDialog({ open: true, item: timelineItem });
       }
     }
   };
@@ -470,7 +624,7 @@ export default function GanttChart() {
 
         {/* Chart Area */}
         <div className="flex-1 overflow-auto p-6">
-          {filteredItems.length === 0 ? (
+          {hierarchicalRows.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center py-12">
                 <Calendar className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
