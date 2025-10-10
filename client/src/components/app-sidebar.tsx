@@ -109,26 +109,31 @@ export function AppSidebar() {
           <SidebarGroupLabel>メインメニュー</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild
-                    className={location === item.url ? 'bg-sidebar-accent' : ''}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span className="flex-1">{item.title}</span>
-                      {item.badge && (
-                        <Badge variant="secondary" className="ml-auto">
-                          {item.badge}
-                        </Badge>
-                      )}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-              
-              {/* Collapsible Work Instructions Menu */}
+              {/* 1. 案件管理 */}
+              {(() => {
+                const item = menuItems[0];
+                const Icon = item.icon;
+                return (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      asChild
+                      className={location === item.url ? 'bg-sidebar-accent' : ''}
+                    >
+                      <Link href={item.url}>
+                        <Icon className="h-4 w-4" />
+                        <span className="flex-1">{item.title}</span>
+                        {item.badge && (
+                          <Badge variant="secondary" className="ml-auto">
+                            {item.badge}
+                          </Badge>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })()}
+
+              {/* 2. 作業指示 (Collapsible) */}
               <Collapsible
                 open={isWorkInstructionsOpen}
                 onOpenChange={setIsWorkInstructionsOpen}
@@ -167,6 +172,26 @@ export function AppSidebar() {
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+
+              {/* 3-6. 残りのメニュー項目 */}
+              {menuItems.slice(1).map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton 
+                    asChild
+                    className={location === item.url ? 'bg-sidebar-accent' : ''}
+                  >
+                    <Link href={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span className="flex-1">{item.title}</span>
+                      {item.badge && (
+                        <Badge variant="secondary" className="ml-auto">
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
