@@ -2,8 +2,8 @@
 import Database from 'better-sqlite3';
 import { MetricsService } from '../services/metrics.js';
 import type { 
-  Order, Procurement, WorkerLog, Task,
-  InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask,
+  Order, Procurement, WorkerLog, Task, WorkLog,
+  InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog,
   OrderKPI, DashboardKPI, CalendarEvent 
 } from '../../shared/production-schema.js';
 
@@ -502,6 +502,174 @@ export class ProductionDAO {
     const stmt = this.db.prepare(`DELETE FROM tasks WHERE id = ?`);
     const result = stmt.run(taskId);
     return result.changes > 0;
+  }
+
+  // ========== Work Logs CRUD ==========
+  
+  async createWorkLog(logData: InsertWorkLog): Promise<number> {
+    const now = new Date().toISOString();
+    
+    const stmt = this.db.prepare(`
+      INSERT INTO work_logs (
+        date, order_id, task_name, worker, start_time, end_time, 
+        duration_hours, quantity, memo, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const result = stmt.run(
+      logData.date,
+      logData.order_id,
+      logData.task_name,
+      logData.worker,
+      logData.start_time || null,
+      logData.end_time || null,
+      logData.duration_hours,
+      logData.quantity || 0,
+      logData.memo || null,
+      logData.status || '下書き',
+      now
+    );
+    
+    return result.lastInsertRowid as number;
+  }
+
+  async getWorkLogs(options: {
+    date?: string;
+    worker?: string;
+    order_id?: number;
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}): Promise<{ logs: (WorkLog & { product_name?: string })[], total: number }> {
+    let query = `
+      SELECT wl.*, o.product_name 
+      FROM work_logs wl
+      LEFT JOIN orders o ON wl.order_id = o.order_id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    
+    if (options.date) {
+      query += ` AND wl.date = ?`;
+      params.push(options.date);
+    }
+    
+    if (options.worker) {
+      query += ` AND wl.worker = ?`;
+      params.push(options.worker);
+    }
+    
+    if (options.order_id) {
+      query += ` AND wl.order_id = ?`;
+      params.push(options.order_id);
+    }
+    
+    if (options.from) {
+      query += ` AND wl.date >= ?`;
+      params.push(options.from);
+    }
+    
+    if (options.to) {
+      query += ` AND wl.date <= ?`;
+      params.push(options.to);
+    }
+    
+    query += ` ORDER BY wl.date DESC, wl.start_time DESC`;
+    
+    const countQuery = `
+      SELECT COUNT(*) as count FROM work_logs wl WHERE 1=1
+      ${options.date ? ' AND wl.date = ?' : ''}
+      ${options.worker ? ' AND wl.worker = ?' : ''}
+      ${options.order_id ? ' AND wl.order_id = ?' : ''}
+      ${options.from ? ' AND wl.date >= ?' : ''}
+      ${options.to ? ' AND wl.date <= ?' : ''}
+    `;
+    const countResult = this.db.prepare(countQuery).get(...params) as { count: number };
+    const total = countResult.count;
+    
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 50;
+    const offset = (page - 1) * pageSize;
+    
+    query += ` LIMIT ? OFFSET ?`;
+    params.push(pageSize, offset);
+    
+    const logs = this.db.prepare(query).all(...params) as (WorkLog & { product_name?: string })[];
+    
+    return { logs, total };
+  }
+
+  async getWorkLogById(logId: number): Promise<WorkLog | null> {
+    const log = this.db.prepare(`
+      SELECT * FROM work_logs WHERE id = ?
+    `).get(logId) as WorkLog | undefined;
+    
+    return log || null;
+  }
+
+  async updateWorkLog(logId: number, updates: Partial<InsertWorkLog>): Promise<boolean> {
+    const allowedColumns = [
+      'date', 'order_id', 'task_name', 'worker', 'start_time', 'end_time',
+      'duration_hours', 'quantity', 'memo', 'status'
+    ];
+    
+    const updateCols = Object.keys(updates).filter(key => allowedColumns.includes(key));
+    
+    if (updateCols.length === 0) {
+      return false;
+    }
+    
+    const setClause = updateCols.map(col => `${col} = ?`).join(', ');
+    const values = updateCols.map(col => (updates as any)[col]);
+    
+    const stmt = this.db.prepare(`
+      UPDATE work_logs SET ${setClause} WHERE id = ?
+    `);
+    
+    const result = stmt.run(...values, logId);
+    return result.changes > 0;
+  }
+
+  async deleteWorkLog(logId: number): Promise<boolean> {
+    const stmt = this.db.prepare(`DELETE FROM work_logs WHERE id = ?`);
+    const result = stmt.run(logId);
+    return result.changes > 0;
+  }
+
+  async checkWorkLogOverlap(
+    worker: string, 
+    date: string, 
+    startTime: string, 
+    endTime: string,
+    excludeLogId?: number
+  ): Promise<WorkLog[]> {
+    let query = `
+      SELECT * FROM work_logs 
+      WHERE worker = ? 
+        AND date = ? 
+        AND start_time IS NOT NULL 
+        AND end_time IS NOT NULL
+        AND (
+          (start_time <= ? AND end_time > ?) OR
+          (start_time < ? AND end_time >= ?) OR
+          (start_time >= ? AND end_time <= ?)
+        )
+    `;
+    const params: any[] = [worker, date, startTime, startTime, endTime, endTime, startTime, endTime];
+    
+    if (excludeLogId) {
+      query += ` AND id != ?`;
+      params.push(excludeLogId);
+    }
+    
+    return this.db.prepare(query).all(...params) as WorkLog[];
+  }
+
+  async getTasksByOrderId(orderId: number): Promise<Task[]> {
+    return this.db.prepare(`
+      SELECT * FROM tasks WHERE order_id = ? ORDER BY planned_start ASC
+    `).all(orderId) as Task[];
   }
 
   close(): void {

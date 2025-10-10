@@ -78,6 +78,25 @@ export const tasks = sqliteTable("tasks", {
   plannedStartIdx: index("idx_tasks_planned_start").on(table.planned_start),
 }));
 
+// 作業実績ログ (Work Logs) - PC用の詳細な作業実績入力
+export const work_logs = sqliteTable("work_logs", {
+  id: integer("id").primaryKey(),
+  date: text("date").notNull(),                  // 作業日(UTC ISO)
+  order_id: integer("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
+  task_name: text("task_name").notNull(),        // 作業名
+  worker: text("worker").notNull(),              // 作業者
+  start_time: text("start_time"),                // 開始時刻 (HH:mm format)
+  end_time: text("end_time"),                    // 終了時刻 (HH:mm format)
+  duration_hours: real("duration_hours").notNull(), // 実績時間[h]
+  quantity: real("quantity").notNull().default(0), // 数量
+  memo: text("memo"),                            // メモ
+  status: text("status").notNull().default('下書き'), // ステータス
+  created_at: text("created_at").notNull(),
+}, (table) => ({
+  dateWorkerIdx: index("idx_work_logs_date_worker").on(table.date, table.worker),
+  orderIdx: index("idx_work_logs_order").on(table.order_id),
+}));
+
 // ========== Insert Schemas ==========
 export const insertOrderSchema = createInsertSchema(orders).omit({
   created_at: true,
@@ -112,11 +131,28 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   status: z.enum(['not_started', 'in_progress', 'completed']).default('not_started'),
 });
 
+export const insertWorkLogSchema = createInsertSchema(work_logs).omit({
+  id: true,
+  created_at: true,
+}).extend({
+  date: z.string().min(1, "作業日は必須です"),
+  order_id: z.number({ required_error: "受注番号は必須です" }),
+  task_name: z.string().min(1, "作業名は必須です"),
+  worker: z.string().min(1, "作業者は必須です"),
+  duration_hours: z.coerce.number().gt(0, "実績時間は0より大きい値が必要です"),
+  quantity: z.coerce.number().min(0, "数量は0以上である必要があります").default(0),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
+  memo: z.string().optional(),
+  status: z.string().default('下書き'),
+});
+
 // Update schemas with column whitelisting for security
 export const updateOrderSchema = insertOrderSchema.partial();
 export const updateProcurementSchema = insertProcurementSchema.partial();
 export const updateWorkerLogSchema = insertWorkerLogSchema.partial();
 export const updateTaskSchema = insertTaskSchema.partial();
+export const updateWorkLogSchema = insertWorkLogSchema.partial();
 
 // Column whitelists for safe updates
 export const ALLOWED_ORDER_UPDATE_COLUMNS = [
@@ -138,16 +174,23 @@ export const ALLOWED_TASK_UPDATE_COLUMNS = [
   'std_time_per_unit', 'qty', 'status'
 ] as const;
 
+export const ALLOWED_WORK_LOG_UPDATE_COLUMNS = [
+  'date', 'order_id', 'task_name', 'worker', 'start_time', 'end_time',
+  'duration_hours', 'quantity', 'memo', 'status'
+] as const;
+
 // ========== Type Definitions ==========
 export type Order = typeof orders.$inferSelect;
 export type Procurement = typeof procurements.$inferSelect;
 export type WorkerLog = typeof workers_log.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
+export type WorkLog = typeof work_logs.$inferSelect;
 
 export type InsertOrder = typeof insertOrderSchema._type;
 export type InsertProcurement = typeof insertProcurementSchema._type;
 export type InsertWorkerLog = typeof insertWorkerLogSchema._type;
 export type InsertTask = typeof insertTaskSchema._type;
+export type InsertWorkLog = typeof insertWorkLogSchema._type;
 
 // ========== KPI Types ==========
 export interface OrderKPI {
