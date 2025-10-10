@@ -13,8 +13,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ListChecks, Plus, Edit, Filter } from "lucide-react";
-import { listTasks, createTask, updateTask, listOrders, type Task, type TaskPayload } from "@/shared/production-api";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ListChecks, Plus, Edit, Filter, Trash2 } from "lucide-react";
+import { listTasks, createTask, updateTask, deleteTask, listOrders, type Task, type TaskPayload } from "@/shared/production-api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -42,6 +43,7 @@ export default function TaskPlanning() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
 
   // Fetch tasks
   const { data: tasksResponse, isLoading } = useQuery({
@@ -130,6 +132,27 @@ export default function TaskPlanning() {
     }
   });
 
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteTask(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast({
+        title: "作業計画を削除しました",
+        description: "作業計画が正常に削除されました"
+      });
+      setDeletingTaskId(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "エラー",
+        description: "作業計画の削除に失敗しました",
+        variant: "destructive"
+      });
+      setDeletingTaskId(null);
+    }
+  });
+
   const onCreateSubmit = (data: TaskFormData) => {
     createMutation.mutate(data);
   };
@@ -156,6 +179,17 @@ export default function TaskPlanning() {
       status: task.status
     });
     setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteClick = (taskId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeletingTaskId(taskId);
+  };
+
+  const confirmDelete = () => {
+    if (deletingTaskId !== null) {
+      deleteMutation.mutate(deletingTaskId);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -476,14 +510,24 @@ export default function TaskPlanning() {
                       <TableCell>{task.std_time_per_unit}h</TableCell>
                       <TableCell>{getStatusBadge(task.status)}</TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEditClick(task)}
-                          data-testid={`button-edit-${task.id}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditClick(task)}
+                            data-testid={`button-edit-${task.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => handleDeleteClick(task.id, e)}
+                            data-testid={`button-delete-${task.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -658,6 +702,28 @@ export default function TaskPlanning() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deletingTaskId !== null} onOpenChange={(open) => !open && setDeletingTaskId(null)}>
+        <AlertDialogContent data-testid="dialog-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>作業計画を削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              この操作は取り消せません。作業計画に関連するすべてのデータが削除されます。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              削除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
