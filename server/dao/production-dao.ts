@@ -4,7 +4,7 @@ import { MetricsService } from '../services/metrics.js';
 import type { 
   Order, Procurement, WorkerLog, Task, WorkLog,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog,
-  OrderKPI, DashboardKPI, CalendarEvent 
+  OrderKPI, DashboardKPI, CalendarEvent, MaterialCostAnalysis 
 } from '../../shared/production-schema.js';
 
 export class ProductionDAO {
@@ -670,6 +670,54 @@ export class ProductionDAO {
     return this.db.prepare(`
       SELECT * FROM tasks WHERE order_id = ? ORDER BY planned_start ASC
     `).all(orderId) as Task[];
+  }
+
+  // ========== Material Cost Analysis ==========
+  
+  async getMaterialCostAnalysis(): Promise<MaterialCostAnalysis[]> {
+    const query = `
+      SELECT 
+        o.order_id,
+        o.product_name,
+        o.customer_name,
+        o.estimated_material_cost,
+        o.status,
+        COALESCE(SUM(CASE WHEN p.kind = 'purchase' THEN p.qty * p.unit_price ELSE 0 END), 0) as actual_material_cost,
+        COUNT(CASE WHEN p.kind = 'purchase' THEN 1 END) as purchase_count
+      FROM orders o
+      LEFT JOIN procurements p ON o.order_id = p.order_id
+      GROUP BY o.order_id, o.product_name, o.customer_name, o.estimated_material_cost, o.status
+      ORDER BY o.order_id ASC
+    `;
+    
+    const results = this.db.prepare(query).all() as Array<{
+      order_id: number;
+      product_name: string;
+      customer_name: string | null;
+      estimated_material_cost: number;
+      actual_material_cost: number;
+      purchase_count: number;
+      status: 'pending' | 'in_progress' | 'completed';
+    }>;
+    
+    return results.map(row => {
+      const variance = row.actual_material_cost - row.estimated_material_cost;
+      const variance_pct = row.estimated_material_cost > 0 
+        ? (variance / row.estimated_material_cost) * 100 
+        : 0;
+      
+      return {
+        order_id: row.order_id,
+        product_name: row.product_name,
+        customer_name: row.customer_name || undefined,
+        estimated_material_cost: row.estimated_material_cost,
+        actual_material_cost: row.actual_material_cost,
+        variance,
+        variance_pct,
+        purchase_count: row.purchase_count,
+        status: row.status
+      };
+    });
   }
 
   close(): void {

@@ -182,6 +182,19 @@ export interface DashboardKPI {
   manufacture_completion_rate: number;
 }
 
+// Material Cost Analysis Types
+export interface MaterialCostAnalysis {
+  order_id: number;
+  product_name: string;
+  customer_name?: string;
+  estimated_material_cost: number;  // 見込み材料費
+  actual_material_cost: number;     // 実際の購買費用合計
+  variance: number;                 // 差異（実際 - 見込み）
+  variance_pct: number;             // 差異率%
+  purchase_count: number;           // 購買件数
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
 // ========== API FUNCTIONS ==========
 
 // Orders API
@@ -432,4 +445,9 @@ export async function exportCSV(params?: {
   }
   
   return response.blob();
+}
+
+// Material Cost Analysis API
+export async function getMaterialCostAnalysis(): Promise<{ data: MaterialCostAnalysis[] }> {
+  return apiClient<{ data: MaterialCostAnalysis[] }>('/api/production/material-costs');
 }

@@ -11,7 +11,7 @@ export const orders = sqliteTable("orders", {
   order_id: integer("order_id").primaryKey(),    // 受注番号（自動採番）
   product_name: text("product_name").notNull(),  // 製品名
   qty: real("qty").notNull(),                    // 数量
-  start_date: text("start_date").notNull(),      // 開始予定日（UTC ISO）
+  start_date: text("start_date"),                // 開始予定日（UTC ISO、任意）
   due_date: text("due_date").notNull(),          // 納期（UTC ISO）
   sales: real("sales").notNull(),               // 売上（見込み含む）
   estimated_material_cost: real("estimated_material_cost").notNull(), // 見込み材料費（概算）
@@ -103,7 +103,7 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   updated_at: true,
 }).extend({
   order_id: z.number().optional(),
-  start_date: z.string().min(1, "開始予定日は必須です"),
+  start_date: z.string().optional(),
   due_date: z.string().min(1, "納期は必須です"),
   status: z.enum(['pending', 'in_progress', 'completed']).default('pending'),
   customer_name: z.string().optional()
@@ -229,4 +229,16 @@ export interface CalendarEvent {
   status: 'pending' | 'in_progress' | 'completed' | 'overdue';
   order_id?: number;
   procurement_id?: number;
+}
+
+export interface MaterialCostAnalysis {
+  order_id: number;
+  product_name: string;
+  customer_name?: string;
+  estimated_material_cost: number;  // 見込み材料費
+  actual_material_cost: number;     // 実際の購買費用合計
+  variance: number;                 // 差異（実際 - 見込み）
+  variance_pct: number;             // 差異率%
+  purchase_count: number;           // 購買件数
+  status: 'pending' | 'in_progress' | 'completed';
 }

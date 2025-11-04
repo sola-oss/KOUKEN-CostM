@@ -1053,4 +1053,20 @@ router.delete('/api/work-logs/:id', async (req, res) => {
   }
 });
 
+// ========== Material Cost Analysis API ==========
+
+// GET /api/production/material-costs - Get material cost analysis for all orders
+router.get('/api/production/material-costs', async (req, res) => {
+  try {
+    const analysis = await dao.getMaterialCostAnalysis();
+    res.json({ data: analysis });
+  } catch (error) {
+    console.error('Material cost analysis error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch material cost analysis'
+    });
+  }
+});
+
 export default router;
