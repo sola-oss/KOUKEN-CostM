@@ -29,6 +29,7 @@ export const procurements = pgTable("procurements", {
   kind: varchar("kind", { length: 20 }).notNull(), // 'purchase' または 'manufacture'
   item_name: text("item_name"),
   qty: decimal("qty", { precision: 10, scale: 3 }),
+  unit: varchar("unit", { length: 10 }),           // 単位（個、本、kg、m、L など）
   eta: text("eta"),                                // 予定日（ISO文字列）
   status: varchar("status", { length: 20 }),       // 'planned'|'ordered'|'received'|'done'
   vendor: text("vendor"),                          // 仕入先（purchase用）

@@ -28,6 +28,7 @@ CREATE TABLE procurements (
   kind TEXT CHECK(kind IN ('purchase','manufacture')) NOT NULL,
   item_name TEXT,
   qty REAL,
+  unit TEXT,                       -- 単位（個、本、kg、m、L など）
   eta TEXT,                        -- 予定日(UTC)
   status TEXT,                     -- 'planned'|'ordered'|'received'|'done' など
   vendor TEXT,                     -- kind=purchase 用（任意）

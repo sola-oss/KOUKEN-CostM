@@ -186,9 +186,9 @@ export class ProductionSqliteInitializer {
       
       const insertProcurement = db.prepare(`
         INSERT INTO procurements (
-          order_id, kind, item_name, qty, eta, status, vendor, unit_price, 
+          order_id, kind, item_name, qty, unit, eta, status, vendor, unit_price, 
           received_at, std_time_per_unit, act_time_per_unit, worker, completed_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       for (const proc of sampleProcurements) {
@@ -197,6 +197,7 @@ export class ProductionSqliteInitializer {
           proc.kind,
           proc.item_name,
           proc.qty,
+          proc.kind === 'purchase' ? 'kg' : null, // unit
           proc.eta,
           proc.status,
           proc.vendor || null,

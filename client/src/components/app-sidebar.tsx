@@ -3,7 +3,7 @@ import {
   Home, Package, Calendar, ClipboardCheck, FileText, 
   Truck, Receipt, Users, Settings, BarChart3, 
   ChevronRight, ChevronDown, Building2, Clock, Timer, CheckSquare,
-  GanttChart, ListChecks, ShoppingCart, TrendingUp
+  GanttChart, ListChecks, ShoppingCart, TrendingUp, PackagePlus
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -81,6 +81,11 @@ const workInstructionsSubItems = [
     title: "調達管理",
     url: "/procurement",
     icon: ShoppingCart
+  },
+  {
+    title: "材料費管理",
+    url: "/material-management",
+    icon: PackagePlus
   }
 ];
 

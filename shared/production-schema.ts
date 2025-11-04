@@ -33,6 +33,7 @@ export const procurements = sqliteTable("procurements", {
   kind: text("kind", { enum: ['purchase', 'manufacture'] }).notNull(),
   item_name: text("item_name"),
   qty: real("qty"),
+  unit: text("unit"),                            // 単位（個、本、kg、m、L など）
   eta: text("eta"),                              // 予定日(UTC)
   status: text("status"),                        // 'planned'|'ordered'|'received'|'done' など
   vendor: text("vendor"),                        // kind=purchase 用（任意）
@@ -161,7 +162,7 @@ export const ALLOWED_ORDER_UPDATE_COLUMNS = [
 ] as const;
 
 export const ALLOWED_PROCUREMENT_UPDATE_COLUMNS = [
-  'kind', 'item_name', 'qty', 'eta', 'status', 'vendor', 'unit_price',
+  'kind', 'item_name', 'qty', 'unit', 'eta', 'status', 'vendor', 'unit_price',
   'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at'
 ] as const;
 

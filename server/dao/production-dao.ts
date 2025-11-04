@@ -162,10 +162,10 @@ export class ProductionDAO {
     const now = new Date().toISOString();
     const stmt = this.db.prepare(`
       INSERT INTO procurements (
-        order_id, kind, item_name, qty, eta, status, vendor, 
+        order_id, kind, item_name, qty, unit, eta, status, vendor, 
         unit_price, received_at, std_time_per_unit, act_time_per_unit, 
         worker, completed_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     const result = stmt.run(
@@ -173,6 +173,7 @@ export class ProductionDAO {
       procData.kind,
       procData.item_name,
       procData.qty,
+      procData.unit,
       procData.eta,
       procData.status,
       procData.vendor,
@@ -198,24 +199,29 @@ export class ProductionDAO {
     const { orderId, kind, status, page = 1, pageSize = 50 } = options;
     
     let whereConditions: string[] = [];
+    let whereConditionsWithPrefix: string[] = [];
     let params: any[] = [];
     
     if (orderId) {
       whereConditions.push('order_id = ?');
+      whereConditionsWithPrefix.push('p.order_id = ?');
       params.push(orderId);
     }
     
     if (kind) {
       whereConditions.push('kind = ?');
+      whereConditionsWithPrefix.push('p.kind = ?');
       params.push(kind);
     }
     
     if (status) {
       whereConditions.push('status = ?');
+      whereConditionsWithPrefix.push('p.status = ?');
       params.push(status);
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    const whereClauseWithPrefix = whereConditionsWithPrefix.length > 0 ? `WHERE ${whereConditionsWithPrefix.join(' AND ')}` : '';
     
     // Get total count
     const totalResult = this.db.prepare(`
@@ -228,7 +234,7 @@ export class ProductionDAO {
       SELECT p.*, o.product_name 
       FROM procurements p
       JOIN orders o ON p.order_id = o.order_id
-      ${whereClause}
+      ${whereClauseWithPrefix}
       ORDER BY p.created_at DESC
       LIMIT ? OFFSET ?
     `).all([...params, pageSize, offset]) as (Procurement & { product_name: string })[];
@@ -240,7 +246,7 @@ export class ProductionDAO {
   }
 
   async updateProcurement(procId: number, updates: Partial<InsertProcurement>): Promise<boolean> {
-    const allowedColumns = ['kind', 'item_name', 'qty', 'eta', 'status', 'vendor', 'unit_price', 'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at'];
+    const allowedColumns = ['kind', 'item_name', 'qty', 'unit', 'eta', 'status', 'vendor', 'unit_price', 'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at'];
     
     // Filter to only allowed columns
     const filteredUpdates: Record<string, any> = {};

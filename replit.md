@@ -12,6 +12,28 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 4, 2025 - Material Management Unit Field Implementation Complete
+- **Feature**: Added unit field to material (procurement) management for detailed material tracking with flexible units
+- **Implementation Details**:
+  - Extended procurements table schema with `unit` TEXT column (単位：個、本、kg、m、L、枚、箱、セット)
+  - Updated migration file (002_production_mvp.sql) to include unit column definition
+  - Modified DAO layer (ProductionDAO) to support unit in create/update operations
+  - Fixed SQL ambiguity bug by adding table prefixes (p.order_id, p.kind) in getProcurements query
+  - Updated seed data to include unit values for sample procurements (kg for purchase items)
+- **Frontend Implementation**:
+  - Material Management UI (material-management.tsx) fully supports unit field
+  - Unit selection dropdown with 8 common unit options (個、本、kg、m、L、枚、箱、セット)
+  - Table display shows unit column with fallback to "個" for null values
+  - Form validation enforces unit as required field
+  - Edit dialog pre-populates unit value for existing materials
+- **Technical Stack**:
+  - Backend: SQLite with Drizzle ORM, Zod validation (insertProcurementSchema)
+  - Frontend: React Hook Form with Zod validation (materialSchema)
+  - API: RESTful endpoints with unit field in CRUD operations
+- **Testing**: API E2E testing completed successfully (all CRUD operations verified with unit field)
+- **Database Migration**: Successfully applied schema changes with unit column to procurements table
+- **Data Integrity**: Unit field consistently handled across schema, migration, DAO, validation, and UI layers
+
 ### October 10, 2025 - Work Results Input (PC) Screen Implementation Complete
 - **Feature**: Implemented comprehensive work results entry screen with full CRUD functionality
 - **Implementation Details**:

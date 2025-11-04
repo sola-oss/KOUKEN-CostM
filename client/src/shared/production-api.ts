@@ -67,6 +67,7 @@ export interface Procurement {
   kind: 'purchase' | 'manufacture';
   item_name: string;
   qty: number;
+  unit: string | null;
   eta: string;
   status: 'planned' | 'ordered' | 'received' | 'completed';
   vendor: string | null;
@@ -84,6 +85,7 @@ export interface ProcurementPayload {
   kind: 'purchase' | 'manufacture';
   item_name: string;
   qty: number;
+  unit?: string;
   eta: string;
   status: 'planned' | 'ordered' | 'received' | 'completed';
   vendor?: string;
