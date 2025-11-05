@@ -243,6 +243,17 @@ export class ProductionSqliteInitializer {
         },
         {
           order_id: orderIds[0],
+          kind: 'purchase',
+          item_name: '工具セット（切削用）',
+          qty: 1,
+          unit: 'セット',
+          eta: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'received',
+          vendor: '工具商会',
+          unit_price: 28000
+        },
+        {
+          order_id: orderIds[0],
           kind: 'manufacture',
           item_name: 'アルミ部品A加工',
           qty: 100,
@@ -330,6 +341,17 @@ export class ProductionSqliteInitializer {
           vendor: '物流資材',
           unit_price: 2200
         },
+        {
+          order_id: orderIds[1],
+          kind: 'purchase',
+          item_name: '溶接治具セット',
+          qty: 1,
+          unit: 'セット',
+          eta: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '工具商会',
+          unit_price: 45000
+        },
         
         // Order 3: 樹脂成型品C - 材料6件
         {
@@ -397,6 +419,17 @@ export class ProductionSqliteInitializer {
           status: 'planned',
           vendor: '梱包資材',
           unit_price: 480
+        },
+        {
+          order_id: orderIds[2],
+          kind: 'purchase',
+          item_name: '成形金型メンテナンスセット',
+          qty: 1,
+          unit: 'セット',
+          eta: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '工具商会',
+          unit_price: 35000
         }
       ];
       
