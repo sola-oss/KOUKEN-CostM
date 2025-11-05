@@ -150,37 +150,253 @@ export class ProductionSqliteInitializer {
         orderIds.push(result.lastInsertRowid as number);
       }
       
-      // Sample procurements
+      // Sample procurements (materials for each order)
       const sampleProcurements = [
+        // Order 1: アルミ部品A - 材料8件
         {
           order_id: orderIds[0],
           kind: 'purchase',
-          item_name: 'アルミ材料',
+          item_name: 'アルミ板 A5052',
           qty: 110,
-          eta: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
+          unit: 'kg',
+          eta: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'ordered',
           vendor: 'アルミ商事',
           unit_price: 750
         },
         {
           order_id: orderIds[0],
+          kind: 'purchase',
+          item_name: 'ステンレスボルト M6×20',
+          qty: 200,
+          unit: '個',
+          eta: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'received',
+          vendor: 'ネジ工業',
+          unit_price: 15
+        },
+        {
+          order_id: orderIds[0],
+          kind: 'purchase',
+          item_name: 'ステンレスナット M6',
+          qty: 200,
+          unit: '個',
+          eta: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'received',
+          vendor: 'ネジ工業',
+          unit_price: 8
+        },
+        {
+          order_id: orderIds[0],
+          kind: 'purchase',
+          item_name: 'ワッシャー M6',
+          qty: 200,
+          unit: '個',
+          eta: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'received',
+          vendor: 'ネジ工業',
+          unit_price: 5
+        },
+        {
+          order_id: orderIds[0],
+          kind: 'purchase',
+          item_name: '切削油',
+          qty: 5,
+          unit: 'L',
+          eta: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'received',
+          vendor: '工具商会',
+          unit_price: 2800
+        },
+        {
+          order_id: orderIds[0],
+          kind: 'purchase',
+          item_name: 'エンドミル 10mm',
+          qty: 2,
+          unit: '本',
+          eta: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'received',
+          vendor: '工具商会',
+          unit_price: 4500
+        },
+        {
+          order_id: orderIds[0],
+          kind: 'purchase',
+          item_name: '梱包用ダンボール箱',
+          qty: 10,
+          unit: '箱',
+          eta: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'received',
+          vendor: '梱包資材',
+          unit_price: 350
+        },
+        {
+          order_id: orderIds[0],
+          kind: 'purchase',
+          item_name: '緩衝材シート',
+          qty: 20,
+          unit: '枚',
+          eta: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'received',
+          vendor: '梱包資材',
+          unit_price: 120
+        },
+        {
+          order_id: orderIds[0],
           kind: 'manufacture',
           item_name: 'アルミ部品A加工',
           qty: 100,
-          eta: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
+          eta: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'planned',
           std_time_per_unit: 0.5,
           worker: '田中'
         },
+        
+        // Order 2: ステンレス部品B - 材料7件
         {
           order_id: orderIds[1],
           kind: 'purchase',
-          item_name: 'ステンレス材料',
+          item_name: 'ステンレス板 SUS304',
           qty: 55,
-          eta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-          status: 'planned',
+          unit: 'kg',
+          eta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'ordered',
           vendor: '鋼材屋',
           unit_price: 1100
+        },
+        {
+          order_id: orderIds[1],
+          kind: 'purchase',
+          item_name: '溶接棒 SUS308',
+          qty: 50,
+          unit: '本',
+          eta: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'ordered',
+          vendor: '溶接材料',
+          unit_price: 280
+        },
+        {
+          order_id: orderIds[1],
+          kind: 'purchase',
+          item_name: '研磨ディスク 100mm',
+          qty: 15,
+          unit: '枚',
+          eta: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '工具商会',
+          unit_price: 320
+        },
+        {
+          order_id: orderIds[1],
+          kind: 'purchase',
+          item_name: '防錆スプレー',
+          qty: 3,
+          unit: '本',
+          eta: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: 'ケミカル商事',
+          unit_price: 1200
+        },
+        {
+          order_id: orderIds[1],
+          kind: 'purchase',
+          item_name: 'クリーニング液',
+          qty: 2,
+          unit: 'L',
+          eta: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: 'ケミカル商事',
+          unit_price: 1800
+        },
+        {
+          order_id: orderIds[1],
+          kind: 'purchase',
+          item_name: '保護フィルム',
+          qty: 60,
+          unit: 'm',
+          eta: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '梱包資材',
+          unit_price: 150
+        },
+        {
+          order_id: orderIds[1],
+          kind: 'purchase',
+          item_name: '木製パレット',
+          qty: 5,
+          unit: '枚',
+          eta: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '物流資材',
+          unit_price: 2200
+        },
+        
+        // Order 3: 樹脂成型品C - 材料6件
+        {
+          order_id: orderIds[2],
+          kind: 'purchase',
+          item_name: 'PP樹脂ペレット',
+          qty: 45,
+          unit: 'kg',
+          eta: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '樹脂材料',
+          unit_price: 420
+        },
+        {
+          order_id: orderIds[2],
+          kind: 'purchase',
+          item_name: '着色剤（黒）',
+          qty: 2,
+          unit: 'kg',
+          eta: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '樹脂材料',
+          unit_price: 3500
+        },
+        {
+          order_id: orderIds[2],
+          kind: 'purchase',
+          item_name: '離型剤',
+          qty: 3,
+          unit: 'L',
+          eta: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: 'ケミカル商事',
+          unit_price: 2400
+        },
+        {
+          order_id: orderIds[2],
+          kind: 'purchase',
+          item_name: 'ポリ袋 小',
+          qty: 250,
+          unit: '枚',
+          eta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '梱包資材',
+          unit_price: 8
+        },
+        {
+          order_id: orderIds[2],
+          kind: 'purchase',
+          item_name: 'ラベルシール',
+          qty: 300,
+          unit: '枚',
+          eta: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '印刷屋',
+          unit_price: 12
+        },
+        {
+          order_id: orderIds[2],
+          kind: 'purchase',
+          item_name: '外箱（大）',
+          qty: 20,
+          unit: '箱',
+          eta: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'planned',
+          vendor: '梱包資材',
+          unit_price: 480
         }
       ];
       
@@ -197,11 +413,11 @@ export class ProductionSqliteInitializer {
           proc.kind,
           proc.item_name,
           proc.qty,
-          proc.kind === 'purchase' ? 'kg' : null, // unit
+          (proc as any).unit || null, // unit
           proc.eta,
           proc.status,
-          proc.vendor || null,
-          proc.unit_price || null,
+          (proc as any).vendor || null,
+          (proc as any).unit_price || null,
           null, // received_at
           (proc as any).std_time_per_unit || null,
           null, // act_time_per_unit
