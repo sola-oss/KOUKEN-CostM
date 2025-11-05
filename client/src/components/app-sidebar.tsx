@@ -81,11 +81,6 @@ const workInstructionsSubItems = [
     title: "調達管理",
     url: "/procurement",
     icon: ShoppingCart
-  },
-  {
-    title: "材料費管理",
-    url: "/material-management",
-    icon: PackagePlus
   }
 ];
 
