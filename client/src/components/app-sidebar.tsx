@@ -3,7 +3,7 @@ import {
   Home, Package, Calendar, ClipboardCheck, FileText, 
   Truck, Receipt, Users, Settings, BarChart3, 
   ChevronRight, ChevronDown, Building2, Clock, Timer, CheckSquare,
-  GanttChart, ListChecks, ShoppingCart, TrendingUp, PackagePlus
+  GanttChart, ListChecks, ShoppingCart, TrendingUp
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
