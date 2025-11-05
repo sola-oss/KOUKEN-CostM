@@ -242,10 +242,14 @@ export async function deleteOrder(id: number): Promise<{ message: string }> {
 export async function listProcurements(params?: {
   page?: number;
   page_size?: number;
+  order_id?: number;
+  kind?: 'purchase' | 'manufacture';
 }): Promise<{ data: Procurement[]; meta: any }> {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.append('page', params.page.toString());
   if (params?.page_size) searchParams.append('page_size', params.page_size.toString());
+  if (params?.order_id) searchParams.append('order_id', params.order_id.toString());
+  if (params?.kind) searchParams.append('kind', params.kind);
   
   const queryString = searchParams.toString();
   const endpoint = queryString ? `/api/procurements?${queryString}` : '/api/procurements';
