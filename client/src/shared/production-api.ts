@@ -33,7 +33,7 @@ export async function apiClient<T = any>(
 
 // Order Types
 export interface Order {
-  order_id: number;
+  order_id: string;
   product_name: string;
   qty: number;
   start_date: string;
@@ -48,7 +48,7 @@ export interface Order {
 }
 
 export interface OrderPayload {
-  order_id?: number;
+  order_id?: string;
   product_name: string;
   qty: number;
   start_date: string;
@@ -63,7 +63,7 @@ export interface OrderPayload {
 // Procurement Types  
 export interface Procurement {
   id: number;
-  order_id: number | null;
+  order_id: string | null;
   kind: 'purchase' | 'manufacture';
   item_name: string;
   qty: number;
@@ -81,7 +81,7 @@ export interface Procurement {
 }
 
 export interface ProcurementPayload {
-  order_id?: number;
+  order_id?: string;
   kind: 'purchase' | 'manufacture';
   item_name: string;
   qty: number;
@@ -100,7 +100,7 @@ export interface ProcurementPayload {
 // Worker Log Types
 export interface WorkerLog {
   id: number;
-  order_id: number | null;
+  order_id: string | null;
   procurement_id: number | null;
   qty: number;
   act_time_per_unit: number;
@@ -110,7 +110,7 @@ export interface WorkerLog {
 }
 
 export interface WorkerLogPayload {
-  order_id?: number;
+  order_id?: string;
   procurement_id?: number;
   qty: number;
   act_time_per_unit: number;
@@ -121,7 +121,7 @@ export interface WorkerLogPayload {
 // Task Types (作業計画)
 export interface Task {
   id: number;
-  order_id: number;
+  order_id: string;
   task_name: string;
   assignee: string;  // 必須フィールド - ビジネスルール上必要
   planned_start: string;
@@ -133,7 +133,7 @@ export interface Task {
 }
 
 export interface TaskPayload {
-  order_id: number;
+  order_id: string;
   task_name: string;
   assignee: string;  // 必須フィールド - ビジネスルール上必要
   planned_start: string;
@@ -147,7 +147,7 @@ export interface TaskPayload {
 export interface WorkLog {
   id: number;
   date: string;
-  order_id: number;
+  order_id: string;
   task_name: string;
   worker: string;
   start_time?: string;
@@ -162,7 +162,7 @@ export interface WorkLog {
 
 export interface WorkLogPayload {
   date: string;
-  order_id: number;
+  order_id: string;
   task_name: string;
   worker: string;
   start_time?: string;
@@ -186,7 +186,7 @@ export interface DashboardKPI {
 
 // Material Cost Analysis Types
 export interface MaterialCostAnalysis {
-  order_id: number;
+  order_id: string;
   product_name: string;
   customer_name?: string;
   estimated_material_cost: number;  // 見込み材料費
@@ -214,7 +214,7 @@ export async function listOrders(params?: {
   return apiClient<{ data: Order[]; meta: any }>(endpoint);
 }
 
-export async function getOrder(id: number): Promise<Order> {
+export async function getOrder(id: string): Promise<Order> {
   return apiClient<Order>(`/api/orders/${id}`);
 }
 
@@ -225,14 +225,14 @@ export async function createOrder(data: OrderPayload): Promise<Order> {
   });
 }
 
-export async function updateOrder(id: number, data: Partial<OrderPayload>): Promise<{ message: string }> {
+export async function updateOrder(id: string, data: Partial<OrderPayload>): Promise<{ message: string }> {
   return apiClient<{ message: string }>(`/api/orders/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
 
-export async function deleteOrder(id: number): Promise<{ message: string }> {
+export async function deleteOrder(id: string): Promise<{ message: string }> {
   return apiClient<{ message: string }>(`/api/orders/${id}`, {
     method: 'DELETE',
   });
@@ -242,7 +242,7 @@ export async function deleteOrder(id: number): Promise<{ message: string }> {
 export async function listProcurements(params?: {
   page?: number;
   page_size?: number;
-  order_id?: number;
+  order_id?: string;
   kind?: 'purchase' | 'manufacture';
 }): Promise<{ data: Procurement[]; meta: any }> {
   const searchParams = new URLSearchParams();
@@ -309,7 +309,7 @@ export async function deleteWorkerLog(id: number): Promise<{ message: string }> 
 export async function listTasks(params?: {
   page?: number;
   page_size?: number;
-  order_id?: number;
+  order_id?: string;
   status?: string;
   from?: string;
   to?: string;
@@ -356,7 +356,7 @@ export async function deleteTask(id: number): Promise<{ message: string }> {
 export async function listWorkLogs(params?: {
   date?: string;
   worker?: string;
-  order_id?: number;
+  order_id?: string;
   status?: string;
 }): Promise<{ data: WorkLog[]; total: number }> {
   const searchParams = new URLSearchParams();

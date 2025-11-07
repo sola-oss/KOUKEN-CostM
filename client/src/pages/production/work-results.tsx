@@ -60,7 +60,7 @@ import { Timer, Save, Plus, Pencil, Trash2, AlertTriangle, Upload, FileText } fr
 // Form validation schema
 const workLogSchema = z.object({
   date: z.string().min(1, "作業日は必須です"),
-  order_id: z.coerce.number({ required_error: "受注番号は必須です" }),
+  order_id: z.string({ required_error: "受注番号は必須です" }).min(1, "受注番号は必須です"),
   task_name: z.string().min(1, "作業名は必須です"),
   worker: z.string().min(1, "作業者は必須です"),
   start_time: z.string().min(1, "開始時刻は必須です"),
@@ -449,8 +449,8 @@ export default function WorkResults() {
                       <FormItem>
                         <FormLabel>受注番号 *</FormLabel>
                         <Select
-                          onValueChange={(value) => field.onChange(Number(value))}
-                          value={field.value?.toString()}
+                          onValueChange={field.onChange}
+                          value={field.value}
                         >
                           <FormControl>
                             <SelectTrigger data-testid="select-order">
@@ -461,7 +461,7 @@ export default function WorkResults() {
                             {ordersData?.data.map((order) => (
                               <SelectItem 
                                 key={order.order_id} 
-                                value={order.order_id.toString()}
+                                value={order.order_id}
                                 data-testid={`option-order-${order.order_id}`}
                               >
                                 #{order.order_id} - {order.product_name}
