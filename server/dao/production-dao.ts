@@ -21,58 +21,48 @@ export class ProductionDAO {
 
   // ========== Orders CRUD ==========
   
-  async createOrder(orderData: InsertOrder): Promise<number> {
+  async createOrder(orderData: InsertOrder): Promise<string> {
     const now = new Date().toISOString();
     
-    // If order_id is specified, use it; otherwise, let SQLite auto-increment
-    if (orderData.order_id !== undefined && orderData.order_id !== null) {
-      const stmt = this.db.prepare(`
-        INSERT INTO orders (
-          order_id, product_name, qty, start_date, due_date, sales, estimated_material_cost, 
-          std_time_per_unit, status, customer_name, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+    // If order_id is specified, use it; otherwise, generate next numeric string ID
+    let orderId = orderData.order_id;
+    
+    if (!orderId) {
+      // Generate next ID by finding max numeric order_id and incrementing
+      const maxIdRow = this.db.prepare(`
+        SELECT order_id FROM orders 
+        WHERE order_id GLOB '[0-9]*'
+        ORDER BY CAST(order_id AS INTEGER) DESC 
+        LIMIT 1
+      `).get() as { order_id: string } | undefined;
       
-      stmt.run(
-        orderData.order_id,
-        orderData.product_name,
-        orderData.qty,
-        orderData.start_date || null,
-        orderData.due_date,
-        orderData.sales,
-        orderData.estimated_material_cost,
-        orderData.std_time_per_unit,
-        orderData.status || 'pending',
-        orderData.customer_name || null,
-        now,
-        now
-      );
-      
-      return orderData.order_id;
-    } else {
-      const stmt = this.db.prepare(`
-        INSERT INTO orders (
-          product_name, qty, start_date, due_date, sales, estimated_material_cost, 
-          std_time_per_unit, status, customer_name, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      
-      const result = stmt.run(
-        orderData.product_name,
-        orderData.qty,
-        orderData.start_date || null,
-        orderData.due_date,
-        orderData.sales,
-        orderData.estimated_material_cost,
-        orderData.std_time_per_unit,
-        orderData.status || 'pending',
-        orderData.customer_name || null,
-        now,
-        now
-      );
-      
-      return result.lastInsertRowid as number;
+      const nextNumericId = maxIdRow ? parseInt(maxIdRow.order_id, 10) + 1 : 1;
+      orderId = String(nextNumericId);
     }
+    
+    const stmt = this.db.prepare(`
+      INSERT INTO orders (
+        order_id, product_name, qty, start_date, due_date, sales, estimated_material_cost, 
+        std_time_per_unit, status, customer_name, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      orderId,
+      orderData.product_name,
+      orderData.qty,
+      orderData.start_date || null,
+      orderData.due_date,
+      orderData.sales,
+      orderData.estimated_material_cost,
+      orderData.std_time_per_unit,
+      orderData.status || 'pending',
+      orderData.customer_name || null,
+      now,
+      now
+    );
+    
+    return orderId;
   }
 
   async getOrders(options: {
@@ -383,13 +373,13 @@ export class ProductionDAO {
 
   // ========== Utility Methods ==========
   
-  async getOrdersForDropdown(): Promise<{ order_id: number; product_name: string }[]> {
+  async getOrdersForDropdown(): Promise<{ order_id: string; product_name: string }[]> {
     return this.db.prepare(`
       SELECT order_id, product_name 
       FROM orders 
       ORDER BY created_at DESC
       LIMIT 100
-    `).all() as { order_id: number; product_name: string }[];
+    `).all() as { order_id: string; product_name: string }[];
   }
 
   async getWorkers(): Promise<{ worker: string }[]> {
@@ -428,7 +418,7 @@ export class ProductionDAO {
   }
 
   async getTasks(options: {
-    order_id?: number;
+    order_id?: string;
     status?: string;
     from?: string;
     to?: string;
@@ -574,7 +564,7 @@ export class ProductionDAO {
   async getWorkLogs(options: {
     date?: string;
     worker?: string;
-    order_id?: number;
+    order_id?: string;
     from?: string;
     to?: string;
     page?: number;
@@ -704,7 +694,7 @@ export class ProductionDAO {
     return this.db.prepare(query).all(...params) as WorkLog[];
   }
 
-  async getTasksByOrderId(orderId: number): Promise<Task[]> {
+  async getTasksByOrderId(orderId: string): Promise<Task[]> {
     return this.db.prepare(`
       SELECT * FROM tasks WHERE order_id = ? ORDER BY planned_start ASC
     `).all(orderId) as Task[];
@@ -729,7 +719,7 @@ export class ProductionDAO {
     `;
     
     const results = this.db.prepare(query).all() as Array<{
-      order_id: number;
+      order_id: string;
       product_name: string;
       customer_name: string | null;
       estimated_material_cost: number;
