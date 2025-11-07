@@ -96,6 +96,7 @@ export class ProductionSqliteInitializer {
       // Sample orders
       const sampleOrders = [
         {
+          order_id: '1',
           product_name: 'アルミ部品A',
           qty: 100,
           due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
@@ -106,6 +107,7 @@ export class ProductionSqliteInitializer {
           customer_name: null
         },
         {
+          order_id: '2',
           product_name: 'ステンレス部品B',
           qty: 50,
           due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
@@ -116,6 +118,7 @@ export class ProductionSqliteInitializer {
           customer_name: null
         },
         {
+          order_id: '3',
           product_name: '樹脂成型品C',
           qty: 200,
           due_date: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(), // 21 days from now
@@ -128,14 +131,15 @@ export class ProductionSqliteInitializer {
       ];
       
       const insertOrder = db.prepare(`
-        INSERT INTO orders (product_name, qty, due_date, sales, estimated_material_cost, std_time_per_unit, status, customer_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO orders (order_id, product_name, qty, due_date, sales, estimated_material_cost, std_time_per_unit, status, customer_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
-      const orderIds: number[] = [];
+      const orderIds: string[] = [];
       
       for (const order of sampleOrders) {
-        const result = insertOrder.run(
+        insertOrder.run(
+          order.order_id,
           order.product_name,
           order.qty,
           order.due_date,
@@ -147,7 +151,7 @@ export class ProductionSqliteInitializer {
           now,
           now
         );
-        orderIds.push(result.lastInsertRowid as number);
+        orderIds.push(order.order_id);
       }
       
       // Sample procurements (materials for each order)

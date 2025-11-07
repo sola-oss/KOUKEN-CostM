@@ -8,7 +8,7 @@ DROP TABLE IF EXISTS sequences;
 
 -- 受注 (Orders) - Core production orders
 CREATE TABLE orders (
-  order_id INTEGER PRIMARY KEY,
+  order_id TEXT PRIMARY KEY,
   product_name TEXT NOT NULL,
   qty REAL NOT NULL,
   due_date TEXT NOT NULL,          -- UTC ISO
@@ -24,7 +24,7 @@ CREATE TABLE orders (
 -- 手配 (Procurements) - 購買(purchase) と 製造(manufacture) を統合
 CREATE TABLE procurements (
   id INTEGER PRIMARY KEY,
-  order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
   kind TEXT CHECK(kind IN ('purchase','manufacture')) NOT NULL,
   item_name TEXT,
   qty REAL,
@@ -44,7 +44,7 @@ CREATE TABLE procurements (
 -- 工数入力 (Workers Log) - スタッフ用の簡易打刻
 CREATE TABLE workers_log (
   id INTEGER PRIMARY KEY,
-  order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
   qty REAL NOT NULL,
   act_time_per_unit REAL NOT NULL, -- [h/個]
   worker TEXT NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE workers_log (
 -- 作業計画 (Tasks) - 作業分解と担当者決定
 CREATE TABLE tasks (
   id INTEGER PRIMARY KEY,
-  order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
   task_name TEXT NOT NULL,         -- 作業名（例：組立/塗装/検査）
   assignee TEXT NOT NULL,          -- 担当者（必須）
   planned_start TEXT NOT NULL,     -- 予定開始日(UTC)
@@ -96,7 +96,7 @@ CREATE TABLE work_logs (
   status TEXT DEFAULT '下書き',    -- ステータス（下書き/確定など）
   
   -- 紐付け関連
-  order_id INTEGER,                -- 受注ID (orders.order_id)
+  order_id TEXT,                   -- 受注ID (orders.order_id)
   order_no TEXT,                   -- 受注番号 (k001など)
   match_status TEXT DEFAULT 'unlinked',  -- linked / temp / unlinked
   
