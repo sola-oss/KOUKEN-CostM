@@ -125,7 +125,7 @@ router.get('/api/orders', async (req, res) => {
 // GET /api/orders/:id - Get order details with KPI
 router.get('/api/orders/:id', async (req, res) => {
   try {
-    const orderId = parseInt(req.params.id);
+    const orderId = req.params.id;
     const result = await dao.getOrderById(orderId);
 
     if (!result.order) {
@@ -228,8 +228,8 @@ router.post('/api/orders', async (req, res) => {
 // PATCH /api/orders/:id - Update order
 router.patch('/api/orders/:id', async (req, res) => {
   try {
-    const orderId = parseInt(req.params.id);
-    if (isNaN(orderId)) {
+    const orderId = req.params.id;
+    if (!orderId || typeof orderId !== 'string') {
       return res.status(400).json({ error: 'Invalid order ID' });
     }
 
@@ -282,7 +282,7 @@ router.patch('/api/orders/:id', async (req, res) => {
 // DELETE /api/orders/:id - Delete order
 router.delete('/api/orders/:id', async (req, res) => {
   try {
-    const orderId = parseInt(req.params.id);
+    const orderId = req.params.id;
     const success = await dao.deleteOrder(orderId);
 
     if (!success) {
@@ -319,7 +319,7 @@ router.get('/api/procurements', async (req, res) => {
     } = req.query as Record<string, string>;
 
     const options = {
-      orderId: order_id ? parseInt(order_id) : undefined,
+      orderId: order_id || undefined,
       kind: kind as 'purchase' | 'manufacture' | undefined,
       status,
       page: parseInt(page),
@@ -485,7 +485,7 @@ router.get('/api/workers-log', async (req, res) => {
     } = req.query as Record<string, string>;
 
     const options = {
-      orderId: order_id ? parseInt(order_id) : undefined,
+      orderId: order_id || undefined,
       worker,
       from: from ? toUTC(from) : undefined,
       to: to ? toUTC(to) : undefined,
@@ -737,7 +737,7 @@ router.get('/api/tasks', async (req, res) => {
     } = req.query as Record<string, string>;
 
     const options = {
-      order_id: order_id ? parseInt(order_id) : undefined,
+      order_id: order_id || undefined,
       status,
       from: from ? toUTC(from) : undefined,
       to: to ? toUTC(to) : undefined,
@@ -926,7 +926,7 @@ router.get('/api/work-logs', async (req, res) => {
     const options = {
       date: date ? toUTC(date) : undefined,
       worker,
-      order_id: order_id ? parseInt(order_id) : undefined,
+      order_id: order_id || undefined,
       status
     };
 

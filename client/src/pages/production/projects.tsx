@@ -22,7 +22,7 @@ import { useLocation } from "wouter";
 // Form validation schema - simplified to match user requirements
 const orderFormSchema = z.object({
   order_id: z.union([
-    z.string().regex(/^\d+$/, "受注番号は数値で入力してください").transform(Number),
+    z.string().min(1),
     z.literal("")
   ]).optional(),
   product_name: z.string().min(1, "案件名は必須です"),
@@ -54,9 +54,9 @@ export default function Projects() {
   const [activeTab, setActiveTab] = useState("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
-  const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<number | null>(null);
+  const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-  const [deletingOrderId, setDeletingOrderId] = useState<number | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
 
   const { data: ordersResponse, isLoading, error } = useQuery({
     queryKey: ['orders', page],
@@ -135,8 +135,8 @@ export default function Projects() {
         status: 'pending',
         customer_name: data.customer_name || ''
       };
-      // Include order_id only if it's provided (after transformation, it's a number or undefined)
-      if (typeof data.order_id === 'number') {
+      // Include order_id only if it's provided as a non-empty string
+      if (data.order_id && typeof data.order_id === 'string') {
         payload.order_id = data.order_id;
       }
       return createOrder(payload);
@@ -165,7 +165,7 @@ export default function Projects() {
 
   // Update order mutation
   const updateOrderMutation = useMutation({
-    mutationFn: async ({ orderId, data }: { orderId: number; data: OrderFormData }) => {
+    mutationFn: async ({ orderId, data }: { orderId: string; data: OrderFormData }) => {
       const payload: any = {
         product_name: data.product_name,
         qty: data.qty,
@@ -199,7 +199,7 @@ export default function Projects() {
 
   // Delete order mutation
   const deleteOrderMutation = useMutation({
-    mutationFn: async (orderId: number) => {
+    mutationFn: async (orderId: string) => {
       return await apiRequest('DELETE', `/api/orders/${orderId}`);
     },
     onSuccess: () => {
@@ -244,7 +244,7 @@ export default function Projects() {
     setActiveTab("registration");
   };
 
-  const handleDelete = (orderId: number, e: React.MouseEvent) => {
+  const handleDelete = (orderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setDeletingOrderId(orderId);
   };
@@ -287,7 +287,7 @@ export default function Projects() {
     }
   };
 
-  const handleRowClick = (orderId: number) => {
+  const handleRowClick = (orderId: string) => {
     setNewlyCreatedOrderId(null); // Clear highlight on row click
     setLocation(`/project/${orderId}`);
   };

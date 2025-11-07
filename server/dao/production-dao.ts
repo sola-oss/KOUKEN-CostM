@@ -75,7 +75,7 @@ export class ProductionDAO {
     return this.metricsService.calculateOrderKPIs(options);
   }
 
-  async getOrderById(orderId: number): Promise<{
+  async getOrderById(orderId: string): Promise<{
     order: Order | null;
     kpi: OrderKPI | null;
     procurements: Procurement[];
@@ -112,7 +112,7 @@ export class ProductionDAO {
     };
   }
 
-  async updateOrder(orderId: number, updates: Partial<InsertOrder>): Promise<boolean> {
+  async updateOrder(orderId: string, updates: Partial<InsertOrder>): Promise<boolean> {
     const allowedColumns = ['product_name', 'qty', 'start_date', 'due_date', 'sales', 'estimated_material_cost', 'std_time_per_unit', 'status', 'customer_name'];
     
     // Filter to only allowed columns
@@ -140,7 +140,7 @@ export class ProductionDAO {
     return result.changes > 0;
   }
 
-  async deleteOrder(orderId: number): Promise<boolean> {
+  async deleteOrder(orderId: string): Promise<boolean> {
     const stmt = this.db.prepare(`DELETE FROM orders WHERE order_id = ?`);
     const result = stmt.run(orderId);
     return result.changes > 0;
@@ -180,7 +180,7 @@ export class ProductionDAO {
   }
 
   async getProcurements(options: {
-    orderId?: number;
+    orderId?: string;
     kind?: 'purchase' | 'manufacture';
     status?: string;
     page?: number;
@@ -292,7 +292,7 @@ export class ProductionDAO {
   }
 
   async getWorkerLogs(options: {
-    orderId?: number;
+    orderId?: string;
     worker?: string;
     from?: string;
     to?: string;
