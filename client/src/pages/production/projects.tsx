@@ -232,7 +232,7 @@ export default function Projects() {
     e.stopPropagation();
     setEditingOrder(order);
     form.reset({
-      order_id: "" as any,
+      order_id: order.order_id,
       product_name: order.product_name,
       customer_name: order.customer_name || "",
       qty: order.qty,
@@ -408,10 +408,16 @@ export default function Projects() {
                             type="text"
                             placeholder="空欄で自動採番" 
                             {...field}
+                            disabled={!!editingOrder}
                             data-testid="input-order-id"
                           />
                         </FormControl>
                         <FormMessage />
+                        {editingOrder && (
+                          <p className="text-sm text-muted-foreground">
+                            ※案件番号は登録後変更できません
+                          </p>
+                        )}
                       </FormItem>
                     )}
                   />
