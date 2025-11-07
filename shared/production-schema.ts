@@ -8,7 +8,7 @@ import { z } from "zod";
 
 // 受注 (Orders)
 export const orders = sqliteTable("orders", {
-  order_id: integer("order_id").primaryKey(),    // 受注番号（自動採番）
+  order_id: text("order_id").primaryKey(),       // 受注番号（文字列対応）
   product_name: text("product_name").notNull(),  // 製品名
   qty: real("qty").notNull(),                    // 数量
   start_date: text("start_date"),                // 開始予定日（UTC ISO、任意）
@@ -29,7 +29,7 @@ export const orders = sqliteTable("orders", {
 // 手配 (Procurements) - 購買(purchase) と 製造(manufacture) を統合
 export const procurements = sqliteTable("procurements", {
   id: integer("id").primaryKey(),
-  order_id: integer("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
+  order_id: text("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
   kind: text("kind", { enum: ['purchase', 'manufacture'] }).notNull(),
   item_name: text("item_name"),
   qty: real("qty"),
@@ -51,7 +51,7 @@ export const procurements = sqliteTable("procurements", {
 // 工数入力 (Workers Log) - スタッフ用の簡易打刻
 export const workers_log = sqliteTable("workers_log", {
   id: integer("id").primaryKey(),
-  order_id: integer("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
+  order_id: text("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
   qty: real("qty").notNull(),
   act_time_per_unit: real("act_time_per_unit").notNull(), // [h/個]
   worker: text("worker").notNull(),
@@ -64,7 +64,7 @@ export const workers_log = sqliteTable("workers_log", {
 // 作業計画 (Tasks) - 作業分解と担当者決定
 export const tasks = sqliteTable("tasks", {
   id: integer("id").primaryKey(),
-  order_id: integer("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
+  order_id: text("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
   task_name: text("task_name").notNull(),        // 作業名（例：組立/塗装/検査）
   assignee: text("assignee").notNull(),          // 担当者（必須 - ビジネスルール上必要）
   planned_start: text("planned_start").notNull(), // 予定開始日(UTC)
@@ -109,8 +109,8 @@ export const work_logs = sqliteTable("work_logs", {
   status: text("status").default('下書き'),      // ステータス
   
   // 紐付け関連
-  order_id: integer("order_id"),                 // 受注ID (orders.order_id)
-  order_no: text("order_no"),                    // 受注番号 (k001など)
+  order_id: text("order_id"),                    // 受注番号 (orders.order_id) - 文字列対応
+  order_no: text("order_no"),                    // 受注番号 (k001など) - 廃止予定（order_idと統合）
   match_status: text("match_status").default('unlinked'), // linked / temp / unlinked
   
   // 取込管理
@@ -127,7 +127,7 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   created_at: true,
   updated_at: true,
 }).extend({
-  order_id: z.number().optional(),
+  order_id: z.string().optional(),
   start_date: z.string().optional(),
   due_date: z.string().min(1, "納期は必須です"),
   status: z.enum(['pending', 'in_progress', 'completed']).default('pending'),
@@ -186,7 +186,7 @@ export const insertWorkLogSchema = createInsertSchema(work_logs).omit({
   status: z.string().optional(),
   
   // 共通フィールド
-  order_id: z.number().optional(),
+  order_id: z.string().optional(),
   order_no: z.string().optional(),
   match_status: z.enum(['linked', 'temp', 'unlinked']).default('unlinked'),
   source: z.enum(['manual', 'harmos']).default('manual'),
@@ -246,7 +246,7 @@ export type InsertWorkLog = typeof insertWorkLogSchema._type;
 
 // ========== KPI Types ==========
 export interface OrderKPI {
-  order_id: number;
+  order_id: string;
   product_name: string;
   qty: number;
   start_date?: string;        // 開始予定日（元データ）
@@ -279,12 +279,12 @@ export interface CalendarEvent {
   date: string;
   type: 'due_date' | 'eta' | 'received' | 'completed';
   status: 'pending' | 'in_progress' | 'completed' | 'overdue';
-  order_id?: number;
+  order_id?: string;
   procurement_id?: number;
 }
 
 export interface MaterialCostAnalysis {
-  order_id: number;
+  order_id: string;
   product_name: string;
   customer_name?: string;
   estimated_material_cost: number;  // 見込み材料費
