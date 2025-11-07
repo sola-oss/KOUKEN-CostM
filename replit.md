@@ -12,6 +12,24 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 7, 2025 - Order ID Edit Restriction Implementation
+- **Feature**: Implemented order_id field edit restriction to prevent modification after registration
+- **Implementation Details**:
+  - Modified handleEdit function to populate order_id field with existing value (was previously blanked)
+  - Added `disabled={!!editingOrder}` attribute to order_id input field in edit mode
+  - Displayed warning message "※案件番号は登録後変更できません" only in edit mode
+  - Preserved order_id visibility while disabling edits for better UX
+- **User Experience**:
+  - Create mode: order_id field is enabled with placeholder "空欄で自動採番"
+  - Edit mode: order_id field displays existing value but is disabled (greyed out)
+  - Warning message guides users that order_id cannot be changed after registration
+- **Technical Stack**:
+  - Frontend: React form control with conditional disabled state
+  - Validation: Backend ALLOWED_ORDER_UPDATE_COLUMNS already excluded order_id
+  - File modified: client/src/pages/production/projects.tsx
+- **Testing**: End-to-end testing verified create/edit flows with order_id restriction
+- **Security**: Backend already prevented order_id updates; frontend now matches backend behavior
+
 ### November 4, 2025 - Material Management Unit Field Implementation Complete
 - **Feature**: Added unit field to material (procurement) management for detailed material tracking with flexible units
 - **Implementation Details**:
