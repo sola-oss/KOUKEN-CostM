@@ -79,7 +79,7 @@ export const tasks = sqliteTable("tasks", {
   plannedStartIdx: index("idx_tasks_planned_start").on(table.planned_start),
 }));
 
-// 作業実績ログ (Work Logs) - ハーモスCSV取込対応
+// 作業実績ログ (Work Logs) - ハーモスCSV取込 + 手動入力対応
 export const work_logs = sqliteTable("work_logs", {
   id: integer("id").primaryKey(),
   
@@ -96,6 +96,17 @@ export const work_logs = sqliteTable("work_logs", {
   actual_time: text("actual_time"),              // 業務時間_実績_
   total_work_time: text("total_work_time"),      // 総労働時間
   note: text("note"),                            // 備考
+  
+  // 手動入力専用フィールド
+  date: text("date"),                            // 作業日（手動入力用）
+  worker: text("worker"),                        // 作業者（手動入力用）
+  task_name: text("task_name"),                  // 作業名（手動入力用）
+  start_time: text("start_time"),                // 開始時刻（HH:MM形式）
+  end_time: text("end_time"),                    // 終了時刻（HH:MM形式）
+  duration_hours: real("duration_hours"),        // 実績時間（小数）
+  quantity: real("quantity").default(0),         // 数量
+  memo: text("memo"),                            // メモ（手動入力用）
+  status: text("status").default('下書き'),      // ステータス
   
   // 紐付け関連
   order_id: integer("order_id"),                 // 受注ID (orders.order_id)
@@ -149,6 +160,7 @@ export const insertWorkLogSchema = createInsertSchema(work_logs).omit({
   id: true,
   imported_at: true,
 }).extend({
+  // ハーモスCSVフィールド（全てoptional）
   work_date: z.string().optional(),
   employee_name: z.string().optional(),
   client_name: z.string().optional(),
@@ -161,6 +173,19 @@ export const insertWorkLogSchema = createInsertSchema(work_logs).omit({
   actual_time: z.string().optional(),
   total_work_time: z.string().optional(),
   note: z.string().optional(),
+  
+  // 手動入力フィールド（全てoptional）
+  date: z.string().optional(),
+  worker: z.string().optional(),
+  task_name: z.string().optional(),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
+  duration_hours: z.number().optional(),
+  quantity: z.number().optional(),
+  memo: z.string().optional(),
+  status: z.string().optional(),
+  
+  // 共通フィールド
   order_id: z.number().optional(),
   order_no: z.string().optional(),
   match_status: z.enum(['linked', 'temp', 'unlinked']).default('unlinked'),
@@ -195,9 +220,14 @@ export const ALLOWED_TASK_UPDATE_COLUMNS = [
 ] as const;
 
 export const ALLOWED_WORK_LOG_UPDATE_COLUMNS = [
+  // ハーモスCSVフィールド
   'work_date', 'employee_name', 'client_name', 'project_name',
   'task_large', 'task_medium', 'task_small', 'work_name',
   'planned_time', 'actual_time', 'total_work_time', 'note',
+  // 手動入力フィールド
+  'date', 'worker', 'task_name', 'start_time', 'end_time', 
+  'duration_hours', 'quantity', 'memo', 'status',
+  // 共通フィールド
   'order_id', 'order_no', 'match_status'
 ] as const;
 

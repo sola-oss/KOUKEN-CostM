@@ -513,29 +513,61 @@ export class ProductionDAO {
   // ========== Work Logs CRUD ==========
   
   async createWorkLog(logData: InsertWorkLog): Promise<number> {
-    const now = new Date().toISOString();
+    // Build dynamic INSERT statement to support both manual and CSV fields
+    const fields: string[] = [];
+    const placeholders: string[] = [];
+    const values: any[] = [];
+    
+    // Helper to add field if value exists
+    const addField = (fieldName: string, value: any) => {
+      if (value !== undefined && value !== null) {
+        fields.push(fieldName);
+        placeholders.push('?');
+        values.push(value);
+      }
+    };
+    
+    // ハーモスCSVフィールド
+    addField('work_date', logData.work_date);
+    addField('employee_name', logData.employee_name);
+    addField('client_name', logData.client_name);
+    addField('project_name', logData.project_name);
+    addField('task_large', logData.task_large);
+    addField('task_medium', logData.task_medium);
+    addField('task_small', logData.task_small);
+    addField('work_name', logData.work_name);
+    addField('planned_time', logData.planned_time);
+    addField('actual_time', logData.actual_time);
+    addField('total_work_time', logData.total_work_time);
+    addField('note', logData.note);
+    
+    // 手動入力フィールド
+    addField('date', logData.date);
+    addField('worker', logData.worker);
+    addField('task_name', logData.task_name);
+    addField('start_time', logData.start_time);
+    addField('end_time', logData.end_time);
+    addField('duration_hours', logData.duration_hours);
+    addField('quantity', logData.quantity);
+    addField('memo', logData.memo);
+    addField('status', logData.status);
+    
+    // 共通フィールド
+    addField('order_id', logData.order_id);
+    addField('order_no', logData.order_no);
+    addField('match_status', logData.match_status || 'unlinked');
+    addField('source', logData.source || 'manual');
+    
+    if (fields.length === 0) {
+      throw new Error('No valid fields to insert');
+    }
     
     const stmt = this.db.prepare(`
-      INSERT INTO work_logs (
-        date, order_id, task_name, worker, start_time, end_time, 
-        duration_hours, quantity, memo, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO work_logs (${fields.join(', ')})
+      VALUES (${placeholders.join(', ')})
     `);
     
-    const result = stmt.run(
-      logData.date,
-      logData.order_id,
-      logData.task_name,
-      logData.worker,
-      logData.start_time || null,
-      logData.end_time || null,
-      logData.duration_hours,
-      logData.quantity || 0,
-      logData.memo || null,
-      logData.status || '下書き',
-      now
-    );
-    
+    const result = stmt.run(...values);
     return result.lastInsertRowid as number;
   }
 

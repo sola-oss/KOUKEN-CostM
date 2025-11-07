@@ -66,7 +66,7 @@ CREATE TABLE tasks (
   created_at TEXT NOT NULL
 );
 
--- 作業実績ログ (Work Logs) - ハーモスCSV取込対応
+-- 作業実績ログ (Work Logs) - ハーモスCSV取込 + 手動入力対応
 CREATE TABLE work_logs (
   id INTEGER PRIMARY KEY,
   
@@ -83,6 +83,17 @@ CREATE TABLE work_logs (
   actual_time TEXT,                -- 業務時間_実績_
   total_work_time TEXT,            -- 総労働時間
   note TEXT,                       -- 備考
+  
+  -- 手動入力専用フィールド
+  date TEXT,                       -- 作業日（手動入力用、work_dateと同じだが互換性のため残す）
+  worker TEXT,                     -- 作業者（手動入力用、employee_nameと同じだが互換性のため残す）
+  task_name TEXT,                  -- 作業名（手動入力用）
+  start_time TEXT,                 -- 開始時刻（HH:MM形式）
+  end_time TEXT,                   -- 終了時刻（HH:MM形式）
+  duration_hours REAL,             -- 実績時間（小数）
+  quantity REAL DEFAULT 0,         -- 数量
+  memo TEXT,                       -- メモ（手動入力用、noteと同じだが互換性のため残す）
+  status TEXT DEFAULT '下書き',    -- ステータス（下書き/確定など）
   
   -- 紐付け関連
   order_id INTEGER,                -- 受注ID (orders.order_id)

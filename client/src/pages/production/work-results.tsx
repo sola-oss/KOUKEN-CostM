@@ -480,27 +480,13 @@ export default function WorkResults() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>作業名 *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger data-testid="select-task">
-                              <SelectValue placeholder="作業を選択" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {tasksData?.data.map((task, idx) => (
-                              <SelectItem 
-                                key={task.id} 
-                                value={task.task_name}
-                                data-testid={`option-task-${idx}`}
-                              >
-                                {task.task_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="作業名を入力"
+                            data-testid="input-task-name" 
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
