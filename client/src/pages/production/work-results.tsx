@@ -55,7 +55,7 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Timer, Save, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Timer, Save, Plus, Pencil, Trash2, AlertTriangle, Upload, FileText } from "lucide-react";
 
 // Form validation schema
 const workLogSchema = z.object({
@@ -112,6 +112,8 @@ export default function WorkResults() {
   const [editingLog, setEditingLog] = useState<WorkLog | null>(null);
   const [overlapWarning, setOverlapWarning] = useState<WorkLog[]>([]);
   const [currentWorker] = useState("田中"); // TODO: Get from auth/session
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   
   const timeOptions = generateTimeOptions();
   const todayDate = dayjs().format('YYYY-MM-DD');
@@ -282,6 +284,74 @@ export default function WorkResults() {
     }
   };
 
+  // Handle CSV file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+        toast({
+          title: "エラー",
+          description: "CSVファイルを選択してください",
+          variant: "destructive",
+        });
+        return;
+      }
+      setCsvFile(file);
+    }
+  };
+
+  // Handle CSV upload
+  const handleCsvUpload = async () => {
+    if (!csvFile) {
+      toast({
+        title: "エラー",
+        description: "ファイルが選択されていません",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', csvFile);
+
+      const response = await fetch('/api/work-logs/upload-csv', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('CSV upload failed');
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: "CSVアップロード完了",
+        description: `${result.summary.success}件の作業実績を登録しました（失敗: ${result.summary.failed}件）`,
+      });
+
+      // Reset file input
+      setCsvFile(null);
+      const fileInput = document.getElementById('csv-file-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
+      // Refresh work logs list
+      queryClient.invalidateQueries({ queryKey: ['/api/work-logs'] });
+
+    } catch (error: any) {
+      toast({
+        title: "エラー",
+        description: error.message || "CSVのアップロードに失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6" data-testid="page-work-results">
       <div>
@@ -302,6 +372,46 @@ export default function WorkResults() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* CSV Upload Section */}
+      <Card data-testid="card-csv-upload">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            ハーモスCSV取込
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <Input
+                id="csv-file-input"
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                disabled={isUploading}
+                data-testid="input-csv-file"
+              />
+              {csvFile && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  <FileText className="h-4 w-4 inline mr-1" />
+                  選択中: {csvFile.name}
+                </p>
+              )}
+            </div>
+            <Button
+              onClick={handleCsvUpload}
+              disabled={!csvFile || isUploading}
+              data-testid="button-upload-csv"
+            >
+              {isUploading ? "アップロード中..." : "アップロード"}
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mt-3">
+            ハーモス勤怠管理システムからエクスポートしたCSVファイルをアップロードできます。
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Input Form */}
       <Card>

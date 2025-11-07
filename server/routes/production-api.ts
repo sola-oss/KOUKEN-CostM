@@ -15,9 +15,17 @@ import {
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import timezone from 'dayjs/plugin/timezone.js';
+import multer from 'multer';
+import { parse } from 'csv-parse/sync';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
+
+// Configure multer for CSV upload
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 const router = Router();
 let dao: ProductionDAO;
@@ -1049,6 +1057,87 @@ router.delete('/api/work-logs/:id', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal server error',
       message: 'Failed to delete work log'
+    });
+  }
+});
+
+// POST /api/work-logs/upload-csv - Upload Harmos CSV
+router.post('/api/work-logs/upload-csv', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        error: 'Bad request',
+        message: 'No file uploaded' 
+      });
+    }
+
+    const csvContent = req.file.buffer.toString('utf-8');
+    
+    // Parse CSV (assuming headers: 日付,氏名,取引先,プロジェクト,業務_大_,業務_中_,業務_小_,業務名,業務時間_予定_,業務時間_実績_,総労働時間,備考)
+    const records = parse(csvContent, {
+      columns: true,
+      skip_empty_lines: true,
+      bom: true, // Handle BOM in UTF-8 files
+      trim: true
+    });
+
+    // Helper function to extract order number from work_name (e.g., "k001" from text)
+    const extractOrderNo = (workName: string | undefined): string | null => {
+      if (!workName) return null;
+      const match = workName.match(/k\d{3}/i);
+      return match ? match[0].toLowerCase() : null;
+    };
+
+    // Process each record
+    const insertedCount = {
+      total: records.length,
+      success: 0,
+      failed: 0,
+      errors: [] as string[]
+    };
+
+    for (const record of records) {
+      try {
+        const orderNo = extractOrderNo(record['業務名']);
+        
+        const workLogData = {
+          work_date: record['日付'],
+          employee_name: record['氏名'],
+          client_name: record['取引先'],
+          project_name: record['プロジェクト'],
+          task_large: record['業務_大_'],
+          task_medium: record['業務_中_'],
+          task_small: record['業務_小_'],
+          work_name: record['業務名'],
+          planned_time: record['業務時間_予定_'],
+          actual_time: record['業務時間_実績_'],
+          total_work_time: record['総労働時間'],
+          note: record['備考'],
+          order_no: orderNo,
+          order_id: null, // Will be linked later
+          match_status: orderNo ? 'temp' : 'unlinked',
+          source: 'harmos'
+        };
+
+        await dao.createWorkLog(workLogData);
+        insertedCount.success++;
+      } catch (error: any) {
+        insertedCount.failed++;
+        insertedCount.errors.push(`Row error: ${error.message}`);
+      }
+    }
+
+    res.status(201).json({
+      message: 'CSV upload completed',
+      summary: insertedCount
+    });
+
+  } catch (error: any) {
+    console.error('CSV upload error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to upload CSV',
+      details: error.message
     });
   }
 });

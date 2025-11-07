@@ -79,23 +79,36 @@ export const tasks = sqliteTable("tasks", {
   plannedStartIdx: index("idx_tasks_planned_start").on(table.planned_start),
 }));
 
-// 作業実績ログ (Work Logs) - PC用の詳細な作業実績入力
+// 作業実績ログ (Work Logs) - ハーモスCSV取込対応
 export const work_logs = sqliteTable("work_logs", {
   id: integer("id").primaryKey(),
-  date: text("date").notNull(),                  // 作業日(UTC ISO)
-  order_id: integer("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
-  task_name: text("task_name").notNull(),        // 作業名
-  worker: text("worker").notNull(),              // 作業者
-  start_time: text("start_time"),                // 開始時刻 (HH:mm format)
-  end_time: text("end_time"),                    // 終了時刻 (HH:mm format)
-  duration_hours: real("duration_hours").notNull(), // 実績時間[h]
-  quantity: real("quantity").notNull().default(0), // 数量
-  memo: text("memo"),                            // メモ
-  status: text("status").notNull().default('下書き'), // ステータス
-  created_at: text("created_at").notNull(),
+  
+  // ハーモスCSVフィールド
+  work_date: text("work_date"),                  // 日付 (YYYY-MM-DD)
+  employee_name: text("employee_name"),          // 氏名
+  client_name: text("client_name"),              // 取引先
+  project_name: text("project_name"),            // プロジェクト
+  task_large: text("task_large"),                // 業務_大_
+  task_medium: text("task_medium"),              // 業務_中_
+  task_small: text("task_small"),                // 業務_小_
+  work_name: text("work_name"),                  // 業務名（受注番号を入れる列）
+  planned_time: text("planned_time"),            // 業務時間_予定_
+  actual_time: text("actual_time"),              // 業務時間_実績_
+  total_work_time: text("total_work_time"),      // 総労働時間
+  note: text("note"),                            // 備考
+  
+  // 紐付け関連
+  order_id: integer("order_id"),                 // 受注ID (orders.order_id)
+  order_no: text("order_no"),                    // 受注番号 (k001など)
+  match_status: text("match_status").default('unlinked'), // linked / temp / unlinked
+  
+  // 取込管理
+  source: text("source").default('manual'),      // データ由来: manual / harmos
+  imported_at: text("imported_at").default(sql`(datetime('now', 'localtime'))`),
 }, (table) => ({
-  dateWorkerIdx: index("idx_work_logs_date_worker").on(table.date, table.worker),
+  dateIdx: index("idx_work_logs_date").on(table.work_date),
   orderIdx: index("idx_work_logs_order").on(table.order_id),
+  orderNoIdx: index("idx_work_logs_order_no").on(table.order_no),
 }));
 
 // ========== Insert Schemas ==========
@@ -134,18 +147,24 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
 
 export const insertWorkLogSchema = createInsertSchema(work_logs).omit({
   id: true,
-  created_at: true,
+  imported_at: true,
 }).extend({
-  date: z.string().min(1, "作業日は必須です"),
-  order_id: z.number({ required_error: "受注番号は必須です" }),
-  task_name: z.string().min(1, "作業名は必須です"),
-  worker: z.string().min(1, "作業者は必須です"),
-  start_time: z.string().min(1, "開始時刻は必須です"),
-  end_time: z.string().min(1, "終了時刻は必須です"),
-  duration_hours: z.coerce.number().gt(0, "実績時間は0より大きい値が必要です"),
-  quantity: z.coerce.number().min(0, "数量は0以上である必要があります").default(0),
-  memo: z.string().optional(),
-  status: z.string().default('下書き'),
+  work_date: z.string().optional(),
+  employee_name: z.string().optional(),
+  client_name: z.string().optional(),
+  project_name: z.string().optional(),
+  task_large: z.string().optional(),
+  task_medium: z.string().optional(),
+  task_small: z.string().optional(),
+  work_name: z.string().optional(),
+  planned_time: z.string().optional(),
+  actual_time: z.string().optional(),
+  total_work_time: z.string().optional(),
+  note: z.string().optional(),
+  order_id: z.number().optional(),
+  order_no: z.string().optional(),
+  match_status: z.enum(['linked', 'temp', 'unlinked']).default('unlinked'),
+  source: z.enum(['manual', 'harmos']).default('manual'),
 });
 
 // Update schemas with column whitelisting for security
@@ -176,8 +195,10 @@ export const ALLOWED_TASK_UPDATE_COLUMNS = [
 ] as const;
 
 export const ALLOWED_WORK_LOG_UPDATE_COLUMNS = [
-  'date', 'order_id', 'task_name', 'worker', 'start_time', 'end_time',
-  'duration_hours', 'quantity', 'memo', 'status'
+  'work_date', 'employee_name', 'client_name', 'project_name',
+  'task_large', 'task_medium', 'task_small', 'work_name',
+  'planned_time', 'actual_time', 'total_work_time', 'note',
+  'order_id', 'order_no', 'match_status'
 ] as const;
 
 // ========== Type Definitions ==========

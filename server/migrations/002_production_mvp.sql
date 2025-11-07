@@ -66,20 +66,32 @@ CREATE TABLE tasks (
   created_at TEXT NOT NULL
 );
 
--- 作業実績ログ (Work Logs) - PC用の詳細な作業実績入力
+-- 作業実績ログ (Work Logs) - ハーモスCSV取込対応
 CREATE TABLE work_logs (
   id INTEGER PRIMARY KEY,
-  date TEXT NOT NULL,              -- 作業日(UTC ISO)
-  order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
-  task_name TEXT NOT NULL,         -- 作業名
-  worker TEXT NOT NULL,            -- 作業者
-  start_time TEXT,                 -- 開始時刻 (HH:mm format)
-  end_time TEXT,                   -- 終了時刻 (HH:mm format)
-  duration_hours REAL NOT NULL,    -- 実績時間[h]
-  quantity REAL NOT NULL DEFAULT 0, -- 数量
-  memo TEXT,                       -- メモ
-  status TEXT NOT NULL DEFAULT '下書き', -- ステータス
-  created_at TEXT NOT NULL
+  
+  -- ハーモスCSVフィールド
+  work_date TEXT,                  -- 日付 (YYYY-MM-DD)
+  employee_name TEXT,              -- 氏名
+  client_name TEXT,                -- 取引先
+  project_name TEXT,               -- プロジェクト
+  task_large TEXT,                 -- 業務_大_
+  task_medium TEXT,                -- 業務_中_
+  task_small TEXT,                 -- 業務_小_
+  work_name TEXT,                  -- 業務名（受注番号を入れる列）
+  planned_time TEXT,               -- 業務時間_予定_
+  actual_time TEXT,                -- 業務時間_実績_
+  total_work_time TEXT,            -- 総労働時間
+  note TEXT,                       -- 備考
+  
+  -- 紐付け関連
+  order_id INTEGER,                -- 受注ID (orders.order_id)
+  order_no TEXT,                   -- 受注番号 (k001など)
+  match_status TEXT DEFAULT 'unlinked',  -- linked / temp / unlinked
+  
+  -- 取込管理
+  source TEXT DEFAULT 'manual',    -- データ由来: manual / harmos
+  imported_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 -- Create indexes for performance
@@ -90,8 +102,9 @@ CREATE INDEX IF NOT EXISTS idx_wlog_order ON workers_log(order_id, date);
 CREATE INDEX IF NOT EXISTS idx_tasks_order ON tasks(order_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_planned_start ON tasks(planned_start);
-CREATE INDEX IF NOT EXISTS idx_work_logs_date_worker ON work_logs(date, worker);
+CREATE INDEX IF NOT EXISTS idx_work_logs_date ON work_logs(work_date);
 CREATE INDEX IF NOT EXISTS idx_work_logs_order ON work_logs(order_id);
+CREATE INDEX IF NOT EXISTS idx_work_logs_order_no ON work_logs(order_no);
 
 -- Migration: Add start_date column to orders table
 ALTER TABLE orders ADD COLUMN start_date TEXT;
