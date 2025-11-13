@@ -1,12 +1,19 @@
 // Production Management MVP - Orders Management (受注管理)
-// Stage 1: Read-only order list with 19-field support
+// Stage 2: Full CRUD with 19-field form support
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check } from "lucide-react";
@@ -14,6 +21,33 @@ import { listOrders, type Order } from "@/shared/production-api";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+
+// ========== FORM VALIDATION SCHEMA ==========
+
+// Order form validation schema
+const orderFormSchema = z.object({
+  order_id: z.string().optional(),
+  order_date: z.string().optional(),
+  client_name: z.string().min(1, "客先名は必須です"),
+  manager: z.string().optional(),
+  client_order_no: z.string().optional(),
+  project_title: z.string().min(1, "件名は必須です"),
+  due_date: z.string().min(1, "納期は必須です"),
+  delivery_date: z.string().optional(),
+  confirmed_date: z.string().optional(),
+  estimated_amount: z.string().optional(),
+  invoiced_amount: z.string().optional(),
+  invoice_month: z.string().optional(),
+  note: z.string().optional(),
+  subcontractor: z.string().optional(),
+  processing_hours: z.string().optional(),
+  is_delivered: z.boolean().optional(),
+  has_shipping_fee: z.boolean().optional(),
+  is_amount_confirmed: z.boolean().optional(),
+  is_invoiced: z.boolean().optional(),
+});
+
+type OrderFormValues = z.infer<typeof orderFormSchema>;
 
 // ========== HELPER COMPONENTS ==========
 
@@ -111,6 +145,36 @@ export default function Projects() {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  
+  // Form Dialog state
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  
+  // Form hook
+  const form = useForm<OrderFormValues>({
+    resolver: zodResolver(orderFormSchema),
+    defaultValues: {
+      order_id: "",
+      order_date: "",
+      client_name: "",
+      manager: "",
+      client_order_no: "",
+      project_title: "",
+      due_date: "",
+      delivery_date: "",
+      confirmed_date: "",
+      estimated_amount: "",
+      invoiced_amount: "",
+      invoice_month: "",
+      note: "",
+      subcontractor: "",
+      processing_hours: "",
+      is_delivered: false,
+      has_shipping_fee: false,
+      is_amount_confirmed: false,
+      is_invoiced: false,
+    },
+  });
 
   // Fetch orders
   const { data: ordersResponse, isLoading, error } = useQuery({
@@ -119,6 +183,56 @@ export default function Projects() {
   });
 
   const orders = ordersResponse?.data || [];
+
+  // Create Order mutation
+  const createOrderMutation = useMutation({
+    mutationFn: async (data: Partial<Order>) => {
+      const response = await apiRequest('POST', '/api/production/orders', data);
+      return await response.json() as Order;
+    },
+    onSuccess: (newOrder) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setNewlyCreatedOrderId(newOrder.order_id);
+      toast({
+        title: "成功",
+        description: "受注を登録しました",
+      });
+      setIsFormOpen(false);
+      form.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error.message || "受注の登録に失敗しました",
+      });
+    }
+  });
+
+  // Update Order mutation
+  const updateOrderMutation = useMutation({
+    mutationFn: async ({ orderId, data }: { orderId: string; data: Partial<Order> }) => {
+      const response = await apiRequest('PATCH', `/api/production/orders/${orderId}`, data);
+      return await response.json() as Order;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({
+        title: "成功",
+        description: "受注を更新しました",
+      });
+      setIsFormOpen(false);
+      setEditingOrder(null);
+      form.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error.message || "受注の更新に失敗しました",
+      });
+    }
+  });
 
   // Filter and sort orders
   const filteredAndSortedOrders = useMemo(() => {
@@ -168,7 +282,7 @@ export default function Projects() {
   // Delete order mutation
   const deleteOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      return await apiRequest('DELETE', `/api/orders/${orderId}`);
+      return await apiRequest('DELETE', `/api/production/orders/${orderId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -210,6 +324,93 @@ export default function Projects() {
   const confirmDelete = () => {
     if (deletingOrderId) {
       deleteOrderMutation.mutate(deletingOrderId);
+    }
+  };
+
+  // Form handlers
+  const handleCreateOrder = () => {
+    setEditingOrder(null);
+    form.reset({
+      order_id: "",
+      order_date: new Date().toISOString().split('T')[0],
+      client_name: "",
+      manager: "",
+      client_order_no: "",
+      project_title: "",
+      due_date: "",
+      delivery_date: "",
+      confirmed_date: "",
+      estimated_amount: "",
+      invoiced_amount: "",
+      invoice_month: "",
+      note: "",
+      subcontractor: "",
+      processing_hours: "",
+      is_delivered: false,
+      has_shipping_fee: false,
+      is_amount_confirmed: false,
+      is_invoiced: false,
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleEditOrder = (order: Order, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingOrder(order);
+    form.reset({
+      order_id: order.order_id,
+      order_date: order.order_date || "",
+      client_name: order.client_name || "",
+      manager: order.manager || "",
+      client_order_no: order.client_order_no || "",
+      project_title: order.project_title || "",
+      due_date: order.due_date || "",
+      delivery_date: order.delivery_date || "",
+      confirmed_date: order.confirmed_date || "",
+      estimated_amount: order.estimated_amount?.toString() || "",
+      invoiced_amount: order.invoiced_amount?.toString() || "",
+      invoice_month: order.invoice_month || "",
+      note: order.note || "",
+      subcontractor: order.subcontractor || "",
+      processing_hours: order.processing_hours?.toString() || "",
+      is_delivered: order.is_delivered || false,
+      has_shipping_fee: order.has_shipping_fee || false,
+      is_amount_confirmed: order.is_amount_confirmed || false,
+      is_invoiced: order.is_invoiced || false,
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleFormSubmit = (values: OrderFormValues) => {
+    // Convert form values to API format
+    const orderData: Partial<Order> = {
+      order_id: values.order_id || undefined,
+      order_date: values.order_date || null,
+      client_name: values.client_name,
+      manager: values.manager || null,
+      client_order_no: values.client_order_no || null,
+      project_title: values.project_title,
+      due_date: values.due_date,
+      delivery_date: values.delivery_date || null,
+      confirmed_date: values.confirmed_date || null,
+      estimated_amount: values.estimated_amount ? parseFloat(values.estimated_amount) : null,
+      invoiced_amount: values.invoiced_amount ? parseFloat(values.invoiced_amount) : null,
+      invoice_month: values.invoice_month || null,
+      note: values.note || null,
+      subcontractor: values.subcontractor || null,
+      processing_hours: values.processing_hours ? parseFloat(values.processing_hours) : null,
+      is_delivered: values.is_delivered || false,
+      has_shipping_fee: values.has_shipping_fee || false,
+      is_amount_confirmed: values.is_amount_confirmed || false,
+      is_invoiced: values.is_invoiced || false,
+    };
+
+    if (editingOrder) {
+      // Update existing order
+      updateOrderMutation.mutate({ orderId: editingOrder.order_id, data: orderData });
+    } else {
+      // Create new order
+      createOrderMutation.mutate(orderData);
     }
   };
 
@@ -279,8 +480,7 @@ export default function Projects() {
           </p>
         </div>
         <Button 
-          onClick={() => toast({ title: "開発中", description: "受注登録フォームは次のステージで実装予定です" })}
-          disabled
+          onClick={handleCreateOrder}
           data-testid="button-new-order"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -396,23 +596,14 @@ export default function Projects() {
                   {/* Actions */}
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled
-                              data-testid={`button-edit-${order.order_id}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Stage 2で実装予定</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => handleEditOrder(order, e)}
+                        data-testid={`button-edit-${order.order_id}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
 
                       <Button
                         variant="ghost"
@@ -452,6 +643,410 @@ export default function Projects() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Create/Edit Order Dialog */}
+        <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-order-form">
+            <DialogHeader>
+              <DialogTitle data-testid="text-dialog-title">
+                {editingOrder ? "受注編集" : "受注登録"}
+              </DialogTitle>
+            </DialogHeader>
+
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
+                {/* Section 1: Basic Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">基本情報</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="order_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>受注番号</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="空欄で自動採番" 
+                              data-testid="input-order-id"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="order_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>受注日</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="date" 
+                              data-testid="input-order-date"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="client_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>客先名 <span className="text-destructive">*</span></FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="客先名を入力" 
+                              data-testid="input-client-name"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="manager"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>担当者</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="担当者名を入力" 
+                              data-testid="input-manager"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="client_order_no"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>客先注番</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="客先注文番号を入力" 
+                              data-testid="input-client-order-no"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="project_title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>件名 <span className="text-destructive">*</span></FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="案件の件名を入力" 
+                              data-testid="input-project-title"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 2: Schedule */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">スケジュール</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="due_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>納期 <span className="text-destructive">*</span></FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="date" 
+                              data-testid="input-due-date"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="delivery_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>納品日</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="date" 
+                              data-testid="input-delivery-date"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="confirmed_date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>確定日</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="date" 
+                              data-testid="input-confirmed-date"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 3: Amount Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">金額情報</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="estimated_amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>見積金額</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              placeholder="0" 
+                              data-testid="input-estimated-amount"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="invoiced_amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>請求金額</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              placeholder="0" 
+                              data-testid="input-invoiced-amount"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="invoice_month"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>請求月</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="month" 
+                              data-testid="input-invoice-month"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 4: Management Memo & Status */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">管理メモ・ステータス</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="subcontractor"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>外注/自社</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="外注先または自社を入力" 
+                              data-testid="input-subcontractor"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="processing_hours"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>加工時間（時間）</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              step="0.1"
+                              placeholder="0" 
+                              data-testid="input-processing-hours"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="note"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>備考</FormLabel>
+                          <FormControl>
+                            <Textarea 
+                              {...field} 
+                              placeholder="備考を入力"
+                              className="min-h-[80px]"
+                              data-testid="input-note"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Status Checkboxes */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                    <FormField
+                      control={form.control}
+                      name="is_delivered"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center space-x-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-is-delivered"
+                            />
+                          </FormControl>
+                          <FormLabel className="!mt-0 cursor-pointer">納品完了 (*)</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="has_shipping_fee"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center space-x-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-has-shipping-fee"
+                            />
+                          </FormControl>
+                          <FormLabel className="!mt-0 cursor-pointer">送料 (#)</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="is_amount_confirmed"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center space-x-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-is-amount-confirmed"
+                            />
+                          </FormControl>
+                          <FormLabel className="!mt-0 cursor-pointer">金額確定 (-)</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="is_invoiced"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center space-x-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-is-invoiced"
+                            />
+                          </FormControl>
+                          <FormLabel className="!mt-0 cursor-pointer">請求済 (+)</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Form Actions */}
+                <DialogFooter>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsFormOpen(false)}
+                    data-testid="button-cancel-form"
+                  >
+                    キャンセル
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={createOrderMutation.isPending || updateOrderMutation.isPending}
+                    data-testid="button-submit-form"
+                  >
+                    {editingOrder ? "更新" : "登録"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
