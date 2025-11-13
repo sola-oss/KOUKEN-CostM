@@ -265,31 +265,31 @@ export async function listOrders(params?: {
   if (params?.page_size) searchParams.append('page_size', params.page_size.toString());
   
   const queryString = searchParams.toString();
-  const endpoint = queryString ? `/api/orders?${queryString}` : '/api/orders';
+  const endpoint = queryString ? `/api/production/orders?${queryString}` : '/api/production/orders';
   
   return apiClient<{ data: Order[]; meta: any }>(endpoint);
 }
 
 export async function getOrder(id: string): Promise<Order> {
-  return apiClient<Order>(`/api/orders/${id}`);
+  return apiClient<Order>(`/api/production/orders/${id}`);
 }
 
 export async function createOrder(data: OrderPayload): Promise<Order> {
-  return apiClient<Order>('/api/orders', {
+  return apiClient<Order>('/api/production/orders', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
 export async function updateOrder(id: string, data: Partial<OrderPayload>): Promise<{ message: string }> {
-  return apiClient<{ message: string }>(`/api/orders/${id}`, {
+  return apiClient<{ message: string }>(`/api/production/orders/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
 
 export async function deleteOrder(id: string): Promise<{ message: string }> {
-  return apiClient<{ message: string }>(`/api/orders/${id}`, {
+  return apiClient<{ message: string }>(`/api/production/orders/${id}`, {
     method: 'DELETE',
   });
 }

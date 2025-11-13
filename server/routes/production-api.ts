@@ -75,8 +75,8 @@ router.get('/api', (req, res) => {
 
 // ========== Orders API ==========
 
-// GET /api/orders - List orders with KPIs
-router.get('/api/orders', async (req, res) => {
+// GET /api/production/orders - List orders with KPIs
+router.get('/api/production/orders', async (req, res) => {
   try {
     const { 
       from, 
@@ -145,8 +145,8 @@ router.get('/api/orders', async (req, res) => {
   }
 });
 
-// GET /api/orders/:id - Get order details with KPI
-router.get('/api/orders/:id', async (req, res) => {
+// GET /api/production/orders/:id - Get order details with KPI
+router.get('/api/production/orders/:id', async (req, res) => {
   try {
     const orderId = req.params.id;
     const result = await dao.getOrderById(orderId);
@@ -212,8 +212,8 @@ router.get('/api/orders/:id', async (req, res) => {
   }
 });
 
-// POST /api/orders - Create new order
-router.post('/api/orders', async (req, res) => {
+// POST /api/production/orders - Create new order
+router.post('/api/production/orders', async (req, res) => {
   try {
     // Validate request body
     const validation = insertOrderSchema.safeParse(req.body);
@@ -264,8 +264,8 @@ router.post('/api/orders', async (req, res) => {
   }
 });
 
-// PATCH /api/orders/:id - Update order
-router.patch('/api/orders/:id', async (req, res) => {
+// PATCH /api/production/orders/:id - Update order
+router.patch('/api/production/orders/:id', async (req, res) => {
   try {
     const orderId = req.params.id;
     if (!orderId || typeof orderId !== 'string') {
@@ -318,8 +318,8 @@ router.patch('/api/orders/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/orders/:id - Delete order
-router.delete('/api/orders/:id', async (req, res) => {
+// DELETE /api/production/orders/:id - Delete order
+router.delete('/api/production/orders/:id', async (req, res) => {
   try {
     const orderId = req.params.id;
     const success = await dao.deleteOrder(orderId);
