@@ -26,11 +26,14 @@ export class MetricsService {
     if (!order) return null;
 
     // Apply safe defaults for nullable fields
+    // Note: For OrderKPI, we must provide string values (not null) for required fields
+    // This matches the non-nullable OrderKPI interface requirements
     const qty = order.qty ?? 0;
     const estimatedMaterialCost = order.estimated_material_cost ?? 0;
     const sales = order.sales ?? 0;
     const stdTimePerUnit = order.std_time_per_unit ?? 0;
     const productName = order.product_name ?? '';
+    // Keep due_date as empty string for OrderKPI (required field), but track null state
     const dueDate = order.due_date ?? '';
     const status = order.status ?? 'pending';
     const customerName = order.customer_name ?? undefined;

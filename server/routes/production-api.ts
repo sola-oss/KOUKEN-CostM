@@ -118,11 +118,11 @@ router.get('/api/orders', async (req, res) => {
       has_shipping_fee: toBool(order.has_shipping_fee),
       is_amount_confirmed: toBool(order.is_amount_confirmed),
       is_invoiced: toBool(order.is_invoiced),
-      // Convert KPI dates to JST for consistency
+      // Convert KPI dates to JST for consistency, guard against empty strings
       kpi: order.kpi ? {
         ...order.kpi,
         start_date: order.kpi.start_date ? toJST(order.kpi.start_date) : undefined,
-        due_date: toJST(order.kpi.due_date),
+        due_date: order.kpi.due_date && order.kpi.due_date !== '' ? toJST(order.kpi.due_date) : '',
       } : null,
     }));
 
@@ -185,7 +185,7 @@ router.get('/api/orders/:id', async (req, res) => {
       kpi: result.kpi ? {
         ...result.kpi,
         start_date: result.kpi.start_date ? toJST(result.kpi.start_date) : undefined,
-        due_date: toJST(result.kpi.due_date)
+        due_date: result.kpi.due_date && result.kpi.due_date !== '' ? toJST(result.kpi.due_date) : ''
       } : null,
       procurements: result.procurements.map(p => ({
         ...p,

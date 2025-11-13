@@ -53,6 +53,12 @@ export class ProductionDAO {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
+    // Helper to convert boolean to SQLite (true→1, false→0, null/undefined→null)
+    const toBoolInt = (val: boolean | null | undefined): number | null => {
+      if (val === null || val === undefined) return null;
+      return val ? 1 : 0;
+    };
+
     stmt.run(
       orderId,
       // 新受注管理項目
@@ -61,11 +67,11 @@ export class ProductionDAO {
       orderData.manager ?? null,
       orderData.client_order_no ?? null,
       orderData.project_title ?? null,
-      // ステータスフラグ
-      orderData.is_delivered ? 1 : 0,
-      orderData.has_shipping_fee ? 1 : 0,
-      orderData.is_amount_confirmed ? 1 : 0,
-      orderData.is_invoiced ? 1 : 0,
+      // ステータスフラグ - preserve null
+      toBoolInt(orderData.is_delivered),
+      toBoolInt(orderData.has_shipping_fee),
+      toBoolInt(orderData.is_amount_confirmed),
+      toBoolInt(orderData.is_invoiced),
       // 日付情報
       orderData.due_date ?? null,
       orderData.delivery_date ?? null,
@@ -202,15 +208,21 @@ export class ProductionDAO {
       'std_time_per_unit', 'status', 'customer_name'
     ];
     
+    // Helper to convert boolean to SQLite (true→1, false→0, null/undefined→null)
+    const toBoolInt = (val: boolean | null | undefined): number | null => {
+      if (val === null || val === undefined) return null;
+      return val ? 1 : 0;
+    };
+
     // Filter to only allowed columns and convert boolean values
     const filteredUpdates: Record<string, any> = {};
     for (const key of Object.keys(updates)) {
       if (allowedColumns.includes(key)) {
         const value = updates[key as keyof InsertOrder];
-        // Convert boolean fields to integer (0/1) for SQLite
+        // Convert boolean fields to integer (0/1/null) for SQLite, preserving null
         if (key === 'is_delivered' || key === 'has_shipping_fee' || 
             key === 'is_amount_confirmed' || key === 'is_invoiced') {
-          filteredUpdates[key] = value ? 1 : 0;
+          filteredUpdates[key] = toBoolInt(value as boolean | null | undefined);
         } else {
           filteredUpdates[key] = value;
         }
