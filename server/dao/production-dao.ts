@@ -42,22 +42,52 @@ export class ProductionDAO {
     
     const stmt = this.db.prepare(`
       INSERT INTO orders (
-        order_id, product_name, qty, start_date, due_date, sales, estimated_material_cost, 
-        std_time_per_unit, status, customer_name, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        order_id, order_date, client_name, manager, client_order_no, project_title,
+        is_delivered, has_shipping_fee, is_amount_confirmed, is_invoiced,
+        due_date, delivery_date, confirmed_date,
+        estimated_amount, invoiced_amount, invoice_month,
+        subcontractor, processing_hours, note,
+        product_name, qty, start_date, sales, estimated_material_cost,
+        std_time_per_unit, status, customer_name,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
       orderId,
-      orderData.product_name,
-      orderData.qty,
-      orderData.start_date || null,
-      orderData.due_date,
-      orderData.sales,
-      orderData.estimated_material_cost,
-      orderData.std_time_per_unit,
-      orderData.status || 'pending',
-      orderData.customer_name || null,
+      // 新受注管理項目
+      orderData.order_date ?? null,
+      orderData.client_name ?? null,
+      orderData.manager ?? null,
+      orderData.client_order_no ?? null,
+      orderData.project_title ?? null,
+      // ステータスフラグ
+      orderData.is_delivered ? 1 : 0,
+      orderData.has_shipping_fee ? 1 : 0,
+      orderData.is_amount_confirmed ? 1 : 0,
+      orderData.is_invoiced ? 1 : 0,
+      // 日付情報
+      orderData.due_date ?? null,
+      orderData.delivery_date ?? null,
+      orderData.confirmed_date ?? null,
+      // 金額情報
+      orderData.estimated_amount ?? null,
+      orderData.invoiced_amount ?? null,
+      orderData.invoice_month ?? null,
+      // 作業情報
+      orderData.subcontractor ?? null,
+      orderData.processing_hours ?? null,
+      orderData.note ?? null,
+      // レガシー項目
+      orderData.product_name ?? null,
+      orderData.qty ?? null,
+      orderData.start_date ?? null,
+      orderData.sales ?? null,
+      orderData.estimated_material_cost ?? null,
+      orderData.std_time_per_unit ?? null,
+      orderData.status ?? 'pending',
+      orderData.customer_name ?? null,
+      // システム管理
       now,
       now
     );
@@ -71,8 +101,55 @@ export class ProductionDAO {
     q?: string;
     page?: number;
     pageSize?: number;
-  } = {}): Promise<{ orders: OrderKPI[], total: number }> {
-    return this.metricsService.calculateOrderKPIs(options);
+  } = {}): Promise<{ orders: Array<Order & { kpi: OrderKPI | null }>, total: number }> {
+    const { from, to, q, page = 1, pageSize = 20 } = options;
+    
+    // Build WHERE clause
+    let whereConditions: string[] = [];
+    let params: any[] = [];
+    
+    if (from) {
+      whereConditions.push('order_date >= ?');
+      params.push(from);
+    }
+    
+    if (to) {
+      whereConditions.push('order_date <= ?');
+      params.push(to);
+    }
+    
+    if (q) {
+      whereConditions.push('(client_name LIKE ? OR project_title LIKE ? OR client_order_no LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    
+    // Get total count
+    const totalQuery = `SELECT COUNT(*) as count FROM orders ${whereClause}`;
+    const totalResult = this.db.prepare(totalQuery).get(params) as { count: number };
+    
+    // Get paginated orders
+    const offset = (page - 1) * pageSize;
+    const ordersQuery = `
+      SELECT * FROM orders 
+      ${whereClause}
+      ORDER BY order_date DESC, order_id DESC
+      LIMIT ? OFFSET ?
+    `;
+    
+    const orders = this.db.prepare(ordersQuery).all([...params, pageSize, offset]) as Order[];
+    
+    // Attach KPI to each order
+    const ordersWithKPI = orders.map(order => ({
+      ...order,
+      kpi: this.metricsService.calculateOrderKPI(order.order_id)
+    }));
+
+    return {
+      orders: ordersWithKPI,
+      total: totalResult.count
+    };
   }
 
   async getOrderById(orderId: string): Promise<{
@@ -113,13 +190,30 @@ export class ProductionDAO {
   }
 
   async updateOrder(orderId: string, updates: Partial<InsertOrder>): Promise<boolean> {
-    const allowedColumns = ['product_name', 'qty', 'start_date', 'due_date', 'sales', 'estimated_material_cost', 'std_time_per_unit', 'status', 'customer_name'];
+    const allowedColumns = [
+      // 新受注管理項目
+      'order_date', 'client_name', 'manager', 'client_order_no', 'project_title',
+      'is_delivered', 'has_shipping_fee', 'is_amount_confirmed', 'is_invoiced',
+      'due_date', 'delivery_date', 'confirmed_date',
+      'estimated_amount', 'invoiced_amount', 'invoice_month',
+      'subcontractor', 'processing_hours', 'note',
+      // レガシー項目
+      'product_name', 'qty', 'start_date', 'sales', 'estimated_material_cost',
+      'std_time_per_unit', 'status', 'customer_name'
+    ];
     
-    // Filter to only allowed columns
+    // Filter to only allowed columns and convert boolean values
     const filteredUpdates: Record<string, any> = {};
     for (const key of Object.keys(updates)) {
       if (allowedColumns.includes(key)) {
-        filteredUpdates[key] = updates[key as keyof InsertOrder];
+        const value = updates[key as keyof InsertOrder];
+        // Convert boolean fields to integer (0/1) for SQLite
+        if (key === 'is_delivered' || key === 'has_shipping_fee' || 
+            key === 'is_amount_confirmed' || key === 'is_invoiced') {
+          filteredUpdates[key] = value ? 1 : 0;
+        } else {
+          filteredUpdates[key] = value;
+        }
       }
     }
     

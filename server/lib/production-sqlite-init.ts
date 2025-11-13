@@ -33,27 +33,18 @@ export class ProductionSqliteInitializer {
       db.pragma('foreign_keys = ON');
       
       // Read and execute migration
-      const migrationPath = join(__dirname, '../migrations/002_production_mvp.sql');
+      const migrationPath = join(__dirname, '../migrations/001_production_schema.sql');
       const migrationSQL = readFileSync(migrationPath, 'utf8');
       
-      // Execute migration in transaction
-      const transaction = db.transaction(() => {
-        // Split migration into individual statements and execute
-        const statements = migrationSQL
-          .split(';')
-          .map(stmt => stmt.trim())
-          .filter(stmt => stmt.length > 0);
-        
-        for (const statement of statements) {
-          try {
-            db.exec(statement);
-          } catch (error) {
-            console.log(`Skipping statement (may already exist): ${statement.substring(0, 50)}...`);
-          }
+      // Execute migration directly (contains full schema)
+      try {
+        db.exec(migrationSQL);
+      } catch (error: any) {
+        if (!error.message?.includes('already exists')) {
+          throw error;
         }
-      });
-      
-      transaction();
+        console.log('Database tables already exist, skipping schema creation');
+      }
       
       // Verify tables exist
       const tables = db.prepare(`
@@ -131,8 +122,16 @@ export class ProductionSqliteInitializer {
       ];
       
       const insertOrder = db.prepare(`
-        INSERT INTO orders (order_id, product_name, qty, due_date, sales, estimated_material_cost, std_time_per_unit, status, customer_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO orders (
+          order_id, order_date, client_name, manager, client_order_no, project_title,
+          is_delivered, has_shipping_fee, is_amount_confirmed, is_invoiced,
+          due_date, delivery_date, confirmed_date,
+          estimated_amount, invoiced_amount, invoice_month,
+          subcontractor, processing_hours, note,
+          product_name, qty, start_date, sales, estimated_material_cost,
+          std_time_per_unit, status, customer_name,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const orderIds: string[] = [];
@@ -140,14 +139,39 @@ export class ProductionSqliteInitializer {
       for (const order of sampleOrders) {
         insertOrder.run(
           order.order_id,
+          // 新受注管理項目（サンプルデータ用の初期値）
+          new Date().toISOString().split('T')[0], // order_date
+          null, // client_name
+          null, // manager
+          null, // client_order_no
+          order.product_name, // project_title
+          // ステータスフラグ
+          order.status === 'completed' ? 1 : 0, // is_delivered
+          0, // has_shipping_fee
+          order.status === 'completed' ? 1 : 0, // is_amount_confirmed
+          order.status === 'completed' ? 1 : 0, // is_invoiced
+          // 日付情報
+          order.due_date, // due_date
+          order.status === 'completed' ? new Date().toISOString().split('T')[0] : null, // delivery_date
+          order.status === 'completed' ? new Date().toISOString().split('T')[0] : null, // confirmed_date
+          // 金額情報
+          order.sales, // estimated_amount
+          order.status === 'completed' ? order.sales : null, // invoiced_amount
+          order.status === 'completed' ? new Date().toISOString().substring(0, 7) : null, // invoice_month (YYYY-MM)
+          // 作業情報
+          null, // subcontractor
+          null, // processing_hours
+          null, // note
+          // レガシー項目
           order.product_name,
           order.qty,
-          order.due_date,
+          null, // start_date
           order.sales,
           order.estimated_material_cost,
           order.std_time_per_unit,
           order.status,
           order.customer_name,
+          // システム管理
           now,
           now
         );

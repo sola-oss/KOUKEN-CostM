@@ -116,17 +116,3 @@ CREATE INDEX IF NOT EXISTS idx_tasks_planned_start ON tasks(planned_start);
 CREATE INDEX IF NOT EXISTS idx_work_logs_date ON work_logs(work_date);
 CREATE INDEX IF NOT EXISTS idx_work_logs_order ON work_logs(order_id);
 CREATE INDEX IF NOT EXISTS idx_work_logs_order_no ON work_logs(order_no);
-
--- Migration: Add start_date column to orders table
-ALTER TABLE orders ADD COLUMN start_date TEXT;
-
--- Migration: Backfill start_date with earliest task start date, or created_at if no tasks
-UPDATE orders 
-SET start_date = COALESCE(
-  (SELECT MIN(planned_start) FROM tasks WHERE tasks.order_id = orders.order_id),
-  created_at
-)
-WHERE start_date IS NULL;
-
--- Create index for start_date after column is added
-CREATE INDEX IF NOT EXISTS idx_orders_start ON orders(start_date);

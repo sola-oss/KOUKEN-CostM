@@ -9,21 +9,56 @@ import { z } from "zod";
 // 受注 (Orders)
 export const orders = sqliteTable("orders", {
   order_id: text("order_id").primaryKey(),       // 受注番号（文字列対応）
-  product_name: text("product_name").notNull(),  // 製品名
-  qty: real("qty").notNull(),                    // 数量
-  start_date: text("start_date"),                // 開始予定日（UTC ISO、任意）
-  due_date: text("due_date").notNull(),          // 納期（UTC ISO）
-  sales: real("sales").notNull(),               // 売上（見込み含む）
-  estimated_material_cost: real("estimated_material_cost").notNull(), // 見込み材料費（概算）
-  std_time_per_unit: real("std_time_per_unit").notNull(),   // 標準作業時間[h/個]
-  status: text("status", { enum: ['pending', 'in_progress', 'completed'] }).notNull().default('pending'), // ステータス
-  customer_name: text("customer_name"),          // 顧客名（任意）
+  
+  // 新受注管理項目（2025-01拡張）
+  order_date: text("order_date"),                // 受注日（YYYY-MM-DD）
+  client_name: text("client_name"),              // 客先
+  manager: text("manager"),                      // 担当者
+  client_order_no: text("client_order_no"),      // 客先注番
+  project_title: text("project_title"),          // 件名
+  
+  // ステータスフラグ（チェックマーク形式）
+  is_delivered: integer("is_delivered", { mode: 'boolean' }).default(false),        // 納品完了 ✱
+  has_shipping_fee: integer("has_shipping_fee", { mode: 'boolean' }).default(false), // 送料有り ＃
+  is_amount_confirmed: integer("is_amount_confirmed", { mode: 'boolean' }).default(false), // 金額決定済み -
+  is_invoiced: integer("is_invoiced", { mode: 'boolean' }).default(false),          // 請求済み +
+  
+  // 日付情報
+  due_date: text("due_date"),                    // 納期（YYYY-MM-DD）
+  delivery_date: text("delivery_date"),          // 納品日（YYYY-MM-DD）
+  confirmed_date: text("confirmed_date"),        // 確定日（YYYY-MM-DD）
+  
+  // 金額情報
+  estimated_amount: real("estimated_amount"),    // 見積金額
+  invoiced_amount: real("invoiced_amount"),      // 請求金額
+  invoice_month: text("invoice_month"),          // 請求月（YYYY-MM形式）
+  
+  // 作業情報
+  subcontractor: text("subcontractor"),          // 外注自社
+  processing_hours: real("processing_hours"),    // 加工時間
+  
+  // その他
+  note: text("note"),                            // 備考
+  
+  // レガシー項目（互換性のため残す、将来的に廃止予定）
+  product_name: text("product_name"),            // → project_title に移行
+  qty: real("qty"),                              // 数量（他テーブルで使用中）
+  start_date: text("start_date"),                // 開始予定日（KPI計算で使用中）
+  sales: real("sales"),                          // → estimated_amount に移行
+  estimated_material_cost: real("estimated_material_cost"), // 見込み材料費（KPI計算で使用中）
+  std_time_per_unit: real("std_time_per_unit"),  // 標準工数（KPI計算で使用中）
+  status: text("status", { enum: ['pending', 'in_progress', 'completed'] }).default('pending'), // ワークフローステータス
+  customer_name: text("customer_name"),          // → client_name に移行
+  
+  // システム管理
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),
 }, (table) => ({
   dueDateIdx: index("idx_orders_due").on(table.due_date),
   statusIdx: index("idx_orders_status").on(table.status),
   startDateIdx: index("idx_orders_start").on(table.start_date),
+  orderDateIdx: index("idx_orders_order_date").on(table.order_date),
+  invoiceMonthIdx: index("idx_orders_invoice_month").on(table.invoice_month),
 }));
 
 // 手配 (Procurements) - 購買(purchase) と 製造(manufacture) を統合
@@ -128,10 +163,46 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   updated_at: true,
 }).extend({
   order_id: z.string().optional(),
+  
+  // 新受注管理項目
+  order_date: z.string().optional(),
+  client_name: z.string().optional(),
+  manager: z.string().optional(),
+  client_order_no: z.string().optional(),
+  project_title: z.string().optional(),
+  
+  // ステータスフラグ
+  is_delivered: z.boolean().default(false),
+  has_shipping_fee: z.boolean().default(false),
+  is_amount_confirmed: z.boolean().default(false),
+  is_invoiced: z.boolean().default(false),
+  
+  // 日付情報
+  due_date: z.string().optional(),
+  delivery_date: z.string().optional(),
+  confirmed_date: z.string().optional(),
+  
+  // 金額情報
+  estimated_amount: z.coerce.number().optional(),
+  invoiced_amount: z.coerce.number().optional(),
+  invoice_month: z.string().optional(),
+  
+  // 作業情報
+  subcontractor: z.string().optional(),
+  processing_hours: z.coerce.number().optional(),
+  
+  // その他
+  note: z.string().optional(),
+  
+  // レガシー項目（互換性）
+  product_name: z.string().optional(),
+  qty: z.coerce.number().optional(),
   start_date: z.string().optional(),
-  due_date: z.string().min(1, "納期は必須です"),
+  sales: z.coerce.number().optional(),
+  estimated_material_cost: z.coerce.number().optional(),
+  std_time_per_unit: z.coerce.number().optional(),
   status: z.enum(['pending', 'in_progress', 'completed']).default('pending'),
-  customer_name: z.string().optional()
+  customer_name: z.string().optional(),
 });
 
 export const insertProcurementSchema = createInsertSchema(procurements).omit({
@@ -201,7 +272,14 @@ export const updateWorkLogSchema = insertWorkLogSchema.partial();
 
 // Column whitelists for safe updates
 export const ALLOWED_ORDER_UPDATE_COLUMNS = [
-  'product_name', 'qty', 'start_date', 'due_date', 'sales', 'estimated_material_cost', 
+  // 新受注管理項目
+  'order_date', 'client_name', 'manager', 'client_order_no', 'project_title',
+  'is_delivered', 'has_shipping_fee', 'is_amount_confirmed', 'is_invoiced',
+  'due_date', 'delivery_date', 'confirmed_date',
+  'estimated_amount', 'invoiced_amount', 'invoice_month',
+  'subcontractor', 'processing_hours', 'note',
+  // レガシー項目（互換性のため残す）
+  'product_name', 'qty', 'start_date', 'sales', 'estimated_material_cost', 
   'std_time_per_unit', 'status', 'customer_name'
 ] as const;
 

@@ -96,11 +96,34 @@ router.get('/api/orders', async (req, res) => {
 
     const result = await dao.getOrders(options);
 
-    // Convert dates to JST for response
+    // Helper to convert SQLite boolean (0/1/null) to JavaScript boolean (true/false/null)
+    const toBool = (val: any): boolean | null => {
+      if (val === null || val === undefined) return null;
+      return val === 1 || val === true;
+    };
+
+    // Convert dates to JST and booleans from SQLite integers for response
     const ordersWithJST = result.orders.map(order => ({
       ...order,
-      start_date: order.start_date ? toJST(order.start_date) : order.start_date,
-      due_date: toJST(order.due_date)
+      // Convert date fields to JST
+      order_date: order.order_date ? toJST(order.order_date) : null,
+      start_date: order.start_date ? toJST(order.start_date) : null,
+      due_date: order.due_date ? toJST(order.due_date) : null,
+      delivery_date: order.delivery_date ? toJST(order.delivery_date) : null,
+      confirmed_date: order.confirmed_date ? toJST(order.confirmed_date) : null,
+      created_at: toJST(order.created_at),
+      updated_at: toJST(order.updated_at),
+      // Convert boolean flags from SQLite integers (0/1/null) to actual booleans, preserving null
+      is_delivered: toBool(order.is_delivered),
+      has_shipping_fee: toBool(order.has_shipping_fee),
+      is_amount_confirmed: toBool(order.is_amount_confirmed),
+      is_invoiced: toBool(order.is_invoiced),
+      // Convert KPI dates to JST for consistency
+      kpi: order.kpi ? {
+        ...order.kpi,
+        start_date: order.kpi.start_date ? toJST(order.kpi.start_date) : undefined,
+        due_date: toJST(order.kpi.due_date),
+      } : null,
     }));
 
     res.json({
@@ -135,17 +158,33 @@ router.get('/api/orders/:id', async (req, res) => {
       });
     }
 
-    // Convert dates to JST
+    // Helper to convert SQLite boolean (0/1/null) to JavaScript boolean (true/false/null)
+    const toBool = (val: any): boolean | null => {
+      if (val === null || val === undefined) return null;
+      return val === 1 || val === true;
+    };
+
+    // Convert dates to JST and booleans for response
     const response = {
       order: {
         ...result.order,
-        start_date: result.order.start_date ? toJST(result.order.start_date) : result.order.start_date,
-        due_date: toJST(result.order.due_date),
+        // Convert date fields to JST
+        order_date: result.order.order_date ? toJST(result.order.order_date) : null,
+        start_date: result.order.start_date ? toJST(result.order.start_date) : null,
+        due_date: result.order.due_date ? toJST(result.order.due_date) : null,
+        delivery_date: result.order.delivery_date ? toJST(result.order.delivery_date) : null,
+        confirmed_date: result.order.confirmed_date ? toJST(result.order.confirmed_date) : null,
         created_at: toJST(result.order.created_at),
-        updated_at: toJST(result.order.updated_at)
+        updated_at: toJST(result.order.updated_at),
+        // Convert boolean flags
+        is_delivered: toBool(result.order.is_delivered),
+        has_shipping_fee: toBool(result.order.has_shipping_fee),
+        is_amount_confirmed: toBool(result.order.is_amount_confirmed),
+        is_invoiced: toBool(result.order.is_invoiced),
       },
       kpi: result.kpi ? {
         ...result.kpi,
+        start_date: result.kpi.start_date ? toJST(result.kpi.start_date) : undefined,
         due_date: toJST(result.kpi.due_date)
       } : null,
       procurements: result.procurements.map(p => ({

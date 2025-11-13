@@ -17,7 +17,7 @@ export class MetricsService {
   /**
    * Calculate KPI for a single order
    */
-  calculateOrderKPI(orderId: number): OrderKPI | null {
+  calculateOrderKPI(orderId: string): OrderKPI | null {
     // Get order details
     const order = this.db.prepare(`
       SELECT * FROM orders WHERE order_id = ?
@@ -25,8 +25,18 @@ export class MetricsService {
 
     if (!order) return null;
 
+    // Apply safe defaults for nullable fields
+    const qty = order.qty ?? 0;
+    const estimatedMaterialCost = order.estimated_material_cost ?? 0;
+    const sales = order.sales ?? 0;
+    const stdTimePerUnit = order.std_time_per_unit ?? 0;
+    const productName = order.product_name ?? '';
+    const dueDate = order.due_date ?? '';
+    const status = order.status ?? 'pending';
+    const customerName = order.customer_name ?? undefined;
+
     // Calculate material cost
-    const baseMaterialCost = order.qty * order.estimated_material_cost;
+    const baseMaterialCost = qty * estimatedMaterialCost;
     
     // Add received purchases material cost
     const purchaseMaterialCost = this.db.prepare(`
@@ -51,30 +61,30 @@ export class MetricsService {
     `).get(orderId) as { total: number };
 
     const totalActualHours = manufactureHours.total + workerLogHours.total;
-    const actualTimePerUnit = order.qty > 0 ? totalActualHours / order.qty : 0;
+    const actualTimePerUnit = qty > 0 ? totalActualHours / qty : 0;
 
     // Calculate labor cost
     const defaultWageRate = 2000; // システム設定のデフォルト賃金レート（円/時）
     const laborCost = defaultWageRate * totalActualHours;
 
     // Calculate gross profit
-    const grossProfit = order.sales - (materialCost + laborCost);
+    const grossProfit = sales - (materialCost + laborCost);
 
     // Calculate efficiency variance
-    const variancePct = order.std_time_per_unit > 0 
-      ? ((actualTimePerUnit - order.std_time_per_unit) / order.std_time_per_unit) * 100
+    const variancePct = stdTimePerUnit > 0 
+      ? ((actualTimePerUnit - stdTimePerUnit) / stdTimePerUnit) * 100
       : 0;
 
     return {
       order_id: order.order_id,
-      product_name: order.product_name,
-      qty: order.qty,
-      due_date: order.due_date,
-      sales: order.sales,
-      estimated_material_cost: order.estimated_material_cost,
-      std_time_per_unit: order.std_time_per_unit,
-      status: order.status,
-      customer_name: order.customer_name,
+      product_name: productName,
+      qty: qty,
+      due_date: dueDate,
+      sales: sales,
+      estimated_material_cost: estimatedMaterialCost,
+      std_time_per_unit: stdTimePerUnit,
+      status: status,
+      customer_name: customerName,
       material_cost: materialCost,
       labor_cost: laborCost,
       gross_profit: grossProfit,
@@ -129,7 +139,7 @@ export class MetricsService {
       LIMIT ? OFFSET ?
     `;
     
-    const orderIds = this.db.prepare(ordersQuery).all([...params, pageSize, offset]) as { order_id: number }[];
+    const orderIds = this.db.prepare(ordersQuery).all([...params, pageSize, offset]) as { order_id: string }[];
     
     // Calculate KPIs for each order
     const orders = orderIds
@@ -167,7 +177,7 @@ export class MetricsService {
     // Get all relevant order IDs
     const orderIds = this.db.prepare(`
       SELECT order_id FROM orders ${whereClause}
-    `).all(params) as { order_id: number }[];
+    `).all(params) as { order_id: string }[];
 
     let totalSales = 0;
     let totalGrossProfit = 0;
@@ -255,10 +265,11 @@ export class MetricsService {
     `).all(params) as Order[];
 
     for (const order of orders) {
+      if (!order.due_date) continue; // Skip orders without due date
       const isOverdue = new Date(order.due_date) < new Date();
       events.push({
         id: `order-${order.order_id}`,
-        title: `納期: ${order.product_name}`,
+        title: `納期: ${order.product_name ?? ''}`,
         date: order.due_date,
         type: 'due_date',
         status: isOverdue ? 'overdue' : 'pending',
@@ -320,7 +331,7 @@ export class MetricsService {
   /**
    * Helper method to get standard time per unit for an order
    */
-  private getOrderStdTimePerUnit(orderId: number): number {
+  private getOrderStdTimePerUnit(orderId: string): number {
     const result = this.db.prepare(`
       SELECT std_time_per_unit FROM orders WHERE order_id = ?
     `).get(orderId) as { std_time_per_unit: number } | undefined;

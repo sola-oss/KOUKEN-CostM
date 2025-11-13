@@ -34,28 +34,84 @@ export async function apiClient<T = any>(
 // Order Types
 export interface Order {
   order_id: string;
-  product_name: string;
-  qty: number;
-  start_date: string;
-  due_date: string;
-  sales: number;
-  estimated_material_cost: number;
-  std_time_per_unit: number;
-  status: 'pending' | 'in_progress' | 'completed';
-  customer_name?: string;
+  // 新受注管理フィールド (19 fields)
+  order_date: string | null;
+  client_name: string | null;
+  manager: string | null;
+  client_order_no: string | null;
+  project_title: string | null;
+  is_delivered: boolean | null;
+  has_shipping_fee: boolean | null;
+  is_amount_confirmed: boolean | null;
+  is_invoiced: boolean | null;
+  due_date: string | null;
+  delivery_date: string | null;
+  confirmed_date: string | null;
+  estimated_amount: number | null;
+  invoiced_amount: number | null;
+  invoice_month: string | null;
+  subcontractor: string | null;
+  processing_hours: number | null;
+  note: string | null;
+  // レガシーフィールド (KPI計算用)
+  product_name: string | null;
+  qty: number | null;
+  start_date: string | null;
+  sales: number | null;
+  estimated_material_cost: number | null;
+  std_time_per_unit: number | null;
+  status: 'pending' | 'in_progress' | 'completed' | null;
+  customer_name: string | null;
+  // システム管理フィールド
   created_at: string;
   updated_at: string;
+  // KPI
+  kpi?: {
+    order_id: string;
+    product_name: string;
+    qty: number;
+    due_date: string;
+    sales: number;
+    estimated_material_cost: number;
+    std_time_per_unit: number;
+    status: 'pending' | 'in_progress' | 'completed';
+    customer_name?: string;
+    material_cost: number;
+    labor_cost: number;
+    gross_profit: number;
+    actual_time_per_unit: number;
+    variance_pct: number;
+  } | null;
 }
 
 export interface OrderPayload {
   order_id?: string;
-  product_name: string;
-  qty: number;
-  start_date: string;
-  due_date: string;
-  sales: number;
-  estimated_material_cost: number;
-  std_time_per_unit: number;
+  // 新受注管理フィールド
+  order_date?: string;
+  client_name?: string;
+  manager?: string;
+  client_order_no?: string;
+  project_title?: string;
+  is_delivered?: boolean;
+  has_shipping_fee?: boolean;
+  is_amount_confirmed?: boolean;
+  is_invoiced?: boolean;
+  due_date?: string;
+  delivery_date?: string;
+  confirmed_date?: string;
+  estimated_amount?: number;
+  invoiced_amount?: number;
+  invoice_month?: string;
+  subcontractor?: string;
+  processing_hours?: number;
+  note?: string;
+  // レガシーフィールド
+  product_name?: string;
+  qty?: number;
+  start_date?: string;
+  sales?: number;
+  estimated_material_cost?: number;
+  std_time_per_unit?: number;
   status?: 'pending' | 'in_progress' | 'completed';
   customer_name?: string;
 }
