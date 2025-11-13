@@ -12,6 +12,39 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 13, 2025 - Order Management CRUD Form Implementation (Stage 2)
+- **Feature**: Implemented comprehensive 19-field CRUD form dialog for order management with professional UI/UX
+- **Implementation Details**:
+  - Dialog-based form design with 4 logical sections: 基本情報 (Basic Info), スケジュール (Schedule), 金額情報 (Amount Info), 管理メモ・ステータス (Management Notes & Status)
+  - 2-column desktop layout with responsive single-column mobile layout
+  - React Hook Form with Zod validation for type-safe form handling
+  - Required fields: client_name (客先名), project_title (件名), due_date (納期)
+  - Boolean status fields rendered as checkboxes: is_delivered, has_shipping_fee, is_amount_confirmed, is_invoiced
+  - String→Number/Null conversions for numeric fields (invoiced_amount, processing_hours)
+  - Pre-population support for edit mode with proper type handling
+- **CRUD Operations**:
+  - Create: POST /api/production/orders with form validation and auto-generated order_id
+  - Update: PATCH /api/production/orders/${id} with partial update support (order_id excluded from updates)
+  - Delete: DELETE /api/production/orders/${id} with confirmation dialog
+  - All mutations use TanStack Query with proper cache invalidation by queryKey
+  - Toast notifications for success/error feedback
+- **API Architecture**:
+  - Unified all endpoints to /api/production/orders/* pattern for consistency
+  - Fixed endpoint mismatch between frontend and backend (was /api/orders)
+  - Proper Response.json() parsing for mutation responses
+  - JST/UTC timezone conversion for date fields
+- **Testing**: End-to-end testing verified:
+  - Order creation with POST 201 response
+  - Form validation and required field enforcement
+  - Success toast notifications and table updates
+  - Search functionality with client name filter
+  - Amount display formatting (¥200,000)
+- **Technical Stack**:
+  - Frontend: React Hook Form + Zod validation, Shadcn/ui Dialog and Form components
+  - Backend: SQLite with proper null-safe handling, Zod validation schema
+  - State Management: TanStack Query v5 with cache invalidation
+- **UX Notes**: Optional string fields require empty strings instead of nulls for server validation
+
 ### November 7, 2025 - Order ID Edit Restriction Implementation
 - **Feature**: Implemented order_id field edit restriction to prevent modification after registration
 - **Implementation Details**:
