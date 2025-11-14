@@ -188,16 +188,36 @@ export default function GanttChart() {
       itemsByOrder.get(item.order_id)!.push(item);
     });
 
-    // Create hierarchical structure - sorted by numeric order_id
-    Array.from(itemsByOrder.entries())
-      .sort(([a], [b]) => Number(a) - Number(b)) // Sort by order_id numerically
-      .forEach(([orderId, items]) => {
-        if (items.length === 0) return;
+    // Get all selected orders with valid date range
+    const rangeStart = parseISO(dateRange.start);
+    const rangeEnd = parseISO(dateRange.end);
+    
+    const ordersToDisplay = orders.filter(order => {
+      // Filter by selected orders
+      if (!selectedOrderIds.has(String(order.order_id))) {
+        return false;
+      }
+      
+      // Filter by date range (order_date to due_date)
+      if (order.order_date && order.due_date) {
+        const orderStart = parseISO(order.order_date);
+        const orderEnd = parseISO(order.due_date);
+        return orderStart <= rangeEnd && orderEnd >= rangeStart;
+      }
+      
+      return false;
+    });
 
-        const order = ordersMap.get(orderId);
-        const orderName = order?.product_name || '(名称不明)';
+    // Create hierarchical structure - sorted by numeric order_id
+    ordersToDisplay
+      .sort((a, b) => Number(a.order_id) - Number(b.order_id))
+      .forEach(order => {
+        const orderId = String(order.order_id);
+        const orderName = order.product_name || '(名称不明)';
+        const items = itemsByOrder.get(orderId) || [];
         
         // Add header row (transparent bar for position)
+        const headerStart = order.order_date || order.due_date || format(new Date(), 'yyyy-MM-dd');
         rows.push({
           id: `header-${orderId}`,
           type: 'header',
@@ -205,14 +225,14 @@ export default function GanttChart() {
           order_name: orderName,
           row_label: `案件${orderId}：${orderName}`,
           row_order: rowOrder++,
-          start: items[0].start,
-          end: items[0].start, // Same day for minimal bar
+          start: headerStart,
+          end: headerStart, // Same day for minimal bar
           status: 'header',
           isHeader: true
         });
 
-        // Add order period row (order_date to due_date)
-        if (order && order.order_date && order.due_date) {
+        // Add order period row (order_date to due_date) - always display if dates exist
+        if (order.order_date && order.due_date) {
           rows.push({
             id: `order-period-${orderId}`,
             type: 'order_period',
@@ -222,7 +242,7 @@ export default function GanttChart() {
             row_order: rowOrder++,
             start: order.order_date,
             end: order.due_date,
-            status: order.status,
+            status: order.status || 'not_started',
             isHeader: false
           });
         }
@@ -270,7 +290,7 @@ export default function GanttChart() {
       });
 
     return rows;
-  }, [filteredItems, ordersMap]);
+  }, [filteredItems, ordersMap, orders, selectedOrderIds, dateRange]);
 
   // Get unique assignees
   const assignees = useMemo(() => {
