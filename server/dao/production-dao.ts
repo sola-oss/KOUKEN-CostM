@@ -104,11 +104,11 @@ export class ProductionDAO {
   async getOrders(options: {
     from?: string;
     to?: string;
-    q?: string;
+    search?: string;
     page?: number;
     pageSize?: number;
   } = {}): Promise<{ orders: Array<Order & { kpi: OrderKPI | null }>, total: number }> {
-    const { from, to, q, page = 1, pageSize = 20 } = options;
+    const { from, to, search, page = 1, pageSize = 20 } = options;
     
     // Build WHERE clause
     let whereConditions: string[] = [];
@@ -124,9 +124,9 @@ export class ProductionDAO {
       params.push(to);
     }
     
-    if (q) {
-      whereConditions.push('(client_name LIKE ? OR project_title LIKE ? OR client_order_no LIKE ?)');
-      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    if (search) {
+      whereConditions.push('(order_id LIKE ? OR client_name LIKE ? OR project_title LIKE ? OR client_order_no LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';

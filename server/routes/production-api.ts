@@ -81,7 +81,7 @@ router.get('/api/production/orders', async (req, res) => {
     const { 
       from, 
       to, 
-      q, 
+      search, 
       page = '1', 
       page_size = '20' 
     } = req.query as Record<string, string>;
@@ -89,7 +89,7 @@ router.get('/api/production/orders', async (req, res) => {
     const options = {
       from: from ? toUTC(from) : undefined,
       to: to ? toUTC(to) : undefined,
-      q,
+      search,
       page: parseInt(page),
       pageSize: parseInt(page_size)
     };

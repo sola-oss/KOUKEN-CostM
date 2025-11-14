@@ -91,8 +91,8 @@ function parseExcelRow(row: any[]): ExcelRow | null {
     manager: cleanString(row[8]),
     client_order_no: cleanString(row[9]),
     project_title,
-    due_date: cleanString(row[11]) ? null : null, // "納期" is a placeholder
-    delivery_date: cleanString(row[12]) ? null : null, // "納品日" is a placeholder
+    due_date: (typeof row[11] === 'number') ? excelDateToJSDate(row[11]) : null,
+    delivery_date: (typeof row[12] === 'number') ? excelDateToJSDate(row[12]) : null,
     estimated_amount: cleanNumber(row[13]),
     invoiced_amount: cleanNumber(row[14]),
     invoice_month: formatInvoiceMonth(row[15]),
