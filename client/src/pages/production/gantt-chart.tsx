@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { GanttChart as GanttChartIcon, Calendar, CheckSquare, Square } from "lucide-react";
 import { listTasks, listProcurements, listOrders, updateTask, updateProcurement, type Task, type Procurement, type Order } from "@/shared/production-api";
-import { format, parseISO, addDays, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
+import { format, parseISO, addDays, startOfMonth, endOfMonth, differenceInDays, subYears, addYears } from "date-fns";
 import { ja } from "date-fns/locale";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -54,8 +54,8 @@ export default function GanttChart() {
   const [selectedAssignee, setSelectedAssignee] = useState<string>("all");
   const [displayMode, setDisplayMode] = useState<'both' | 'tasks' | 'procurements'>('both');
   const [dateRange, setDateRange] = useState({
-    start: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-    end: format(endOfMonth(addDays(new Date(), 30)), 'yyyy-MM-dd')
+    start: format(subYears(new Date(), 1), 'yyyy-MM-dd'),
+    end: format(addYears(new Date(), 1), 'yyyy-MM-dd')
   });
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
