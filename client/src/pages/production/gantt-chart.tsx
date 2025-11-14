@@ -211,8 +211,8 @@ export default function GanttChart() {
           isHeader: true
         });
 
-        // Add order period row (start_date to due_date)
-        if (order && order.start_date && order.due_date) {
+        // Add order period row (order_date to due_date)
+        if (order && order.order_date && order.due_date) {
           rows.push({
             id: `order-period-${orderId}`,
             type: 'order_period',
@@ -220,7 +220,7 @@ export default function GanttChart() {
             order_name: orderName,
             row_label: `　├ 案件期間`,
             row_order: rowOrder++,
-            start: order.start_date,
+            start: order.order_date,
             end: order.due_date,
             status: order.status,
             isHeader: false
