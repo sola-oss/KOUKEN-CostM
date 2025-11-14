@@ -39,7 +39,15 @@ try {
 }
 
 // UTC/JST conversion helpers
-const toUTC = (dateStr: string): string => {
+const toUTC = (dateStr: string | null | undefined): string | null => {
+  // Handle empty/null/undefined values
+  if (!dateStr || dateStr === '') return null;
+  
+  // For YYYY-MM-DD format (from HTML date inputs), treat as JST midnight
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return dayjs.tz(dateStr, 'Asia/Tokyo').utc().toISOString();
+  }
+  // For ISO datetime strings, parse and convert
   return dayjs(dateStr).tz('Asia/Tokyo').utc().toISOString();
 };
 
@@ -226,10 +234,14 @@ router.post('/api/production/orders', async (req, res) => {
       });
     }
 
+    // Convert date fields, handling empty strings
     const orderData = {
       ...validation.data,
-      start_date: validation.data.start_date ? toUTC(validation.data.start_date) : undefined,
-      due_date: toUTC(validation.data.due_date)
+      order_date: validation.data.order_date && validation.data.order_date !== '' ? toUTC(validation.data.order_date) : undefined,
+      start_date: validation.data.start_date && validation.data.start_date !== '' ? toUTC(validation.data.start_date) : undefined,
+      due_date: validation.data.due_date && validation.data.due_date !== '' ? toUTC(validation.data.due_date) : undefined,
+      delivery_date: validation.data.delivery_date && validation.data.delivery_date !== '' ? toUTC(validation.data.delivery_date) : undefined,
+      confirmed_date: validation.data.confirmed_date && validation.data.confirmed_date !== '' ? toUTC(validation.data.confirmed_date) : undefined,
     };
 
     const orderId = await dao.createOrder(orderData);
@@ -288,12 +300,32 @@ router.patch('/api/production/orders/:id', async (req, res) => {
       return res.status(400).json({ error: 'No valid updates provided' });
     }
 
-    // Convert dates to UTC if provided
-    if (updates.start_date) {
-      updates.start_date = toUTC(updates.start_date);
+    // Convert date fields to UTC if provided, handling empty strings
+    // Empty strings are converted to null to allow clearing existing dates
+    if (updates.order_date && updates.order_date !== '') {
+      updates.order_date = toUTC(updates.order_date);
+    } else if (updates.order_date === '') {
+      updates.order_date = null as any;  // Explicitly set to null to clear the field
     }
-    if (updates.due_date) {
+    if (updates.start_date && updates.start_date !== '') {
+      updates.start_date = toUTC(updates.start_date);
+    } else if (updates.start_date === '') {
+      updates.start_date = null as any;
+    }
+    if (updates.due_date && updates.due_date !== '') {
       updates.due_date = toUTC(updates.due_date);
+    } else if (updates.due_date === '') {
+      updates.due_date = null as any;
+    }
+    if (updates.delivery_date && updates.delivery_date !== '') {
+      updates.delivery_date = toUTC(updates.delivery_date);
+    } else if (updates.delivery_date === '') {
+      updates.delivery_date = null as any;
+    }
+    if (updates.confirmed_date && updates.confirmed_date !== '') {
+      updates.confirmed_date = toUTC(updates.confirmed_date);
+    } else if (updates.confirmed_date === '') {
+      updates.confirmed_date = null as any;
     }
 
     const success = await dao.updateOrder(orderId, updates);

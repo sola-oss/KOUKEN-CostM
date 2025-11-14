@@ -8,6 +8,7 @@ import { z } from "zod";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -341,10 +342,10 @@ export default function Projects() {
       note: order.note || "",
       subcontractor: order.subcontractor || "",
       processing_hours: order.processing_hours?.toString() || "",
-      is_delivered: order.is_delivered || false,
-      has_shipping_fee: order.has_shipping_fee || false,
-      is_amount_confirmed: order.is_amount_confirmed || false,
-      is_invoiced: order.is_invoiced || false,
+      is_delivered: !!order.is_delivered,
+      has_shipping_fee: !!order.has_shipping_fee,
+      is_amount_confirmed: !!order.is_amount_confirmed,
+      is_invoiced: !!order.is_invoiced,
     });
     setIsFormOpen(true);
   };
@@ -368,10 +369,10 @@ export default function Projects() {
       note: values.note || "",
       subcontractor: values.subcontractor || "",
       processing_hours: values.processing_hours ? parseFloat(values.processing_hours) : null,
-      is_delivered: values.is_delivered || false,
-      has_shipping_fee: values.has_shipping_fee || false,
-      is_amount_confirmed: values.is_amount_confirmed || false,
-      is_invoiced: values.is_invoiced || false,
+      is_delivered: values.is_delivered === true,
+      has_shipping_fee: values.has_shipping_fee === true,
+      is_amount_confirmed: values.is_amount_confirmed === true,
+      is_invoiced: values.is_invoiced === true,
     };
 
     if (editingOrder) {
@@ -389,11 +390,6 @@ export default function Projects() {
       style: "currency", 
       currency: "JPY",
     }).format(amount);
-  };
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString("ja-JP");
   };
 
   // ========== LOADING STATE ==========
