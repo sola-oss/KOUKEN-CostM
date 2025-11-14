@@ -359,7 +359,7 @@ export default function GanttChart() {
         return end.getTime() - start.getTime();
       }),
       y: hierarchicalRows.map(row => row.row_label),
-      base: hierarchicalRows.map(row => new Date(row.start)),
+      base: hierarchicalRows.map(row => new Date(row.start).getTime()),
       marker: {
         color: hierarchicalRows.map(row => getStatusColor(row.status)),
         line: {
