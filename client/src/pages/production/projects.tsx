@@ -79,12 +79,12 @@ function StatusIconCluster({ is_delivered, has_shipping_fee, is_amount_confirmed
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1" data-testid="status-badge-cluster">
+    <div className="flex flex-col items-start gap-0.5" data-testid="status-badge-cluster">
       {activeStatuses.map((status) => (
         <Badge 
           key={status.label}
           variant="default"
-          className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/40"
+          className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/40 text-xs"
           data-testid={status.testId}
         >
           <Check className="h-3 w-3 mr-1" />
@@ -565,15 +565,13 @@ export default function Projects() {
                   </TableCell>
 
                   {/* Status Icon Cluster */}
-                  <TableCell className="text-center" data-testid={`cell-status-${order.order_id}`}>
-                    <div className="flex items-center justify-center">
-                      <StatusIconCluster
-                        is_delivered={order.is_delivered}
-                        has_shipping_fee={order.has_shipping_fee}
-                        is_amount_confirmed={order.is_amount_confirmed}
-                        is_invoiced={order.is_invoiced}
-                      />
-                    </div>
+                  <TableCell data-testid={`cell-status-${order.order_id}`}>
+                    <StatusIconCluster
+                      is_delivered={order.is_delivered}
+                      has_shipping_fee={order.has_shipping_fee}
+                      is_amount_confirmed={order.is_amount_confirmed}
+                      is_invoiced={order.is_invoiced}
+                    />
                   </TableCell>
 
                   {/* Actions */}
