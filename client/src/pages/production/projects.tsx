@@ -383,21 +383,22 @@ export default function Projects() {
 
   const handleFormSubmit = (values: OrderFormValues) => {
     // Convert form values to API format
+    // Note: Empty strings are sent as empty strings (not null) to satisfy backend validation
     const orderData: Partial<Order> = {
       order_id: values.order_id || undefined,
-      order_date: values.order_date || null,
+      order_date: values.order_date || "",
       client_name: values.client_name,
-      manager: values.manager || null,
-      client_order_no: values.client_order_no || null,
+      manager: values.manager || "",
+      client_order_no: values.client_order_no || "",
       project_title: values.project_title,
       due_date: values.due_date,
-      delivery_date: values.delivery_date || null,
-      confirmed_date: values.confirmed_date || null,
+      delivery_date: values.delivery_date || "",
+      confirmed_date: values.confirmed_date || "",
       estimated_amount: values.estimated_amount ? parseFloat(values.estimated_amount) : null,
       invoiced_amount: values.invoiced_amount ? parseFloat(values.invoiced_amount) : null,
-      invoice_month: values.invoice_month || null,
-      note: values.note || null,
-      subcontractor: values.subcontractor || null,
+      invoice_month: values.invoice_month || "",
+      note: values.note || "",
+      subcontractor: values.subcontractor || "",
       processing_hours: values.processing_hours ? parseFloat(values.processing_hours) : null,
       is_delivered: values.is_delivered || false,
       has_shipping_fee: values.has_shipping_fee || false,
