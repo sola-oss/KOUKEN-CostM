@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { GanttChart as GanttChartIcon, Calendar, CheckSquare, Square } from "lucide-react";
 import { listTasks, listProcurements, listOrders, updateTask, updateProcurement, type Task, type Procurement, type Order } from "@/shared/production-api";
-import { format, parseISO, addDays, startOfMonth, endOfMonth } from "date-fns";
+import { format, parseISO, addDays, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -202,6 +202,13 @@ export default function GanttChart() {
       if (order.order_date && order.due_date) {
         const orderStart = parseISO(order.order_date);
         const orderEnd = parseISO(order.due_date);
+        
+        // Filter: Only show orders with 60+ days duration (2+ months)
+        const durationDays = differenceInDays(orderEnd, orderStart);
+        if (durationDays < 60) {
+          return false;
+        }
+        
         return orderStart <= rangeEnd && orderEnd >= rangeStart;
       }
       
