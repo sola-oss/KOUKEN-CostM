@@ -8,6 +8,7 @@ import { z } from "zod";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,14 +53,8 @@ type OrderFormValues = z.infer<typeof orderFormSchema>;
 // ========== HELPER COMPONENTS ==========
 
 /**
- * StatusIconCluster: Displays 4 boolean status flags as Check icons
- * - is_delivered (納品完了: *)
- * - has_shipping_fee (送料: #)
- * - is_amount_confirmed (金額確定: -)
- * - is_invoiced (請求済: +)
- * 
- * Visual: true=filled, false/null=muted outline
- * Semantics: null preserved internally to avoid accidental overwrites
+ * StatusIconCluster: Displays status flags as Japanese labeled badges
+ * Only shows badges for true values, making it easy to see active statuses at a glance
  */
 interface StatusIconClusterProps {
   is_delivered: boolean | null;
@@ -69,60 +64,32 @@ interface StatusIconClusterProps {
 }
 
 function StatusIconCluster({ is_delivered, has_shipping_fee, is_amount_confirmed, is_invoiced }: StatusIconClusterProps) {
-  const iconClassName = (value: boolean | null) => 
-    value === true 
-      ? "h-4 w-4 fill-current text-green-600 dark:text-green-400" 
-      : "h-4 w-4 text-muted-foreground/30";
+  const statuses = [
+    { value: is_delivered, label: "納品済み", testId: "badge-delivered" },
+    { value: has_shipping_fee, label: "送料あり", testId: "badge-shipping" },
+    { value: is_amount_confirmed, label: "金額確定", testId: "badge-amount-confirmed" },
+    { value: is_invoiced, label: "請求済み", testId: "badge-invoiced" },
+  ];
+
+  const activeStatuses = statuses.filter(status => status.value === true);
+
+  if (activeStatuses.length === 0) {
+    return <span className="text-muted-foreground text-sm">-</span>;
+  }
 
   return (
-    <div className="flex items-center gap-1.5" data-testid="status-icon-cluster">
-      {/* 納品完了 (*) */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>
-            <Check className={iconClassName(is_delivered)} data-testid="icon-delivered" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>納品完了 (*)</p>
-        </TooltipContent>
-      </Tooltip>
-
-      {/* 送料 (#) */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>
-            <Check className={iconClassName(has_shipping_fee)} data-testid="icon-shipping" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>送料 (#)</p>
-        </TooltipContent>
-      </Tooltip>
-
-      {/* 金額確定 (-) */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>
-            <Check className={iconClassName(is_amount_confirmed)} data-testid="icon-amount-confirmed" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>金額確定 (-)</p>
-        </TooltipContent>
-      </Tooltip>
-
-      {/* 請求済 (+) */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>
-            <Check className={iconClassName(is_invoiced)} data-testid="icon-invoiced" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>請求済 (+)</p>
-        </TooltipContent>
-      </Tooltip>
+    <div className="flex flex-wrap items-center gap-1" data-testid="status-badge-cluster">
+      {activeStatuses.map((status) => (
+        <Badge 
+          key={status.label}
+          variant="default"
+          className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/40"
+          data-testid={status.testId}
+        >
+          <Check className="h-3 w-3 mr-1" />
+          {status.label}
+        </Badge>
+      ))}
     </div>
   );
 }
