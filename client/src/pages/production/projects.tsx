@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check } from "lucide-react";
+import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { listOrders, type Order } from "@/shared/production-api";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -181,7 +181,7 @@ export default function Projects() {
     queryKey: ['orders', page, searchQuery],
     queryFn: () => listOrders({ 
       page, 
-      page_size: 20,
+      page_size: 30,
       search: searchQuery.trim() || undefined
     }),
   });
@@ -265,12 +265,20 @@ export default function Projects() {
     return sorted;
   }, [orders, sortConfig]);
 
-  // Clear highlight when search query changes
+  // Clear highlight and reset page when search query changes
   useEffect(() => {
     if (searchQuery.trim()) {
       setNewlyCreatedOrderId(null);
     }
+    setPage(1); // Reset to page 1 when search changes
   }, [searchQuery]);
+
+  // Sync local page state with server page when data changes
+  useEffect(() => {
+    if (ordersResponse?.meta?.page && ordersResponse.meta.page !== page) {
+      setPage(ordersResponse.meta.page);
+    }
+  }, [ordersResponse?.meta?.page]);
 
   // Delete order mutation
   const deleteOrderMutation = useMutation({
@@ -633,6 +641,50 @@ export default function Projects() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Pagination Controls */}
+      {ordersResponse?.meta && ordersResponse.meta.total > 0 && (
+        <div className="flex items-center justify-between px-2 py-4">
+          {/* Left: Showing X-Y of Z items */}
+          <div className="text-sm text-muted-foreground">
+            {(() => {
+              const { total, page: currentPage, page_size } = ordersResponse.meta;
+              const startItem = (currentPage - 1) * page_size + 1;
+              const endItem = Math.min(currentPage * page_size, total);
+              return `全${total}件中 ${startItem}-${endItem}件を表示`;
+            })()}
+          </div>
+
+          {/* Right: Page navigation */}
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-muted-foreground">
+              ページ {ordersResponse.meta.page} / {ordersResponse.meta.total_pages}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(ordersResponse.meta.page - 1)}
+                disabled={ordersResponse.meta.page === 1}
+                data-testid="button-previous-page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                前へ
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(ordersResponse.meta.page + 1)}
+                disabled={ordersResponse.meta.page >= ordersResponse.meta.total_pages}
+                data-testid="button-next-page"
+              >
+                次へ
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deletingOrderId !== null} onOpenChange={(open) => !open && setDeletingOrderId(null)}>
