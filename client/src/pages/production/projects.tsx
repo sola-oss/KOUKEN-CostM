@@ -508,7 +508,9 @@ export default function Projects() {
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-[100px]">受注番号</TableHead>
+              <TableHead>受注日</TableHead>
               <TableHead>客先名</TableHead>
+              <TableHead>担当者</TableHead>
               <TableHead>件名</TableHead>
               <TableHead>
                 <Button
@@ -522,7 +524,6 @@ export default function Projects() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
-              <TableHead className="text-center">ステータス</TableHead>
               <TableHead className="text-right">
                 <Button
                   variant="ghost"
@@ -535,13 +536,15 @@ export default function Projects() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
+              <TableHead>請求月</TableHead>
+              <TableHead className="text-center">ステータス</TableHead>
               <TableHead className="text-right w-[100px]">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredAndSortedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center">
+                <TableCell colSpan={10} className="h-32 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <Package className="h-8 w-8 mb-2" />
                     <p>該当する受注がありません</p>
@@ -561,9 +564,19 @@ export default function Projects() {
                     #{order.order_id}
                   </TableCell>
 
+                  {/* Order Date */}
+                  <TableCell data-testid={`cell-order-date-${order.order_id}`}>
+                    {formatDate(order.order_date)}
+                  </TableCell>
+
                   {/* Client Name */}
                   <TableCell data-testid={`cell-client-name-${order.order_id}`}>
                     {order.client_name || '-'}
+                  </TableCell>
+
+                  {/* Manager */}
+                  <TableCell data-testid={`cell-manager-${order.order_id}`}>
+                    {order.manager || '-'}
                   </TableCell>
 
                   {/* Project Title */}
@@ -576,6 +589,16 @@ export default function Projects() {
                     {formatDate(order.due_date)}
                   </TableCell>
 
+                  {/* Invoiced Amount */}
+                  <TableCell className="text-right font-medium" data-testid={`cell-invoiced-amount-${order.order_id}`}>
+                    {formatCurrency(order.invoiced_amount)}
+                  </TableCell>
+
+                  {/* Invoice Month */}
+                  <TableCell data-testid={`cell-invoice-month-${order.order_id}`}>
+                    {order.invoice_month || '-'}
+                  </TableCell>
+
                   {/* Status Icon Cluster */}
                   <TableCell className="text-center" data-testid={`cell-status-${order.order_id}`}>
                     <div className="flex items-center justify-center">
@@ -586,11 +609,6 @@ export default function Projects() {
                         is_invoiced={order.is_invoiced}
                       />
                     </div>
-                  </TableCell>
-
-                  {/* Invoiced Amount */}
-                  <TableCell className="text-right font-medium" data-testid={`cell-invoiced-amount-${order.order_id}`}>
-                    {formatCurrency(order.invoiced_amount)}
                   </TableCell>
 
                   {/* Actions */}
