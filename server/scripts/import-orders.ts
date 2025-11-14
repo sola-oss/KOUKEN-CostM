@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Database connection
-const dbPath = process.env.DB_PATH || path.join(__dirname, '..', '..', 'data', 'production.db');
+// Database connection (same as ProductionDAO)
+const dbPath = process.env.DB_PATH || './server/db/production.sqlite';
 const db = new Database(dbPath);
 
 // Excel date to JS date converter

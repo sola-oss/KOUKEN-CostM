@@ -259,10 +259,12 @@ export interface MaterialCostAnalysis {
 export async function listOrders(params?: {
   page?: number;
   page_size?: number;
+  search?: string;
 }): Promise<{ data: Order[]; meta: any }> {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.append('page', params.page.toString());
   if (params?.page_size) searchParams.append('page_size', params.page_size.toString());
+  if (params?.search) searchParams.append('search', params.search);
   
   const queryString = searchParams.toString();
   const endpoint = queryString ? `/api/production/orders?${queryString}` : '/api/production/orders';

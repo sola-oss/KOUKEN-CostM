@@ -176,10 +176,14 @@ export default function Projects() {
     },
   });
 
-  // Fetch orders
+  // Fetch orders (with server-side search)
   const { data: ordersResponse, isLoading, error } = useQuery({
-    queryKey: ['orders', page],
-    queryFn: () => listOrders({ page, page_size: 20 }),
+    queryKey: ['orders', page, searchQuery],
+    queryFn: () => listOrders({ 
+      page, 
+      page_size: 20,
+      search: searchQuery.trim() || undefined
+    }),
   });
 
   const orders = ordersResponse?.data || [];
@@ -234,22 +238,11 @@ export default function Projects() {
     }
   });
 
-  // Filter and sort orders
+  // Sort orders (search is handled server-side)
   const filteredAndSortedOrders = useMemo(() => {
-    let filtered = orders;
-
-    // Apply search filter (order_id, client_name, project_title)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = orders.filter(order => 
-        order.order_id.toLowerCase().includes(query) ||
-        (order.client_name && order.client_name.toLowerCase().includes(query)) ||
-        (order.project_title && order.project_title.toLowerCase().includes(query))
-      );
-    }
-
+    // No client-side filtering needed - server handles search
     // Apply sorting with null-safe comparators (nulls always sort to bottom)
-    const sorted = [...filtered].sort((a, b) => {
+    const sorted = [...orders].sort((a, b) => {
       let compareValue = 0;
       
       // Determine null sentinel: +Infinity for asc, -Infinity for desc
@@ -270,7 +263,7 @@ export default function Projects() {
     });
 
     return sorted;
-  }, [orders, searchQuery, sortConfig]);
+  }, [orders, sortConfig]);
 
   // Clear highlight when search query changes
   useEffect(() => {
