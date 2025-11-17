@@ -91,12 +91,25 @@ export default function GanttChart() {
     return map;
   }, [orders]);
 
-  // Initialize with all orders selected
+  // Filter orders for sidebar display (60+ days duration only)
+  const sidebarOrders = useMemo(() => {
+    return orders.filter(order => {
+      if (order.order_date && order.due_date) {
+        const orderStart = parseISO(order.order_date);
+        const orderEnd = parseISO(order.due_date);
+        const durationDays = differenceInDays(orderEnd, orderStart);
+        return durationDays >= 60;
+      }
+      return false;
+    });
+  }, [orders]);
+
+  // Initialize with all orders selected (60+ days only)
   useEffect(() => {
     if (orders.length > 0 && selectedOrderIds.size === 0) {
-      setSelectedOrderIds(new Set(orders.map(o => String(o.order_id))));
+      setSelectedOrderIds(new Set(sidebarOrders.map(o => String(o.order_id))));
     }
-  }, [orders]);
+  }, [orders, sidebarOrders]);
 
   // Convert data to timeline items
   const timelineItems: TimelineItem[] = useMemo(() => {
@@ -587,18 +600,18 @@ export default function GanttChart() {
               onClick={handleToggleAll}
               data-testid="button-toggle-all"
             >
-              {selectedOrderIds.size === orders.length ? (
+              {selectedOrderIds.size === sidebarOrders.length ? (
                 <CheckSquare className="h-4 w-4 mr-2" />
               ) : (
                 <Square className="h-4 w-4 mr-2" />
               )}
-              {selectedOrderIds.size === orders.length ? '全解除' : '全選択'}
+              {selectedOrderIds.size === sidebarOrders.length ? '全解除' : '全選択'}
             </Button>
           </div>
         </div>
 
         <div className="space-y-2">
-          {orders.map(order => {
+          {sidebarOrders.map(order => {
             const orderIdStr = String(order.order_id);
             return (
               <div key={order.order_id} className="flex items-center space-x-2">
