@@ -104,10 +104,11 @@ export default function GanttChart() {
     });
   }, [orders]);
 
-  // Initialize with all orders selected (60+ days only)
+  // Initialize with top 20 orders selected (for performance)
   useEffect(() => {
     if (orders.length > 0 && selectedOrderIds.size === 0) {
-      setSelectedOrderIds(new Set(sidebarOrders.map(o => String(o.order_id))));
+      const initialOrders = sidebarOrders.slice(0, 20);
+      setSelectedOrderIds(new Set(initialOrders.map(o => String(o.order_id))));
     }
   }, [orders, sidebarOrders]);
 
@@ -607,6 +608,17 @@ export default function GanttChart() {
               )}
               {selectedOrderIds.size === sidebarOrders.length ? '全解除' : '全選択'}
             </Button>
+            {selectedOrderIds.size < sidebarOrders.length && (
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="w-full justify-start"
+                onClick={() => setSelectedOrderIds(new Set(sidebarOrders.map(o => String(o.order_id))))}
+                data-testid="button-show-all"
+              >
+                全て表示 (残り {sidebarOrders.length - selectedOrderIds.size}件)
+              </Button>
+            )}
           </div>
         </div>
 
