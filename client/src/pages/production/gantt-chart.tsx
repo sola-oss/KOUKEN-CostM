@@ -498,10 +498,10 @@ export default function GanttChart() {
 
   // Toggle all orders
   const handleToggleAll = () => {
-    if (selectedOrderIds.size === orders.length) {
+    if (selectedOrderIds.size === sidebarOrders.length) {
       setSelectedOrderIds(new Set());
     } else {
-      setSelectedOrderIds(new Set(orders.map(o => String(o.order_id))));
+      setSelectedOrderIds(new Set(sidebarOrders.map(o => String(o.order_id))));
     }
   };
 
