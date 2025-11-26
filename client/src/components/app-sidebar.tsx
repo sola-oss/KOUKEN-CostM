@@ -3,7 +3,7 @@ import {
   Home, Package, Calendar, ClipboardCheck, FileText, 
   Truck, Receipt, Users, Settings, BarChart3, 
   ChevronRight, ChevronDown, Building2, Clock, Timer, CheckSquare,
-  GanttChart, ListChecks, ShoppingCart, TrendingUp
+  ListChecks, ShoppingCart, TrendingUp
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -67,11 +67,6 @@ const menuItems = [
 
 // Work Instructions Sub-menu
 const workInstructionsSubItems = [
-  {
-    title: "ガントチャート",
-    url: "/gantt-chart",
-    icon: GanttChart
-  },
   {
     title: "作業計画",
     url: "/task-planning",
