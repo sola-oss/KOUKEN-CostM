@@ -229,9 +229,13 @@ export default function GanttChart() {
       return false;
     });
 
-    // Create hierarchical structure - sorted by numeric order_id
+    // Create hierarchical structure - sorted by numeric part of order_id (e.g., "ko130149" -> 130149)
     ordersToDisplay
-      .sort((a, b) => Number(a.order_id) - Number(b.order_id))
+      .sort((a, b) => {
+        const aNum = Number(String(a.order_id).replace(/^\D+/, '')) || 0;
+        const bNum = Number(String(b.order_id).replace(/^\D+/, '')) || 0;
+        return aNum - bNum;
+      })
       .forEach(order => {
         const orderId = String(order.order_id);
         const orderName = order.product_name || '(名称不明)';
