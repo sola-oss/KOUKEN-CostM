@@ -91,17 +91,23 @@ export default function GanttChart() {
     return map;
   }, [orders]);
 
-  // Filter orders for sidebar display (60+ days duration only)
+  // Filter orders for sidebar display (60+ days duration only) and sort by numeric order_id
   const sidebarOrders = useMemo(() => {
-    return orders.filter(order => {
-      if (order.order_date && order.due_date) {
-        const orderStart = parseISO(order.order_date);
-        const orderEnd = parseISO(order.due_date);
-        const durationDays = differenceInDays(orderEnd, orderStart);
-        return durationDays >= 60;
-      }
-      return false;
-    });
+    return orders
+      .filter(order => {
+        if (order.order_date && order.due_date) {
+          const orderStart = parseISO(order.order_date);
+          const orderEnd = parseISO(order.due_date);
+          const durationDays = differenceInDays(orderEnd, orderStart);
+          return durationDays >= 60;
+        }
+        return false;
+      })
+      .sort((a, b) => {
+        const aNum = Number(String(a.order_id).replace(/^\D+/, '')) || 0;
+        const bNum = Number(String(b.order_id).replace(/^\D+/, '')) || 0;
+        return aNum - bNum;
+      });
   }, [orders]);
 
   // Initialize with top 20 orders selected (for performance)
