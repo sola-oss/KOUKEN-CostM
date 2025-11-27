@@ -496,6 +496,43 @@ export class ProductionDAO {
     `).all() as { worker: string }[];
   }
 
+  async getOrdersForGantt(): Promise<{
+    id: string;
+    name: string;
+    start: string | null;
+    end: string | null;
+    progress: number;
+  }[]> {
+    const rows = this.db.prepare(`
+      SELECT 
+        order_id,
+        COALESCE(project_title, product_name, '(名称なし)') as project_name,
+        COALESCE(start_date, order_date) as start_date,
+        due_date,
+        status,
+        is_delivered
+      FROM orders
+      WHERE due_date IS NOT NULL OR start_date IS NOT NULL OR order_date IS NOT NULL
+      ORDER BY COALESCE(start_date, order_date, due_date) ASC
+    `).all() as {
+      order_id: string;
+      project_name: string;
+      start_date: string | null;
+      due_date: string | null;
+      status: string;
+      is_delivered: number | null;
+    }[];
+
+    return rows.map(row => ({
+      id: row.order_id,
+      name: row.project_name,
+      start: row.start_date,
+      end: row.due_date,
+      progress: row.is_delivered === 1 || row.status === 'completed' ? 100 : 
+                row.status === 'in_progress' ? 50 : 0
+    }));
+  }
+
   // ========== Tasks CRUD ==========
   
   async createTask(taskData: InsertTask): Promise<number> {

@@ -153,6 +153,30 @@ router.get('/api/production/orders', async (req, res) => {
   }
 });
 
+// GET /api/production/orders/gantt - Get orders for Gantt chart
+router.get('/api/production/orders/gantt', async (req, res) => {
+  try {
+    const ganttData = await dao.getOrdersForGantt();
+    
+    // Convert dates to JST for frontend display
+    const convertedData = ganttData.map(item => ({
+      id: item.id,
+      name: item.name,
+      start: item.start ? toJST(item.start) : null,
+      end: item.end ? toJST(item.end) : null,
+      progress: item.progress
+    }));
+    
+    res.json(convertedData);
+  } catch (error) {
+    console.error('Gantt data error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch Gantt data'
+    });
+  }
+});
+
 // GET /api/production/orders/:id - Get order details with KPI
 router.get('/api/production/orders/:id', async (req, res) => {
   try {
