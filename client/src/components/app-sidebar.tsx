@@ -3,7 +3,7 @@ import {
   Home, Package, Calendar, ClipboardCheck, FileText, 
   Truck, Receipt, Users, Settings, BarChart3, 
   ChevronRight, ChevronDown, Building2, Clock, Timer, CheckSquare,
-  ListChecks, ShoppingCart, TrendingUp
+  ListChecks, ShoppingCart, TrendingUp, GanttChart
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -61,6 +61,12 @@ const menuItems = [
     title: "材料費分析",
     url: "/material-cost-analysis",
     icon: TrendingUp,
+    badge: null
+  },
+  {
+    title: "ガントチャート",
+    url: "/gantt",
+    icon: GanttChart,
     badge: null
   }
 ];
