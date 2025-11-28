@@ -66,7 +66,44 @@ export const GanttChart = ({
         : undefined,
     });
 
+    // カスタムwheelイベントハンドラ
+    // frappe-ganttの内部ハンドラがdeltaYを横スクロールに変換してしまうので、
+    // それを防いで縦/横スクロールを適切に振り分ける
+    const container = containerRef.current;
+    const svgElement = container.querySelector("svg");
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // 親のスクロール可能なコンテナを取得
+      const scrollableParent = container.closest('[style*="overflow"]') as HTMLElement;
+      
+      // Shift+ホイール または 横方向の動きが大きい場合は横スクロール
+      const isHorizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+
+      if (isHorizontal) {
+        // 横スクロール（frappe-gantt内部のコンテナ）
+        const ganttContainer = container.querySelector(".gantt-container") as HTMLElement;
+        if (ganttContainer) {
+          ganttContainer.scrollLeft += e.deltaX || e.deltaY;
+        }
+      } else {
+        // 縦スクロール（親コンテナ）
+        if (scrollableParent) {
+          scrollableParent.scrollTop += e.deltaY;
+        }
+      }
+    };
+
+    if (svgElement) {
+      svgElement.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    }
+
     return () => {
+      if (svgElement) {
+        svgElement.removeEventListener("wheel", handleWheel, { capture: true });
+      }
       if (containerRef.current) {
         containerRef.current.innerHTML = "";
       }
