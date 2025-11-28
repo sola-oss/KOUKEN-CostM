@@ -19,6 +19,23 @@ interface GanttChartProps {
   onClick?: (task: GanttTask) => void;
 }
 
+// スクロール可能な親要素を探すヘルパー関数
+const findScrollableParent = (element: HTMLElement | null): HTMLElement | null => {
+  let current = element?.parentElement;
+  while (current) {
+    const style = getComputedStyle(current);
+    const overflowY = style.overflowY;
+    const isScrollable =
+      (overflowY === "auto" || overflowY === "scroll") &&
+      current.scrollHeight > current.clientHeight;
+    if (isScrollable) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+};
+
 export const GanttChart = ({
   tasks,
   viewMode = "Week",
@@ -73,12 +90,6 @@ export const GanttChart = ({
     const svgElement = container.querySelector("svg");
 
     const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      // 親のスクロール可能なコンテナを取得
-      const scrollableParent = container.closest('[style*="overflow"]') as HTMLElement;
-      
       // Shift+ホイール または 横方向の動きが大きい場合は横スクロール
       const isHorizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
 
@@ -86,12 +97,28 @@ export const GanttChart = ({
         // 横スクロール（frappe-gantt内部のコンテナ）
         const ganttContainer = container.querySelector(".gantt-container") as HTMLElement;
         if (ganttContainer) {
+          e.preventDefault();
+          e.stopPropagation();
           ganttContainer.scrollLeft += e.deltaX || e.deltaY;
         }
+        // ganttContainerが見つからない場合はイベントをそのまま通す
       } else {
         // 縦スクロール（親コンテナ）
+        const scrollableParent = findScrollableParent(container);
         if (scrollableParent) {
+          e.preventDefault();
+          e.stopPropagation();
           scrollableParent.scrollTop += e.deltaY;
+        } else {
+          // スクロール可能な親が見つからない場合、
+          // フォールバックとして直接の親を試す
+          const parent = container.parentElement;
+          if (parent && parent.scrollHeight > parent.clientHeight) {
+            e.preventDefault();
+            e.stopPropagation();
+            parent.scrollTop += e.deltaY;
+          }
+          // それでも見つからない場合はイベントをそのまま通す（ブラウザのデフォルト動作）
         }
       }
     };
