@@ -1,0 +1,84 @@
+React + Express の生産管理アプリです。
+/gantt 画面で Frappe Gantt を使って案件別ガントチャートを表示しています。
+
+すでに以下は対応済みです：
+- body に overflow: hidden を設定
+- ガントチャート部分を <div className="gantt-wrapper"> でラップしてスクロール領域を分離
+- レイアウトはサイドバーとガントの左端が揃っている状態
+
+【今回やりたいこと（Step4）】
+ガントチャートの上部にあるボタンまわりを拡張して、
+「Today / 3ヶ月 / 6ヶ月」の表示期間ボタンを追加し、期間に応じて表示するタスクを絞り込みたいです。
+
+### 1. UI（ボタン）の要件
+
+- すでにある「←」ボタンと「Today」ボタンの近くに、
+  新しく「3ヶ月」「6ヶ月」ボタンを追加してください。
+  例：
+    [←] [Today] [3ヶ月] [6ヶ月]
+
+- ボタンにはクリック時のアクティブ状態が分かるように、クラス名などでスタイルを切り替えられるようにしてください
+  （.active など、既存のスタイルに合わせてOKです）。
+
+### 2. ロジックの要件（表示期間）
+
+/gantt ページのコンポーネント内に、表示期間を管理する state を追加してください。  
+イメージ：
+
+  type GanttRange = "ALL" | "THREE_MONTHS" | "SIX_MONTHS";
+
+  const [range, setRange] = useState<GanttRange>("ALL");
+
+- 「Today」ボタン … 既存の挙動はできるだけ維持しつつ、range を "THREE_MONTHS" にするなど、適切な値をセットしてください。
+- 「3ヶ月」ボタン … range を "THREE_MONTHS" に変更
+- 「6ヶ月」ボタン … range を "SIX_MONTHS" に変更
+
+### 3. タスクの絞り込み
+
+すでにバックエンドから取得している tasks 配列（Frappe Gantt に渡している配列）を、そのまま直接使うのではなく、
+現在の range に応じて「表示用タスク」をフィルタリングした配列を作ってから FrappeGantt に渡してください。
+
+概ね次のようなイメージで実装してください（型やフィールド名は現在の実装に合わせて調整して構いません）：
+
+  const today = new Date();
+
+  let startRange: Date | null = null;
+  let endRange: Date | null = null;
+
+  if (range === "THREE_MONTHS") {
+    // 今日〜3ヶ月先までを表示
+    startRange = new Date(today);
+    endRange = new Date(today);
+    endRange.setMonth(endRange.getMonth() + 3);
+  } else if (range === "SIX_MONTHS") {
+    // 今日〜6ヶ月先までを表示
+    startRange = new Date(today);
+    endRange = new Date(today);
+    endRange.setMonth(endRange.getMonth() + 6);
+  } else {
+    // "ALL" の場合は全件
+    startRange = null;
+    endRange = null;
+  }
+
+  const visibleTasks = tasks.filter((task) => {
+    if (!startRange || !endRange) return true;
+    const taskStart = new Date(task.start || task.start_date);
+    const taskEnd = new Date(task.end || task.end_date);
+    // 期間が少しでもかぶっていれば表示
+    return taskEnd >= startRange && taskStart <= endRange;
+  });
+
+そして FrappeGantt には元の tasks ではなく visibleTasks を渡してください：
+
+  <FrappeGantt tasks={visibleTasks} viewMode={viewMode} ... />
+
+### 4. その他
+
+- 既存の Today ボタンの挙動（今日へスクロールするなど）があれば、できるだけ壊さない範囲で、
+  上記の range 切り替えロジックと共存させてください。
+- TypeScript を使っている場合は、型エラーが出ないように GanttRange 型などを適宜定義してください。
+- 既存のコードスタイル（hooks の場所、コンポーネント構造など）に合わせてリファクタリングして構いません。
+
+上記の要件を満たすように、/gantt 画面まわりのコンポーネントと関連ロジックを安全に書き換えてください。
+必要であれば複数ファイルをまたいで修正して構いません。
