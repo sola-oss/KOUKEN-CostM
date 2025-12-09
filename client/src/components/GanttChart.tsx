@@ -83,6 +83,28 @@ export const GanttChart = ({
         : undefined,
     });
 
+    // ヘッダーを sticky にするための処理
+    const setupStickyHeader = () => {
+      if (!containerRef.current) return;
+      const svgElement = containerRef.current.querySelector("svg");
+      if (!svgElement) return;
+
+      // SVG 内のヘッダー行を探す（最初の <g> グループがヘッダーの可能性が高い）
+      const groups = svgElement.querySelectorAll("g");
+      if (groups.length > 0) {
+        const headerElement = groups[0] as SVGElement;
+        
+        // SVG 要素の場合は setAttribute を使用
+        const currentClass = headerElement.getAttribute("class") || "";
+        if (!currentClass.includes("gantt-header-sticky")) {
+          headerElement.setAttribute("class", `${currentClass} gantt-header-sticky`);
+        }
+      }
+    };
+
+    // DOM の更新を待ってから sticky 処理を実行
+    requestAnimationFrame(setupStickyHeader);
+
     // カスタムwheelイベントハンドラ
     // frappe-ganttの内部ハンドラがdeltaYを横スクロールに変換してしまうので、
     // それを防いで縦/横スクロールを適切に振り分ける

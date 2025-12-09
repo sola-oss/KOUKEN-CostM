@@ -15,6 +15,13 @@ body {
   position: relative;
 }
 
+.gantt-header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #ffffff;
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
