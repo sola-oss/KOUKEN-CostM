@@ -48,22 +48,25 @@ const GanttSimple = () => {
 
   // Filter tasks based on date range and project name
   const visibleTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      const taskStart = new Date(task.start);
-      const taskEnd = new Date(task.end);
+    const filtered = tasks.filter((task) => {
+      // 日付を正規化（タイムゾーン無視してYYYY-MM-DD形式に統一）
+      const taskStartStr = task.start.split('T')[0];
+      const taskEndStr = task.end.split('T')[0];
+      const taskStart = new Date(taskStartStr);
+      const taskEnd = new Date(taskEndStr);
 
       // 日付範囲フィルター（開始日）
       if (startDate) {
         const filterStart = new Date(startDate);
-        // 全くかぶっていない（タスクの終了が開始日より前）の場合は除外
+        // 終了日がフィルター開始日より前の場合は除外
         if (taskEnd < filterStart) return false;
       }
 
       // 日付範囲フィルター（終了日）
       if (endDate) {
-        const filterEnd = new Date(endDate);
-        // 全くかぶっていない（タスクの開始が終了日より後）の場合は除外
-        if (taskStart > filterEnd) return false;
+        const filterEndDate = new Date(endDate);
+        // 開始日がフィルター終了日より後の場合は除外
+        if (taskStart > filterEndDate) return false;
       }
 
       // 案件名フィルター
@@ -77,6 +80,9 @@ const GanttSimple = () => {
 
       return true;
     });
+
+    console.log("Filtering applied:", { startDate, endDate, projectFilter, totalTasks: tasks.length, visibleTasks: filtered.length });
+    return filtered;
   }, [tasks, startDate, endDate, projectFilter]);
 
   const handleToday = () => {
