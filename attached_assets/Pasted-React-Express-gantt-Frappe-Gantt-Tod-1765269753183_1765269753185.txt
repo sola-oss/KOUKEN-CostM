@@ -1,0 +1,129 @@
+React + Express の生産管理アプリです。
+/gantt 画面で Frappe Gantt を使って案件別ガントチャートを表示しています。
+
+現在、ガントチャート上部には
+[←] [Today] [3ヶ月] [6ヶ月] [すべて]
+のボタンがあり、3ヶ月／6ヶ月ボタンで表示期間を切り替えるような実装をしています。
+
+【やりたいこと】
+3ヶ月／6ヶ月という固定の期間ボタンではなく、
+
+- ユーザーが任意の「開始日」「終了日」を指定して期間を絞り込み
+- 「案件名」で見たい案件だけを絞り込み
+
+できるようにしたいです。
+
+### 1. UI の変更
+
+/ g a n t t 画面のボタン周りを次のように変更してください：
+
+- [←] [Today] [すべて] の3つは残す
+- [3ヶ月] [6ヶ月] の2つのボタンは削除してよい
+- 代わりに右側に次のフォームを追加してください：
+
+  - 開始日入力：<input type="date" ...>（ラベル「開始日」）
+  - 終了日入力：<input type="date" ...>（ラベル「終了日」）
+  - 案件フィルター入力：<input type="text" placeholder="案件名で絞り込み" ...>
+
+例（JSXイメージ・実際の className やスタイルは既存に合わせてください）：
+
+  <div className="gantt-toolbar">
+    <div className="gantt-toolbar-left">
+      <button>←</button>
+      <button>Today</button>
+      <button>すべて</button>
+    </div>
+    <div className="gantt-toolbar-right">
+      <label>
+        開始日
+        <input type="date" value={startDate} onChange={...} />
+      </label>
+      <label>
+        終了日
+        <input type="date" value={endDate} onChange={...} />
+      </label>
+      <input
+        type="text"
+        placeholder="案件名で絞り込み"
+        value={projectFilter}
+        onChange={...}
+      />
+    </div>
+  </div>
+
+このイメージに近い形で、既存のツールバーに組み込んでください。
+
+### 2. state の追加
+
+/gantt コンポーネントに次の state を追加してください（型は TS か JS かに合わせて調整してください）：
+
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [projectFilter, setProjectFilter] = useState<string>("");
+
+- startDate, endDate は "YYYY-MM-DD" の文字列（input type="date" の値）として持ってOKです。
+- projectFilter は案件名の部分一致検索用文字列です。
+
+「すべて」ボタンを押したときは、これら3つをすべて空文字にリセットする挙動に変更してください。
+
+### 3. フィルタリングのロジック
+
+もともと FrappeGantt に渡している tasks 配列を、そのまま渡すのではなく、
+startDate, endDate, projectFilter に応じて絞り込んだ配列 visibleTasks を作成してから渡すようにしてください。
+
+イメージコードは次の通りです（実際のフィールド名に合わせて調整してください）：
+
+  const visibleTasks = tasks.filter((task) => {
+    // 日付情報の取得（task.start / task.start_date など、現状で使っているフィールドに合わせてください）
+    const taskStart = new Date(task.start || task.start_date);
+    const taskEnd = new Date(task.end || task.end_date);
+
+    // 期間フィルター
+    if (startDate) {
+      const filterStart = new Date(startDate);
+      // 全くかぶっていない（タスクの終了が開始日より前）の場合は除外
+      if (taskEnd < filterStart) return false;
+    }
+    if (endDate) {
+      const filterEnd = new Date(endDate);
+      // 全くかぶっていない（タスクの開始が終了日より後）の場合は除外
+      if (taskStart > filterEnd) return false;
+    }
+
+    // 案件名フィルター（project_name または title など、現状のモデルに合わせてください）
+    if (projectFilter) {
+      const keyword = projectFilter.toLowerCase();
+      const name =
+        (task.project_name || task.title || "").toLowerCase();
+      if (!name.includes(keyword)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+そして FrappeGantt には元の tasks ではなく visibleTasks を渡してください：
+
+  <FrappeGantt tasks={visibleTasks} viewMode={viewMode} ... />
+
+### 4. Today / すべて ボタンとの関係
+
+- 「すべて」ボタン：
+  - startDate, endDate, projectFilter をすべて "" にリセット
+  - これにより全件表示になる
+
+- 「Today」ボタン：
+  - 既存の「今日にスクロールする」などの挙動があれば維持してください。
+  - もし期間も合わせたい場合は、例えば
+      startDate = 今日の日付
+      endDate = 今日から3ヶ月後
+    のようにセットしても構いません。
+
+### 5. その他
+
+- すでに実装済みの「3ヶ月」「6ヶ月」用の range state やフィルタリングロジックは不要になるため、
+  使われていない state や関数は削除・整理して構いません。
+- TypeScript を使用している場合は、型エラーが出ないように props / state の型定義も併せて更新してください。
+
+以上の要件を満たすように、/gantt 画面まわりのコンポーネントと関連 CSS を安全に修正してください。

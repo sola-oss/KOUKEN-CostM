@@ -1,14 +1,15 @@
 import { useEffect, useState, useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { GanttChart, GanttTask } from "../../components/GanttChart";
 import { ChevronLeft } from "lucide-react";
 
-type GanttRange = "ALL" | "THREE_MONTHS" | "SIX_MONTHS";
-
 const GanttSimple = () => {
   const [tasks, setTasks] = useState<GanttTask[]>([]);
-  const [range, setRange] = useState<GanttRange>("ALL");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [projectFilter, setProjectFilter] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/production/orders/gantt")
@@ -22,9 +23,9 @@ const GanttSimple = () => {
 
               // endがnullの場合、start + 14日をデフォルトに
               if (!end && start) {
-                const startDate = new Date(start);
-                startDate.setDate(startDate.getDate() + 14);
-                end = startDate.toISOString().split("T")[0];
+                const startDateObj = new Date(start);
+                startDateObj.setDate(startDateObj.getDate() + 14);
+                end = startDateObj.toISOString().split("T")[0];
               }
 
               // start > end の場合、日付を入れ替え
@@ -45,39 +46,53 @@ const GanttSimple = () => {
       });
   }, []);
 
-  // Filter tasks based on selected date range
+  // Filter tasks based on date range and project name
   const visibleTasks = useMemo(() => {
-    const today = new Date();
-    let startRange: Date | null = null;
-    let endRange: Date | null = null;
-
-    if (range === "THREE_MONTHS") {
-      // 今日〜3ヶ月先までを表示
-      startRange = new Date(today);
-      endRange = new Date(today);
-      endRange.setMonth(endRange.getMonth() + 3);
-    } else if (range === "SIX_MONTHS") {
-      // 今日〜6ヶ月先までを表示
-      startRange = new Date(today);
-      endRange = new Date(today);
-      endRange.setMonth(endRange.getMonth() + 6);
-    } else {
-      // "ALL" の場合は全件
-      startRange = null;
-      endRange = null;
-    }
-
     return tasks.filter((task) => {
-      if (!startRange || !endRange) return true;
       const taskStart = new Date(task.start);
       const taskEnd = new Date(task.end);
-      // 期間が少しでもかぶっていれば表示
-      return taskEnd >= startRange && taskStart <= endRange;
+
+      // 日付範囲フィルター（開始日）
+      if (startDate) {
+        const filterStart = new Date(startDate);
+        // 全くかぶっていない（タスクの終了が開始日より前）の場合は除外
+        if (taskEnd < filterStart) return false;
+      }
+
+      // 日付範囲フィルター（終了日）
+      if (endDate) {
+        const filterEnd = new Date(endDate);
+        // 全くかぶっていない（タスクの開始が終了日より後）の場合は除外
+        if (taskStart > filterEnd) return false;
+      }
+
+      // 案件名フィルター
+      if (projectFilter) {
+        const keyword = projectFilter.toLowerCase();
+        const name = (task.name || "").toLowerCase();
+        if (!name.includes(keyword)) {
+          return false;
+        }
+      }
+
+      return true;
     });
-  }, [tasks, range]);
+  }, [tasks, startDate, endDate, projectFilter]);
 
   const handleToday = () => {
-    setRange("THREE_MONTHS");
+    const today = new Date();
+    const threeMonthsLater = new Date(today);
+    threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+    
+    setStartDate(today.toISOString().split("T")[0]);
+    setEndDate(threeMonthsLater.toISOString().split("T")[0]);
+    setProjectFilter("");
+  };
+
+  const handleReset = () => {
+    setStartDate("");
+    setEndDate("");
+    setProjectFilter("");
   };
 
   return (
@@ -89,57 +104,76 @@ const GanttSimple = () => {
           <p className="text-muted-foreground">frappe-ganttで案件別タイムラインを表示</p>
         </div>
 
-        {/* Filter and Navigation Buttons */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hover-elevate"
-            data-testid="button-gantt-prev"
-            title="前へ"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <Button
-            variant={range === "THREE_MONTHS" ? "default" : "outline"}
-            size="sm"
-            onClick={handleToday}
-            className="hover-elevate"
-            data-testid="button-gantt-today"
-          >
-            Today
-          </Button>
+        {/* Gantt Toolbar */}
+        <div className="gantt-toolbar">
+          {/* Left side: Navigation buttons */}
+          <div className="gantt-toolbar-left">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hover-elevate"
+              data-testid="button-gantt-prev"
+              title="前へ"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToday}
+              className="hover-elevate"
+              data-testid="button-gantt-today"
+            >
+              Today
+            </Button>
 
-          <Button
-            variant={range === "THREE_MONTHS" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setRange("THREE_MONTHS")}
-            className="hover-elevate"
-            data-testid="button-gantt-three-months"
-          >
-            3ヶ月
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              className="hover-elevate"
+              data-testid="button-gantt-reset"
+            >
+              すべて
+            </Button>
+          </div>
 
-          <Button
-            variant={range === "SIX_MONTHS" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setRange("SIX_MONTHS")}
-            className="hover-elevate"
-            data-testid="button-gantt-six-months"
-          >
-            6ヶ月
-          </Button>
+          {/* Right side: Filter inputs */}
+          <div className="gantt-toolbar-right">
+            <div className="gantt-toolbar-filter">
+              <label htmlFor="start-date" className="gantt-filter-label">開始日</label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="gantt-filter-input"
+                data-testid="input-gantt-start-date"
+              />
+            </div>
 
-          <Button
-            variant={range === "ALL" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setRange("ALL")}
-            className="hover-elevate"
-            data-testid="button-gantt-all"
-          >
-            すべて
-          </Button>
+            <div className="gantt-toolbar-filter">
+              <label htmlFor="end-date" className="gantt-filter-label">終了日</label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="gantt-filter-input"
+                data-testid="input-gantt-end-date"
+              />
+            </div>
+
+            <Input
+              type="text"
+              placeholder="案件名で絞り込み"
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="gantt-filter-input-text"
+              data-testid="input-gantt-project-filter"
+            />
+          </div>
         </div>
 
         {/* Gantt Chart Container */}
@@ -147,7 +181,7 @@ const GanttSimple = () => {
           <div className="gantt-wrapper">
             {visibleTasks.length === 0 ? (
               <p className="p-6 text-muted-foreground">
-                {tasks.length === 0 ? "読み込み中..." : "選択された期間にはタスクがありません"}
+                {tasks.length === 0 ? "読み込み中..." : "選択されたフィルター条件に一致するタスクがありません"}
               </p>
             ) : (
               <GanttChart tasks={visibleTasks} />
