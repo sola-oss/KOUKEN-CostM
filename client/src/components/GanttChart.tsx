@@ -90,36 +90,57 @@ export const GanttChart = ({
     const svgElement = container.querySelector("svg");
 
     const handleWheel = (e: WheelEvent) => {
-      // Shift+ホイール または 横方向の動きが大きい場合は横スクロール
-      const isHorizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      const ganttContainer = container.querySelector(".gantt-container") as HTMLElement;
+      
+      // 縦スクロール用のヘルパー関数
+      const applyVerticalScroll = (delta: number): boolean => {
+        const scrollableParent = findScrollableParent(container);
+        if (scrollableParent) {
+          scrollableParent.scrollTop += delta;
+          return true;
+        }
+        const parent = container.parentElement;
+        if (parent && parent.scrollHeight > parent.clientHeight) {
+          parent.scrollTop += delta;
+          return true;
+        }
+        return false;
+      };
+      
+      // トラックパッドの横スクロール（deltaXが0でない場合）
+      if (e.deltaX !== 0) {
+        let handled = false;
+        if (ganttContainer) {
+          ganttContainer.scrollLeft += e.deltaX;
+          handled = true;
+        }
+        // deltaYも同時にある場合は縦スクロールも適用
+        if (e.deltaY !== 0) {
+          if (applyVerticalScroll(e.deltaY)) {
+            handled = true;
+          }
+        }
+        if (handled) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        return;
+      }
 
-      if (isHorizontal) {
-        // 横スクロール（frappe-gantt内部のコンテナ）
-        const ganttContainer = container.querySelector(".gantt-container") as HTMLElement;
+      // Shift+ホイールで横スクロール
+      if (e.shiftKey) {
         if (ganttContainer) {
           e.preventDefault();
           e.stopPropagation();
-          ganttContainer.scrollLeft += e.deltaX || e.deltaY;
+          ganttContainer.scrollLeft += e.deltaY;
         }
-        // ganttContainerが見つからない場合はイベントをそのまま通す
-      } else {
-        // 縦スクロール（親コンテナ）
-        const scrollableParent = findScrollableParent(container);
-        if (scrollableParent) {
-          e.preventDefault();
-          e.stopPropagation();
-          scrollableParent.scrollTop += e.deltaY;
-        } else {
-          // スクロール可能な親が見つからない場合、
-          // フォールバックとして直接の親を試す
-          const parent = container.parentElement;
-          if (parent && parent.scrollHeight > parent.clientHeight) {
-            e.preventDefault();
-            e.stopPropagation();
-            parent.scrollTop += e.deltaY;
-          }
-          // それでも見つからない場合はイベントをそのまま通す（ブラウザのデフォルト動作）
-        }
+        return;
+      }
+
+      // 通常のホイール → 縦スクロール
+      if (applyVerticalScroll(e.deltaY)) {
+        e.preventDefault();
+        e.stopPropagation();
       }
     };
 
