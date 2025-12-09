@@ -103,92 +103,95 @@ const GanttSimple = () => {
 
   return (
     <TooltipProvider>
-      <div className="p-6 space-y-4" data-testid="page-gantt">
-        {/* Page Header */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">案件別ガントチャート</h1>
-          <p className="text-muted-foreground">frappe-ganttで案件別タイムラインを表示</p>
-        </div>
-
-        {/* Gantt Toolbar */}
-        <div className="gantt-toolbar">
-          {/* Left side: Navigation buttons */}
-          <div className="gantt-toolbar-left">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hover-elevate"
-              data-testid="button-gantt-prev"
-              title="前へ"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleToday}
-              className="hover-elevate"
-              data-testid="button-gantt-today"
-            >
-              Today
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              className="hover-elevate"
-              data-testid="button-gantt-reset"
-            >
-              すべて
-            </Button>
+      <div className="flex flex-col h-full p-6 space-y-4" data-testid="page-gantt">
+        {/* Page Header with Toolbar - All in One Section */}
+        <div className="space-y-4">
+          {/* Title and Description */}
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">案件別ガントチャート</h1>
+            <p className="text-muted-foreground">frappe-ganttで案件別タイムラインを表示</p>
           </div>
 
-          {/* Right side: Filter inputs */}
-          <div className="gantt-toolbar-right">
-            <div className="gantt-toolbar-filter">
-              <label htmlFor="start-date" className="gantt-filter-label">開始日</label>
-              <Input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="gantt-filter-input"
-                data-testid="input-gantt-start-date"
-              />
+          {/* Gantt Toolbar - Unified */}
+          <div className="gantt-toolbar" data-testid="gantt-toolbar">
+            {/* Left side: Navigation buttons */}
+            <div className="gantt-toolbar-left">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover-elevate"
+                data-testid="button-gantt-prev"
+                title="前へ"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToday}
+                className="hover-elevate"
+                data-testid="button-gantt-today"
+              >
+                Today
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReset}
+                className="hover-elevate"
+                data-testid="button-gantt-reset"
+              >
+                すべて
+              </Button>
             </div>
 
-            <div className="gantt-toolbar-filter">
-              <label htmlFor="end-date" className="gantt-filter-label">終了日</label>
+            {/* Right side: Filter inputs - Always visible */}
+            <div className="gantt-toolbar-right">
+              <div className="gantt-toolbar-filter">
+                <label htmlFor="start-date" className="gantt-filter-label">開始日</label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="gantt-filter-input"
+                  data-testid="input-gantt-start-date"
+                />
+              </div>
+
+              <div className="gantt-toolbar-filter">
+                <label htmlFor="end-date" className="gantt-filter-label">終了日</label>
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="gantt-filter-input"
+                  data-testid="input-gantt-end-date"
+                />
+              </div>
+
               <Input
-                id="end-date"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="gantt-filter-input"
-                data-testid="input-gantt-end-date"
+                type="text"
+                placeholder="案件名で絞り込み"
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                className="gantt-filter-input-text"
+                data-testid="input-gantt-project-filter"
               />
             </div>
-
-            <Input
-              type="text"
-              placeholder="案件名で絞り込み"
-              value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value)}
-              className="gantt-filter-input-text"
-              data-testid="input-gantt-project-filter"
-            />
           </div>
         </div>
 
-        {/* Gantt Chart Container */}
-        <div className="gantt-page-content">
-          <div className="gantt-wrapper">
-            {visibleTasks.length === 0 ? (
-              <p className="p-6 text-muted-foreground">
-                {tasks.length === 0 ? "読み込み中..." : "選択されたフィルター条件に一致するタスクがありません"}
-              </p>
+        {/* Gantt Chart Container - Flexible */}
+        <div className="gantt-page-content flex-1">
+          <div className="gantt-wrapper h-full">
+            {tasks.length === 0 ? (
+              <p className="p-6 text-muted-foreground">読み込み中...</p>
+            ) : visibleTasks.length === 0 ? (
+              <p className="p-6 text-muted-foreground">選択されたフィルター条件に一致するタスクがありません</p>
             ) : (
               <GanttChart tasks={visibleTasks} />
             )}
