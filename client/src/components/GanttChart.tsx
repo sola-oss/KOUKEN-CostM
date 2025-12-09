@@ -190,7 +190,14 @@ export const GanttChart = ({
     <div
       ref={containerRef}
       data-testid="gantt-chart-container"
-      style={{ width: "100%", overflowX: "auto" }}
+      style={{ 
+        width: "100%",
+        height: "100%",
+        overflowX: "auto",
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column"
+      }}
     />
   );
 };

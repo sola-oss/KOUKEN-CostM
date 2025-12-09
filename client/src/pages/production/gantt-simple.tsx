@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { GanttChart, GanttTask } from "../../components/GanttChart";
 
 const GanttSimple = () => {
@@ -40,33 +41,26 @@ const GanttSimple = () => {
   }, []);
 
   return (
-    <div className="gantt-wrapper">
-      <div
-        style={{
-          padding: 20,
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-        }}
-      >
-        <h2 style={{ marginBottom: 12 }}>案件別ガントチャート（frappe-gantt）</h2>
+    <TooltipProvider>
+      <div className="p-6 space-y-4" data-testid="page-gantt">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">案件別ガントチャート</h1>
+          <p className="text-muted-foreground">frappe-ganttで案件別タイムラインを表示</p>
+        </div>
 
-        <div
-          style={{
-            flex: 1,
-            overflow: "auto",
-          }}
-        >
-          <div style={{ minWidth: 1200 }}>
+        {/* Gantt Chart Container */}
+        <div className="gantt-page-content">
+          <div className="gantt-wrapper">
             {tasks.length === 0 ? (
-              <p>読み込み中...</p>
+              <p className="p-6 text-muted-foreground">読み込み中...</p>
             ) : (
               <GanttChart tasks={tasks} />
             )}
           </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 };
 

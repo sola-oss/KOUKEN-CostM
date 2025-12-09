@@ -9,8 +9,22 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Gantt Chart Page Layout */
+.gantt-page-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 500px;
+  max-height: calc(100vh - 200px);
+  background-color: #ffffff;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  flex: 1;
+}
+
 .gantt-wrapper {
-  height: calc(100vh - 64px);
+  width: 100%;
+  height: 100%;
   overflow: auto;
   position: relative;
 }
