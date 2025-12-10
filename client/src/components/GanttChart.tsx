@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import Gantt from "frappe-gantt";
 import "../styles/frappe-gantt.css";
 
@@ -19,23 +19,6 @@ interface GanttChartProps {
   onClick?: (task: GanttTask) => void;
 }
 
-// スクロール可能な親要素を探すヘルパー関数
-const findScrollableParent = (element: HTMLElement | null): HTMLElement | null => {
-  let current = element?.parentElement;
-  while (current) {
-    const style = getComputedStyle(current);
-    const overflowY = style.overflowY;
-    const isScrollable =
-      (overflowY === "auto" || overflowY === "scroll") &&
-      current.scrollHeight > current.clientHeight;
-    if (isScrollable) {
-      return current;
-    }
-    current = current.parentElement;
-  }
-  return null;
-};
-
 export const GanttChart = ({
   tasks,
   viewMode = "Week",
@@ -43,11 +26,12 @@ export const GanttChart = ({
   onProgressChange,
   onClick,
 }: GanttChartProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
   const ganttRef = useRef<Gantt | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current || tasks.length === 0) return;
+    if (!mountRef.current || tasks.length === 0) return;
 
     const formattedTasks = tasks.map((task) => ({
       id: task.id,
@@ -58,11 +42,12 @@ export const GanttChart = ({
       dependencies: task.dependencies || "",
     }));
 
+    // Clear only the mount point, not the wrapper
     if (ganttRef.current) {
-      containerRef.current.innerHTML = "";
+      mountRef.current.innerHTML = "";
     }
 
-    ganttRef.current = new Gantt(containerRef.current, formattedTasks, {
+    ganttRef.current = new Gantt(mountRef.current, formattedTasks, {
       view_mode: viewMode,
       date_format: "YYYY-MM-DD",
       language: "ja",
@@ -83,31 +68,9 @@ export const GanttChart = ({
         : undefined,
     });
 
-    // ヘッダーを sticky にするための処理
-    const setupStickyHeader = () => {
-      if (!containerRef.current) return;
-      const svgElement = containerRef.current.querySelector("svg");
-      if (!svgElement) return;
-
-      // SVG 内のヘッダー行を探す（最初の <g> グループがヘッダーの可能性が高い）
-      const groups = svgElement.querySelectorAll("g");
-      if (groups.length > 0) {
-        const headerElement = groups[0] as SVGElement;
-        
-        // SVG 要素の場合は setAttribute を使用
-        const currentClass = headerElement.getAttribute("class") || "";
-        if (!currentClass.includes("gantt-header-sticky")) {
-          headerElement.setAttribute("class", `${currentClass} gantt-header-sticky`);
-        }
-      }
-    };
-
-    // DOM の更新を待ってから sticky 処理を実行
-    requestAnimationFrame(setupStickyHeader);
-
     return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
+      if (mountRef.current) {
+        mountRef.current.innerHTML = "";
       }
     };
   }, [tasks, viewMode, onDateChange, onProgressChange, onClick]);
@@ -118,19 +81,34 @@ export const GanttChart = ({
     }
   }, [viewMode]);
 
+  // Handle wheel events to restore proper vertical scrolling
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    // If vertical scroll is dominant, handle it ourselves
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.stopPropagation();
+      wrapper.scrollTop += e.deltaY;
+    }
+  }, []);
+
   return (
     <div
-      ref={containerRef}
+      ref={wrapperRef}
       data-testid="gantt-chart-container"
+      onWheel={handleWheel}
       style={{ 
         width: "100%",
         height: "100%",
-        overflowX: "auto",
         overflowY: "auto",
-        display: "flex",
-        flexDirection: "column"
+        overflowX: "auto",
+        position: "relative"
       }}
-    />
+    >
+      {/* Isolated mount point for frappe-gantt - it can mutate this freely */}
+      <div ref={mountRef} style={{ minWidth: "100%", minHeight: "100%" }} />
+    </div>
   );
 };
 

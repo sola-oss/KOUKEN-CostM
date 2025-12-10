@@ -59,12 +59,12 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 500px;
-  max-height: calc(100vh - 200px);
+  height: 100%;
   background-color: #ffffff;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   flex: 1;
+  overflow: hidden;
 }
 
 .gantt-wrapper {
