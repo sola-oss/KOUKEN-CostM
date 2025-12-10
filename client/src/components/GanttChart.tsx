@@ -105,75 +105,7 @@ export const GanttChart = ({
     // DOM の更新を待ってから sticky 処理を実行
     requestAnimationFrame(setupStickyHeader);
 
-    // カスタムwheelイベントハンドラ
-    // frappe-ganttの内部ハンドラがdeltaYを横スクロールに変換してしまうので、
-    // それを防いで縦/横スクロールを適切に振り分ける
-    const container = containerRef.current;
-    const svgElement = container.querySelector("svg");
-
-    const handleWheel = (e: WheelEvent) => {
-      const ganttContainer = container.querySelector(".gantt-container") as HTMLElement;
-      
-      // 縦スクロール用のヘルパー関数
-      const applyVerticalScroll = (delta: number): boolean => {
-        const scrollableParent = findScrollableParent(container);
-        if (scrollableParent) {
-          scrollableParent.scrollTop += delta;
-          return true;
-        }
-        const parent = container.parentElement;
-        if (parent && parent.scrollHeight > parent.clientHeight) {
-          parent.scrollTop += delta;
-          return true;
-        }
-        return false;
-      };
-      
-      // トラックパッドの横スクロール（deltaXが0でない場合）
-      if (e.deltaX !== 0) {
-        let handled = false;
-        if (ganttContainer) {
-          ganttContainer.scrollLeft += e.deltaX;
-          handled = true;
-        }
-        // deltaYも同時にある場合は縦スクロールも適用
-        if (e.deltaY !== 0) {
-          if (applyVerticalScroll(e.deltaY)) {
-            handled = true;
-          }
-        }
-        if (handled) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        return;
-      }
-
-      // Shift+ホイールで横スクロール
-      if (e.shiftKey) {
-        if (ganttContainer) {
-          e.preventDefault();
-          e.stopPropagation();
-          ganttContainer.scrollLeft += e.deltaY;
-        }
-        return;
-      }
-
-      // 通常のホイール → 縦スクロール
-      if (applyVerticalScroll(e.deltaY)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-
-    if (svgElement) {
-      svgElement.addEventListener("wheel", handleWheel, { passive: false, capture: true });
-    }
-
     return () => {
-      if (svgElement) {
-        svgElement.removeEventListener("wheel", handleWheel, { capture: true });
-      }
       if (containerRef.current) {
         containerRef.current.innerHTML = "";
       }

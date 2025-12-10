@@ -103,16 +103,16 @@ const GanttSimple = () => {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col h-full p-6 space-y-4" data-testid="page-gantt">
-        {/* Page Header with Toolbar - All in One Section */}
-        <div className="space-y-4">
+      <div className="flex flex-col w-full h-full" data-testid="page-gantt">
+        {/* Page Header with Toolbar - Fixed, always visible */}
+        <div className="px-6 pt-6 pb-4 space-y-4 flex-shrink-0 border-b bg-background">
           {/* Title and Description */}
           <div>
             <h1 className="text-3xl font-bold tracking-tight">案件別ガントチャート</h1>
             <p className="text-muted-foreground">frappe-ganttで案件別タイムラインを表示</p>
           </div>
 
-          {/* Gantt Toolbar - Unified */}
+          {/* Gantt Toolbar - Unified, always visible */}
           <div className="gantt-toolbar" data-testid="gantt-toolbar">
             {/* Left side: Navigation buttons */}
             <div className="gantt-toolbar-left">
@@ -185,16 +185,18 @@ const GanttSimple = () => {
           </div>
         </div>
 
-        {/* Gantt Chart Container - Flexible */}
-        <div className="gantt-page-content flex-1">
-          <div className="gantt-wrapper h-full">
-            {tasks.length === 0 ? (
-              <p className="p-6 text-muted-foreground">読み込み中...</p>
-            ) : visibleTasks.length === 0 ? (
-              <p className="p-6 text-muted-foreground">選択されたフィルター条件に一致するタスクがありません</p>
-            ) : (
-              <GanttChart tasks={visibleTasks} />
-            )}
+        {/* Gantt Chart Container - Flexible, scrollable */}
+        <div className="flex-1 overflow-hidden p-6">
+          <div className="gantt-page-content h-full">
+            <div className="gantt-wrapper h-full">
+              {tasks.length === 0 ? (
+                <p className="p-6 text-muted-foreground">読み込み中...</p>
+              ) : visibleTasks.length === 0 ? (
+                <p className="p-6 text-muted-foreground">選択されたフィルター条件に一致するタスクがありません</p>
+              ) : (
+                <GanttChart tasks={visibleTasks} />
+              )}
+            </div>
           </div>
         </div>
       </div>
