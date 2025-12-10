@@ -100,7 +100,7 @@ html, body {
   width: calc(100% - 3rem);
   max-width: calc(100vw - 17rem - 3rem);
   overflow-x: auto;
-  overflow-y: auto;
+  overflow-y: hidden;
   position: relative;
   background-color: #ffffff;
   border: 1px solid hsl(var(--border));
