@@ -41,7 +41,6 @@ export const GanttChart = ({
       dependencies: task.dependencies || "",
     }));
 
-    // Clear previous gantt instance
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
     }
