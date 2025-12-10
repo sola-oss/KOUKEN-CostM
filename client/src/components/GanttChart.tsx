@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import Gantt from "frappe-gantt";
 import "../styles/frappe-gantt.css";
 
@@ -30,6 +30,27 @@ export const GanttChart = ({
   const mountRef = useRef<HTMLDivElement>(null);
   const ganttRef = useRef<Gantt | null>(null);
 
+  // Capture wheel events BEFORE frappe-gantt can intercept them
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // If vertical scroll is dominant, intercept it
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.stopImmediatePropagation(); // Stop frappe-gantt from receiving this event
+        wrapper.scrollTop += e.deltaY;
+      }
+    };
+
+    // Use capture phase to intercept BEFORE frappe-gantt's bubble phase handler
+    wrapper.addEventListener("wheel", handleWheel, { capture: true, passive: false });
+
+    return () => {
+      wrapper.removeEventListener("wheel", handleWheel, { capture: true });
+    };
+  }, []);
+
   useEffect(() => {
     if (!mountRef.current || tasks.length === 0) return;
 
@@ -43,7 +64,7 @@ export const GanttChart = ({
     }));
 
     // Clear only the mount point, not the wrapper
-    if (ganttRef.current) {
+    if (ganttRef.current && mountRef.current) {
       mountRef.current.innerHTML = "";
     }
 
@@ -81,23 +102,10 @@ export const GanttChart = ({
     }
   }, [viewMode]);
 
-  // Handle wheel events to restore proper vertical scrolling
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    // If vertical scroll is dominant, handle it ourselves
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      e.stopPropagation();
-      wrapper.scrollTop += e.deltaY;
-    }
-  }, []);
-
   return (
     <div
       ref={wrapperRef}
       data-testid="gantt-chart-container"
-      onWheel={handleWheel}
       style={{ 
         width: "100%",
         height: "100%",
