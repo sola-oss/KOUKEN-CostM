@@ -23,6 +23,8 @@ declare module 'frappe-gantt' {
     popup_trigger?: string;
     custom_popup_html?: (task: Task) => string;
     language?: string;
+    today_button?: boolean;
+    view_mode_select?: boolean;
     on_click?: (task: Task) => void;
     on_date_change?: (task: Task, start: Date, end: Date) => void;
     on_progress_change?: (task: Task, progress: number) => void;

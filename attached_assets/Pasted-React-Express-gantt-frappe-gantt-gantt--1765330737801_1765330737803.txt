@@ -1,0 +1,231 @@
+React + Express の生産管理アプリです。
+/gantt 画面で「案件別ガントチャート」を表示しています（frappe-gantt 利用）。
+
+現在 /gantt で、次のような問題が同時に発生しています：
+
+1. ツールバー（開始日・終了日・案件名のフィルター）の UI が
+   画面表示直後の 1秒ほどだけ表示され、その後消えてしまう。
+   最終的には [Today] [すべて] だけのシンプルなツールバーだけが残っている。
+
+2. 開始日・終了日・案件名を入力しても、ガントチャートの表示内容が変わらない。
+   フィルターが一切効いていない。
+
+3. ガントチャートの横幅が画面より大きく、スクロールの挙動もおかしい。
+   とくにトラックパッドで「縦に」スクロールすると、横に移動してしまうことがある。
+
+4. ガントの下側に、[←] [Today] のボタンがもう一つ表示されており、
+   ヘッダー側のボタンと二重になっている。
+
+5. ページ全体のレイアウトとして、
+   - 左にサイドバー
+   - 右側に「案件別ガントチャート」（タイトル・サブタイトル・ツールバー）
+   - その下にガントチャート本体
+   という構造にしたいが、現状は /gantt だけ不安定な挙動になっている。
+
+ブラウザのDOM（抜粋）は次のようになっています（参考）：
+
+- 上部：
+  案件別ガントチャート
+  frappe-ganttで案件別タイムラインを表示
+  [←] [Today] [すべて]
+  開始日 <input type="date">
+  終了日 <input type="date">
+  <input type="text">（案件名フィルタ）
+
+- 下部：
+  .gantt-wrapper 内に Frappe Gantt の SVG と、
+  もう一組の [←] [Today] ボタン
+
+【最終的に実現したい UX】
+
+/gantt ページを、次のような仕様・構造にしてください。
+
+- ページ上部にタイトル部分：
+
+  案件別ガントチャート
+  frappe-ganttで案件別タイムラインを表示
+
+- そのすぐ下に「ツールバー」を 1つだけ置く。
+  このツールバーには、必ず次の UI を含める：
+
+  - 左側：
+    [←] ボタン
+    [Today] ボタン
+    [すべて] ボタン
+  - 右側：
+    開始日 input type="date"
+    終了日 input type="date"
+    案件名で絞り込み input type="text"（placeholder="案件名で絞り込み" など）
+
+- 上記ツールバーは、画面を開いてからずっと表示され続けること。
+  ロード後に別のヘッダーコンポーネントで上書きされて消えてしまうことがないようにする。
+
+- ガントチャート本体は、ヘッダー＋ツールバーの下にある
+  <div className="gantt-wrapper"> 内にのみ描画する。
+  ページ全体（body）はスクロールさせず、
+  ガントチャートのスクロールは .gantt-wrapper の中だけで完結する。
+
+【具体的な修正依頼】
+
+### 1. /gantt ページコンポーネントの統合
+
+1-1. ルーティング設定（React Router 等）から、
+     /gantt パスに対応する「最終的なページコンポーネント」を特定してください。
+     例：GanttPage.tsx / GanttChartPage.tsx など。
+
+1-2. 「開始日・終了日・案件名フィルター付きのツールバー」を定義しているコンポーネントを探し出し、
+     それを /gantt ページの正式なヘッダー／ツールバーとして採用してください。
+
+1-3. それ以外の「古いツールバー」や「[Today] だけのヘッダー」などが
+     /gantt ページで二重に使われている場合は、/gantt では使わないように削除・統合してください。
+
+1-4. JSX 構造のイメージは次のようにしてください（実際のレイアウトコンポーネント名や className はプロジェクトに合わせてOKです）：
+
+  <AppLayout>
+    <Sidebar />  // 既存のサイドバー
+
+    <main className="main-content">
+      <header className="page-header">
+        <h1>案件別ガントチャート</h1>
+        <p>frappe-ganttで案件別タイムラインを表示</p>
+
+        <div className="gantt-toolbar">
+          <div className="gantt-toolbar-left">
+            <button>←</button>
+            <button>Today</button>
+            <button>すべて</button>
+          </div>
+          <div className="gantt-toolbar-right">
+            <label>
+              開始日
+              <input type="date" value={startDate} onChange={...} />
+            </label>
+            <label>
+              終了日
+              <input type="date" value={endDate} onChange={...} />
+            </label>
+            <input
+              type="text"
+              placeholder="案件名で絞り込み"
+              value={projectFilter}
+              onChange={...}
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className="gantt-wrapper">
+        <FrappeGantt tasks={visibleTasks} ... />
+      </div>
+    </main>
+  </AppLayout>
+
+重要なのは：
+- /gantt ページでツールバーを描画している箇所が「1箇所だけ」になること
+- そのツールバーにフィルターUI（開始日・終了日・案件名）が必ず含まれていること
+- 下側に別の [←][Today] ボタンセットが残らないこと（重複を削除）
+
+### 2. フィルター用 state と絞り込みロジック
+
+2-1. /gantt ページコンポーネント内に、次のような state を定義してください（型は TS/JS に合わせて調整）：
+
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [projectFilter, setProjectFilter] = useState<string>("");
+
+2-2. 開始日・終了日の <input type="date">、案件名フィルターの <input type="text"> が
+     上記 state としっかりバインドされるように onChange を実装してください。
+
+2-3. 元々バックエンドから取得している tasks 配列を、そのまま FrappeGantt に渡すのではなく、
+     次のようにフィルタリングした visibleTasks を渡してください。
+     task.start / task.end / task.start_date / task.end_date など、実際に存在するフィールド名に合わせて調整してください。
+
+  const visibleTasks = tasks.filter((task) => {
+    const taskStart = new Date(task.start || task.start_date);
+    const taskEnd = new Date(task.end || task.end_date);
+
+    // 日付フィルタ：開始日
+    if (startDate) {
+      const filterStart = new Date(startDate);
+      if (taskEnd < filterStart) return false; // まったくかぶらなければ除外
+    }
+
+    // 日付フィルタ：終了日
+    if (endDate) {
+      const filterEnd = new Date(endDate);
+      if (taskStart > filterEnd) return false; // まったくかぶらなければ除外
+    }
+
+    // 案件名フィルタ（project_name や title など）
+    if (projectFilter) {
+      const keyword = projectFilter.toLowerCase();
+      const name = (task.project_name || task.title || "").toLowerCase();
+      if (!name.includes(keyword)) return false;
+    }
+
+    return true;
+  });
+
+  // これを Frappe Gantt に渡す
+  <FrappeGantt tasks={visibleTasks} ... />
+
+2-4. 「すべて」ボタンを押したときは、
+     startDate, endDate, projectFilter をすべて "" にリセットし、全件表示に戻るようにしてください。
+
+2-5. 「Today」ボタンの既存挙動（今日にスクロール等）があれば維持したまま、
+     必要であれば startDate / endDate を今日基準の値にセットするなどして構いません。
+
+### 3. スクロールとレイアウトの整理
+
+3-1. CSS で、body と .gantt-wrapper を次のようなイメージにしてください。
+     実際の値は既存レイアウトに合わせて微調整してください。
+
+  body {
+    margin: 0;
+    overflow: hidden; /* ページ全体はスクロールさせない */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .gantt-wrapper {
+    width: 100%;
+    height: calc(100vh - 200px); /* ヘッダー＋ツールバー分を引いた高さに調整 */
+    overflow-x: auto;
+    overflow-y: auto;
+    position: relative;
+  }
+
+3-2. /gantt 関連コンポーネント・カスタムフック内で、
+     onWheel / addEventListener("wheel", ...) などにより
+     deltaY を scrollLeft に変換しているようなコードがあれば、すべて削除してください。
+
+     目的は：
+     - 上下スクロール（ホイール・トラックパッド上下）は縦スクロールだけ動く
+     - 左右スクロール（トラックパッド左右・Shift+ホイールなど）のときだけ、横スクロールが動く
+     という標準挙動に戻すことです。
+
+3-3. Frappe Gantt を囲むコンテナ要素が .gantt-wrapper の中に 1つだけになるように整理してください。
+     .gantt-wrapper 以外に不要なスクロールコンテナがあれば削除してください。
+
+### 4. 動作確認の条件
+
+上記の修正を行ったあと、/gantt ページが次の状態になっていることを確認してください：
+
+- ページロード直後から、
+  「案件別ガントチャート」「frappe-ganttで案件別タイムラインを表示」の下に
+  [←] [Today] [すべて]＋開始日＋終了日＋案件名フィルターが表示され、
+  その後も消えない。
+
+- 下側に別の [←][Today] ボタンが表示されていない（ツールバーは1箇所のみ）。
+
+- 開始日・終了日・案件名を入力すると、Frappe Gantt に表示されるタスクの本数が変わり、
+  期間・案件が正しく絞り込まれる。
+
+- トラックパッドやマウスホイールで「縦に」スクロールすると、
+  画面は縦方向にだけ移動する。
+  （勝手に横方向にずれることはない）
+
+- 横スクロール（トラックパッド左右など）を行ったときのみ、
+  ガントチャートが左右にスクロールする。
+
+これらを満たすように、/gantt 関連のコンポーネント・レイアウト・CSS・イベント処理を整理して修正してください。
+必要であれば複数ファイルにまたがるリファクタリングを行って構いません。

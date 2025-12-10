@@ -9,13 +9,44 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* Gantt Chart Toolbar */
+/* Gantt Page Layout */
+.gantt-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.gantt-page-header {
+  flex-shrink: 0;
+  padding: 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background-color: hsl(var(--background));
+}
+
+.gantt-page-title {
+  margin-bottom: 1rem;
+}
+
+.gantt-page-title h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.gantt-page-title p {
+  color: hsl(var(--muted-foreground));
+  margin: 0.25rem 0 0 0;
+}
+
+/* Gantt Toolbar */
 .gantt-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
-  padding: 0.5rem 0;
   flex-wrap: wrap;
 }
 
@@ -42,7 +73,6 @@ body {
 .gantt-filter-label {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--foreground);
 }
 
 .gantt-filter-input {
@@ -54,32 +84,34 @@ body {
   min-width: 150px;
 }
 
-/* Gantt Chart Page Layout */
-.gantt-page-content {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  background-color: #ffffff;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  flex: 1;
-  overflow: hidden;
-}
-
+/* Gantt Wrapper - Contains the chart */
 .gantt-wrapper {
+  flex: 1;
   width: 100%;
-  height: 100%;
-  overflow-y: auto;
   overflow-x: auto;
+  overflow-y: auto;
   position: relative;
+  background-color: #ffffff;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  margin: 1.5rem;
+  margin-top: 0;
 }
 
-.gantt-header-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: #ffffff;
+.gantt-wrapper .gantt-chart-mount {
+  width: 100%;
+  min-height: 100%;
+}
+
+.gantt-loading,
+.gantt-empty {
+  padding: 1.5rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Hide frappe-gantt's built-in side-header navigation */
+.gantt-container .side-header {
+  display: none !important;
 }
 
 /* LIGHT MODE */

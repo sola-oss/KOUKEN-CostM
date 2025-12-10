@@ -19,25 +19,6 @@ interface GanttChartProps {
   onClick?: (task: GanttTask) => void;
 }
 
-// Calculate date span in days
-const calculateDateSpan = (tasks: GanttTask[]): number => {
-  if (tasks.length === 0) return 30;
-  
-  let minDate = new Date(tasks[0].start);
-  let maxDate = new Date(tasks[0].end);
-  
-  tasks.forEach(task => {
-    const start = new Date(task.start);
-    const end = new Date(task.end);
-    if (start < minDate) minDate = start;
-    if (end > maxDate) maxDate = end;
-  });
-  
-  const diffTime = maxDate.getTime() - minDate.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return Math.max(diffDays, 7); // Minimum 7 days
-};
-
 export const GanttChart = ({
   tasks,
   viewMode = "Week",
@@ -45,36 +26,11 @@ export const GanttChart = ({
   onProgressChange,
   onClick,
 }: GanttChartProps) => {
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const mountNodeRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const ganttRef = useRef<Gantt | null>(null);
 
-  // Capture wheel events BEFORE frappe-gantt can intercept them
   useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      // If vertical scroll is dominant, intercept it completely
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) * 0.5) {
-        e.preventDefault(); // Stop browser's default scroll behavior
-        e.stopImmediatePropagation(); // Stop frappe-gantt from receiving this event
-        wrapper.scrollTop += e.deltaY;
-        wrapper.scrollLeft = 0; // Reset any horizontal drift
-      }
-    };
-
-    // Use capture phase to intercept BEFORE frappe-gantt's bubble phase handler
-    wrapper.addEventListener("wheel", handleWheel, { capture: true, passive: false });
-
-    return () => {
-      wrapper.removeEventListener("wheel", handleWheel, { capture: true });
-    };
-  }, []);
-
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper || tasks.length === 0) return;
+    if (!containerRef.current || tasks.length === 0) return;
 
     const formattedTasks = tasks.map((task) => ({
       id: task.id,
@@ -85,48 +41,17 @@ export const GanttChart = ({
       dependencies: task.dependencies || "",
     }));
 
-    // Clean up existing mount node if it exists
-    if (mountNodeRef.current) {
-      mountNodeRef.current.remove();
-      mountNodeRef.current = null;
-      ganttRef.current = null;
+    // Clear previous gantt instance
+    if (containerRef.current) {
+      containerRef.current.innerHTML = "";
     }
 
-    // Create a new detached mount node - frappe-gantt can mutate this freely
-    const mountNode = document.createElement("div");
-    mountNode.style.width = "100%";
-    mountNode.style.minHeight = "100%";
-    wrapper.appendChild(mountNode);
-    mountNodeRef.current = mountNode;
-
-    // Calculate column width to fit viewport
-    const wrapperWidth = wrapper.clientWidth || 800;
-    const dateSpan = calculateDateSpan(tasks);
-    
-    // Calculate column width based on view mode and available width
-    let baseColumnWidth: number;
-    switch (viewMode) {
-      case "Day":
-        baseColumnWidth = Math.max(20, Math.min(50, (wrapperWidth - 200) / dateSpan));
-        break;
-      case "Week":
-        baseColumnWidth = Math.max(30, Math.min(80, (wrapperWidth - 200) / Math.ceil(dateSpan / 7)));
-        break;
-      case "Month":
-        baseColumnWidth = Math.max(80, Math.min(200, (wrapperWidth - 200) / Math.ceil(dateSpan / 30)));
-        break;
-      case "Year":
-        baseColumnWidth = Math.max(150, Math.min(300, (wrapperWidth - 200) / Math.ceil(dateSpan / 365)));
-        break;
-      default:
-        baseColumnWidth = 40;
-    }
-
-    ganttRef.current = new Gantt(mountNode, formattedTasks, {
+    ganttRef.current = new Gantt(containerRef.current, formattedTasks, {
       view_mode: viewMode,
       date_format: "YYYY-MM-DD",
       language: "ja",
-      column_width: baseColumnWidth,
+      today_button: false,
+      view_mode_select: false,
       bar_height: 24,
       bar_corner_radius: 3,
       padding: 18,
@@ -148,25 +73,23 @@ export const GanttChart = ({
     });
 
     return () => {
-      if (mountNodeRef.current) {
-        mountNodeRef.current.remove();
-        mountNodeRef.current = null;
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
       }
-      ganttRef.current = null;
     };
   }, [tasks, viewMode, onDateChange, onProgressChange, onClick]);
 
+  useEffect(() => {
+    if (ganttRef.current && viewMode) {
+      ganttRef.current.change_view_mode(viewMode);
+    }
+  }, [viewMode]);
+
   return (
     <div
-      ref={wrapperRef}
+      ref={containerRef}
       data-testid="gantt-chart-container"
-      style={{ 
-        width: "100%",
-        height: "100%",
-        overflowY: "auto",
-        overflowX: "hidden", // Hide horizontal scroll completely
-        position: "relative"
-      }}
+      className="gantt-chart-mount"
     />
   );
 };
