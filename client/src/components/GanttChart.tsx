@@ -19,6 +19,25 @@ interface GanttChartProps {
   onClick?: (task: GanttTask) => void;
 }
 
+// Calculate date span in days
+const calculateDateSpan = (tasks: GanttTask[]): number => {
+  if (tasks.length === 0) return 30;
+  
+  let minDate = new Date(tasks[0].start);
+  let maxDate = new Date(tasks[0].end);
+  
+  tasks.forEach(task => {
+    const start = new Date(task.start);
+    const end = new Date(task.end);
+    if (start < minDate) minDate = start;
+    if (end > maxDate) maxDate = end;
+  });
+  
+  const diffTime = maxDate.getTime() - minDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(diffDays, 7); // Minimum 7 days
+};
+
 export const GanttChart = ({
   tasks,
   viewMode = "Week",
@@ -27,7 +46,7 @@ export const GanttChart = ({
   onClick,
 }: GanttChartProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const mountRef = useRef<HTMLDivElement>(null);
+  const mountNodeRef = useRef<HTMLDivElement | null>(null);
   const ganttRef = useRef<Gantt | null>(null);
 
   // Capture wheel events BEFORE frappe-gantt can intercept them
@@ -36,10 +55,12 @@ export const GanttChart = ({
     if (!wrapper) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // If vertical scroll is dominant, intercept it
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      // If vertical scroll is dominant, intercept it completely
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) * 0.5) {
+        e.preventDefault(); // Stop browser's default scroll behavior
         e.stopImmediatePropagation(); // Stop frappe-gantt from receiving this event
         wrapper.scrollTop += e.deltaY;
+        wrapper.scrollLeft = 0; // Reset any horizontal drift
       }
     };
 
@@ -52,7 +73,8 @@ export const GanttChart = ({
   }, []);
 
   useEffect(() => {
-    if (!mountRef.current || tasks.length === 0) return;
+    const wrapper = wrapperRef.current;
+    if (!wrapper || tasks.length === 0) return;
 
     const formattedTasks = tasks.map((task) => ({
       id: task.id,
@@ -63,15 +85,51 @@ export const GanttChart = ({
       dependencies: task.dependencies || "",
     }));
 
-    // Clear only the mount point, not the wrapper
-    if (ganttRef.current && mountRef.current) {
-      mountRef.current.innerHTML = "";
+    // Clean up existing mount node if it exists
+    if (mountNodeRef.current) {
+      mountNodeRef.current.remove();
+      mountNodeRef.current = null;
+      ganttRef.current = null;
     }
 
-    ganttRef.current = new Gantt(mountRef.current, formattedTasks, {
+    // Create a new detached mount node - frappe-gantt can mutate this freely
+    const mountNode = document.createElement("div");
+    mountNode.style.width = "100%";
+    mountNode.style.minHeight = "100%";
+    wrapper.appendChild(mountNode);
+    mountNodeRef.current = mountNode;
+
+    // Calculate column width to fit viewport
+    const wrapperWidth = wrapper.clientWidth || 800;
+    const dateSpan = calculateDateSpan(tasks);
+    
+    // Calculate column width based on view mode and available width
+    let baseColumnWidth: number;
+    switch (viewMode) {
+      case "Day":
+        baseColumnWidth = Math.max(20, Math.min(50, (wrapperWidth - 200) / dateSpan));
+        break;
+      case "Week":
+        baseColumnWidth = Math.max(30, Math.min(80, (wrapperWidth - 200) / Math.ceil(dateSpan / 7)));
+        break;
+      case "Month":
+        baseColumnWidth = Math.max(80, Math.min(200, (wrapperWidth - 200) / Math.ceil(dateSpan / 30)));
+        break;
+      case "Year":
+        baseColumnWidth = Math.max(150, Math.min(300, (wrapperWidth - 200) / Math.ceil(dateSpan / 365)));
+        break;
+      default:
+        baseColumnWidth = 40;
+    }
+
+    ganttRef.current = new Gantt(mountNode, formattedTasks, {
       view_mode: viewMode,
       date_format: "YYYY-MM-DD",
       language: "ja",
+      column_width: baseColumnWidth,
+      bar_height: 24,
+      bar_corner_radius: 3,
+      padding: 18,
       on_date_change: onDateChange
         ? (task: any, start: Date, end: Date) => {
             onDateChange(task as GanttTask, start, end);
@@ -90,17 +148,13 @@ export const GanttChart = ({
     });
 
     return () => {
-      if (mountRef.current) {
-        mountRef.current.innerHTML = "";
+      if (mountNodeRef.current) {
+        mountNodeRef.current.remove();
+        mountNodeRef.current = null;
       }
+      ganttRef.current = null;
     };
   }, [tasks, viewMode, onDateChange, onProgressChange, onClick]);
-
-  useEffect(() => {
-    if (ganttRef.current && viewMode) {
-      ganttRef.current.change_view_mode(viewMode);
-    }
-  }, [viewMode]);
 
   return (
     <div
@@ -110,13 +164,10 @@ export const GanttChart = ({
         width: "100%",
         height: "100%",
         overflowY: "auto",
-        overflowX: "auto",
+        overflowX: "hidden", // Hide horizontal scroll completely
         position: "relative"
       }}
-    >
-      {/* Isolated mount point for frappe-gantt - it can mutate this freely */}
-      <div ref={mountRef} style={{ minWidth: "100%", minHeight: "100%" }} />
-    </div>
+    />
   );
 };
 
