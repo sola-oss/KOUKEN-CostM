@@ -71,13 +71,6 @@ const GanttSimple = () => {
       return true;
     });
 
-    console.log("Filtering applied:", {
-      startDate,
-      endDate,
-      projectFilter,
-      totalTasks: tasks.length,
-      visibleTasks: filtered.length,
-    });
     return filtered;
   }, [tasks, startDate, endDate, projectFilter]);
 
