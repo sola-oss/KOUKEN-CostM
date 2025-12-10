@@ -22,7 +22,7 @@ import { format } from "date-fns";
 
 // Form validation schema
 const taskFormSchema = z.object({
-  order_id: z.coerce.number().min(1, "受注番号は必須です"),
+  order_id: z.string().min(1, "受注番号は必須です"),
   task_name: z.string().min(1, "作業名は必須です"),
   assignee: z.string().min(1, "担当者は必須です"),  // 必須フィールド
   planned_start: z.string().min(1, "予定開始日は必須です"),
@@ -64,7 +64,7 @@ export default function TaskPlanning() {
   const createForm = useForm<TaskFormData>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
-      order_id: 0,
+      order_id: "",
       task_name: "",
       assignee: "",
       planned_start: "",
@@ -79,7 +79,7 @@ export default function TaskPlanning() {
   const editForm = useForm<TaskFormData>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
-      order_id: 0,
+      order_id: "",
       task_name: "",
       assignee: "",
       planned_start: "",
@@ -204,7 +204,7 @@ export default function TaskPlanning() {
 
   // Filter tasks
   const filteredTasks = tasks.filter(task => {
-    if (filterOrderId !== "all" && task.order_id !== parseInt(filterOrderId)) {
+    if (filterOrderId !== "all" && task.order_id !== filterOrderId) {
       return false;
     }
     if (filterStatus !== "all" && task.status !== filterStatus) {
@@ -255,15 +255,15 @@ export default function TaskPlanning() {
                       <FormLabel>受注番号 *</FormLabel>
                       <FormControl>
                         <Select 
-                          value={field.value?.toString() || ""} 
-                          onValueChange={(value) => field.onChange(parseInt(value))}
+                          value={field.value || ""} 
+                          onValueChange={field.onChange}
                         >
                           <SelectTrigger data-testid="select-order-id">
                             <SelectValue placeholder="受注番号を選択" />
                           </SelectTrigger>
                           <SelectContent>
                             {orders.map(order => (
-                              <SelectItem key={order.order_id} value={order.order_id.toString()}>
+                              <SelectItem key={order.order_id} value={order.order_id}>
                                 {order.order_id} - {order.product_name}
                               </SelectItem>
                             ))}
@@ -555,15 +555,15 @@ export default function TaskPlanning() {
                       <FormLabel>受注番号 *</FormLabel>
                       <FormControl>
                         <Select 
-                          value={field.value?.toString() || ""} 
-                          onValueChange={(value) => field.onChange(parseInt(value))}
+                          value={field.value || ""} 
+                          onValueChange={field.onChange}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="受注番号を選択" />
                           </SelectTrigger>
                           <SelectContent>
                             {orders.map(order => (
-                              <SelectItem key={order.order_id} value={order.order_id.toString()}>
+                              <SelectItem key={order.order_id} value={order.order_id}>
                                 {order.order_id} - {order.product_name}
                               </SelectItem>
                             ))}
