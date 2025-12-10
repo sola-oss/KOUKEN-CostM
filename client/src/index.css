@@ -98,9 +98,15 @@ body {
   margin-top: 0;
 }
 
-.gantt-wrapper .gantt-chart-mount {
+.gantt-chart-wrapper {
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.gantt-chart-mount {
+  width: 100%;
+  height: 100%;
 }
 
 .gantt-loading,
@@ -112,6 +118,13 @@ body {
 /* Hide frappe-gantt's built-in side-header navigation */
 .gantt-container .side-header {
   display: none !important;
+}
+
+/* Constrain gantt chart to container */
+.gantt-wrapper .gantt-container {
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* LIGHT MODE */

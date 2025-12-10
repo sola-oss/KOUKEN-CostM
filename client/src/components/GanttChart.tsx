@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Gantt from "frappe-gantt";
 import "../styles/frappe-gantt.css";
 
@@ -21,16 +21,30 @@ interface GanttChartProps {
 
 export const GanttChart = ({
   tasks,
-  viewMode = "Week",
+  viewMode = "Month",
   onDateChange,
   onProgressChange,
   onClick,
 }: GanttChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const ganttRef = useRef<Gantt | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
-    if (!containerRef.current || tasks.length === 0) return;
+    const updateWidth = () => {
+      if (wrapperRef.current) {
+        setContainerWidth(wrapperRef.current.clientWidth);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, []);
+
+  useEffect(() => {
+    if (!containerRef.current || tasks.length === 0 || containerWidth === 0) return;
 
     const formattedTasks = tasks.map((task) => ({
       id: task.id,
@@ -41,19 +55,43 @@ export const GanttChart = ({
       dependencies: task.dependencies || "",
     }));
 
+    const dates = tasks.flatMap((t) => [new Date(t.start), new Date(t.end)]);
+    const minDate = new Date(Math.min(...dates.map((d) => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map((d) => d.getTime())));
+    const daysDiff = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    const sidebarWidth = 200;
+    const availableWidth = containerWidth - sidebarWidth;
+
+    let columnWidth: number;
+    let effectiveViewMode = viewMode;
+
+    if (viewMode === "Month") {
+      const monthsDiff = Math.max(1, Math.ceil(daysDiff / 30));
+      columnWidth = Math.max(30, Math.floor(availableWidth / (monthsDiff + 2)));
+    } else if (viewMode === "Week") {
+      const weeksDiff = Math.max(1, Math.ceil(daysDiff / 7));
+      columnWidth = Math.max(20, Math.floor(availableWidth / (weeksDiff + 2)));
+    } else if (viewMode === "Day") {
+      columnWidth = Math.max(15, Math.floor(availableWidth / (daysDiff + 2)));
+    } else {
+      columnWidth = 50;
+    }
+
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
     }
 
     ganttRef.current = new Gantt(containerRef.current, formattedTasks, {
-      view_mode: viewMode,
+      view_mode: effectiveViewMode,
       date_format: "YYYY-MM-DD",
       language: "ja",
       today_button: false,
       view_mode_select: false,
-      bar_height: 24,
+      column_width: columnWidth,
+      bar_height: 20,
       bar_corner_radius: 3,
-      padding: 18,
+      padding: 14,
       on_date_change: onDateChange
         ? (task: any, start: Date, end: Date) => {
             onDateChange(task as GanttTask, start, end);
@@ -76,7 +114,7 @@ export const GanttChart = ({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [tasks, viewMode, onDateChange, onProgressChange, onClick]);
+  }, [tasks, viewMode, containerWidth, onDateChange, onProgressChange, onClick]);
 
   useEffect(() => {
     if (ganttRef.current && viewMode) {
@@ -85,11 +123,13 @@ export const GanttChart = ({
   }, [viewMode]);
 
   return (
-    <div
-      ref={containerRef}
-      data-testid="gantt-chart-container"
-      className="gantt-chart-mount"
-    />
+    <div ref={wrapperRef} className="gantt-chart-wrapper">
+      <div
+        ref={containerRef}
+        data-testid="gantt-chart-container"
+        className="gantt-chart-mount"
+      />
+    </div>
   );
 };
 

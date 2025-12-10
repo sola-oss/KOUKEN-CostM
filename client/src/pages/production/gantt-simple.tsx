@@ -2,12 +2,23 @@ import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GanttChart, GanttTask } from "../../components/GanttChart";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+const getDefaultDates = () => {
+  const today = new Date();
+  const threeMonthsLater = new Date(today);
+  threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+  return {
+    start: today.toISOString().split("T")[0],
+    end: threeMonthsLater.toISOString().split("T")[0],
+  };
+};
 
 const GanttSimple = () => {
+  const defaultDates = getDefaultDates();
   const [tasks, setTasks] = useState<GanttTask[]>([]);
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
+  const [startDate, setStartDate] = useState<string>(defaultDates.start);
+  const [endDate, setEndDate] = useState<string>(defaultDates.end);
   const [projectFilter, setProjectFilter] = useState<string>("");
 
   useEffect(() => {
@@ -75,12 +86,9 @@ const GanttSimple = () => {
   }, [tasks, startDate, endDate, projectFilter]);
 
   const handleToday = () => {
-    const today = new Date();
-    const threeMonthsLater = new Date(today);
-    threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
-
-    setStartDate(today.toISOString().split("T")[0]);
-    setEndDate(threeMonthsLater.toISOString().split("T")[0]);
+    const dates = getDefaultDates();
+    setStartDate(dates.start);
+    setEndDate(dates.end);
     setProjectFilter("");
   };
 
@@ -88,6 +96,20 @@ const GanttSimple = () => {
     setStartDate("");
     setEndDate("");
     setProjectFilter("");
+  };
+
+  const shiftPeriod = (direction: number) => {
+    if (!startDate || !endDate) return;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const shiftDays = Math.max(7, Math.floor(daysInPeriod / 2));
+    
+    start.setDate(start.getDate() + (direction * shiftDays));
+    end.setDate(end.getDate() + (direction * shiftDays));
+    
+    setStartDate(start.toISOString().split("T")[0]);
+    setEndDate(end.toISOString().split("T")[0]);
   };
 
   return (
@@ -103,6 +125,7 @@ const GanttSimple = () => {
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => shiftPeriod(-1)}
               data-testid="button-gantt-prev"
               title="前へ"
             >
@@ -116,6 +139,16 @@ const GanttSimple = () => {
               data-testid="button-gantt-today"
             >
               Today
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => shiftPeriod(1)}
+              data-testid="button-gantt-next"
+              title="次へ"
+            >
+              <ChevronRight className="h-4 w-4" />
             </Button>
 
             <Button
