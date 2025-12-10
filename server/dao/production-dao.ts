@@ -502,35 +502,116 @@ export class ProductionDAO {
     start: string | null;
     end: string | null;
     progress: number;
+    type: 'task' | 'procurement' | 'order';
   }[]> {
-    const rows = this.db.prepare(`
+    const results: {
+      id: string;
+      name: string;
+      start: string | null;
+      end: string | null;
+      progress: number;
+      type: 'task' | 'procurement' | 'order';
+    }[] = [];
+
+    // 1. Tasks (作業計画)
+    const tasks = this.db.prepare(`
       SELECT 
-        order_id,
-        COALESCE(project_title, product_name, '(名称なし)') as project_name,
-        COALESCE(start_date, order_date) as start_date,
-        due_date,
-        status,
-        is_delivered
-      FROM orders
-      WHERE due_date IS NOT NULL OR start_date IS NOT NULL OR order_date IS NOT NULL
-      ORDER BY COALESCE(start_date, order_date, due_date) ASC
+        t.id,
+        t.task_name,
+        t.planned_start,
+        t.planned_end,
+        t.status,
+        t.order_id,
+        COALESCE(o.project_title, o.product_name, '') as order_name
+      FROM tasks t
+      LEFT JOIN orders o ON t.order_id = o.order_id
+      WHERE t.planned_start IS NOT NULL AND t.planned_end IS NOT NULL
+      ORDER BY t.planned_start ASC
     `).all() as {
-      order_id: string;
-      project_name: string;
-      start_date: string | null;
-      due_date: string | null;
+      id: number;
+      task_name: string;
+      planned_start: string;
+      planned_end: string;
       status: string;
-      is_delivered: number | null;
+      order_id: string;
+      order_name: string;
     }[];
 
-    return rows.map(row => ({
-      id: row.order_id,
-      name: row.project_name,
-      start: row.start_date,
-      end: row.due_date,
-      progress: row.is_delivered === 1 || row.status === 'completed' ? 100 : 
-                row.status === 'in_progress' ? 50 : 0
-    }));
+    for (const task of tasks) {
+      const progress = task.status === 'completed' ? 100 : 
+                       task.status === 'in_progress' ? 50 : 0;
+      const displayName = task.order_name 
+        ? `[${task.order_id}] ${task.task_name}` 
+        : `[${task.order_id}] ${task.task_name}`;
+      
+      results.push({
+        id: `task-${task.id}`,
+        name: displayName,
+        start: task.planned_start,
+        end: task.planned_end,
+        progress,
+        type: 'task'
+      });
+    }
+
+    // 2. Procurements (調達管理) - kind='purchase' has eta (delivery date)
+    const procurements = this.db.prepare(`
+      SELECT 
+        p.id,
+        p.item_name,
+        p.order_id,
+        p.kind,
+        p.eta,
+        p.received_at,
+        p.completed_at,
+        COALESCE(o.project_title, o.product_name, '') as order_name
+      FROM procurements p
+      LEFT JOIN orders o ON p.order_id = o.order_id
+      WHERE p.eta IS NOT NULL OR p.completed_at IS NOT NULL
+      ORDER BY COALESCE(p.eta, p.completed_at) ASC
+    `).all() as {
+      id: number;
+      item_name: string;
+      order_id: string | null;
+      kind: string;
+      eta: string | null;
+      received_at: string | null;
+      completed_at: string | null;
+      order_name: string;
+    }[];
+
+    for (const proc of procurements) {
+      // For procurements, use eta as end date and 7 days before as start
+      const endDate = proc.eta || proc.completed_at;
+      if (!endDate) continue;
+      
+      const startDateObj = new Date(endDate);
+      startDateObj.setDate(startDateObj.getDate() - 7);
+      const startDate = startDateObj.toISOString().split('T')[0];
+      
+      const isCompleted = proc.received_at !== null || proc.completed_at !== null;
+      const displayName = proc.order_id 
+        ? `[${proc.order_id}] ${proc.item_name} (調達)` 
+        : `${proc.item_name} (調達)`;
+      
+      results.push({
+        id: `proc-${proc.id}`,
+        name: displayName,
+        start: startDate,
+        end: endDate,
+        progress: isCompleted ? 100 : 0,
+        type: 'procurement'
+      });
+    }
+
+    // Sort by start date
+    results.sort((a, b) => {
+      const aStart = a.start || '';
+      const bStart = b.start || '';
+      return aStart.localeCompare(bStart);
+    });
+
+    return results;
   }
 
   // ========== Tasks CRUD ==========
