@@ -10,13 +10,22 @@
   padding: 0.6rem 1rem;
   border-bottom: 1px solid hsl(var(--border));
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .gantt-page-title {
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
+}
+
+.gantt-nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .gantt-page-title h1 {

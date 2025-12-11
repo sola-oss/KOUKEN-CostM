@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { Button } from "@/components/ui/button";
 import { GanttTaskList } from "../../components/gantt/GanttTaskList";
 import { GanttGrid } from "../../components/gantt/GanttGrid";
 import type { GanttProject } from "../../types/gantt";
@@ -6,6 +7,7 @@ import "../../styles/gantt-custom.css";
 
 const ROW_HEIGHT = 36;
 const COLUMN_WIDTH = 32;
+const PAST_DAYS_LIMIT = 30;
 
 interface ApiProject {
   orderId: string;
@@ -24,6 +26,7 @@ const GanttSimple = () => {
   const [rawProjects, setRawProjects] = useState<ApiProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [initialScrollDone, setInitialScrollDone] = useState(false);
   
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -85,34 +88,78 @@ const GanttSimple = () => {
   }, []);
 
   const displayDates = useMemo(() => {
-    const allDates: Date[] = [];
+    const today = new Date();
+    
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - PAST_DAYS_LIMIT);
+    
+    const allEndDates: Date[] = [];
     for (const project of projects) {
       for (const task of project.tasks) {
-        if (task.startDate) allDates.push(new Date(task.startDate));
-        if (task.endDate) allDates.push(new Date(task.endDate));
+        if (task.endDate) allEndDates.push(new Date(task.endDate));
       }
     }
     
-    if (allDates.length === 0) {
-      const today = new Date();
-      const threeMonthsLater = new Date(today);
-      threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
-      return {
-        start: today.toISOString().split("T")[0],
-        end: threeMonthsLater.toISOString().split("T")[0],
-      };
+    let endDate: Date;
+    if (allEndDates.length === 0) {
+      endDate = new Date(today);
+      endDate.setMonth(endDate.getMonth() + 3);
+    } else {
+      const maxTaskDate = new Date(Math.max(...allEndDates.map((d) => d.getTime())));
+      endDate = new Date(Math.max(today.getTime(), maxTaskDate.getTime()));
+      endDate.setDate(endDate.getDate() + 14);
     }
     
-    const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
-    const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 14);
-    
     return {
-      start: minDate.toISOString().split("T")[0],
-      end: maxDate.toISOString().split("T")[0],
+      start: startDate.toISOString().split("T")[0],
+      end: endDate.toISOString().split("T")[0],
     };
   }, [projects]);
+
+  const scrollToToday = useCallback(() => {
+    if (!gridRef.current) return;
+    
+    const today = new Date();
+    const startDate = new Date(displayDates.start);
+    
+    const daysDiff = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const scrollLeft = Math.max(0, daysDiff * COLUMN_WIDTH - gridRef.current.clientWidth / 3);
+    
+    gridRef.current.scrollTo({
+      left: scrollLeft,
+      behavior: 'smooth'
+    });
+  }, [displayDates.start]);
+
+  useEffect(() => {
+    if (!loading && projects.length > 0 && !initialScrollDone) {
+      let cancelled = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+      let rafHandle: number;
+      
+      const tryScroll = () => {
+        if (cancelled) return;
+        
+        if (gridRef.current && gridRef.current.scrollWidth > 0) {
+          scrollToToday();
+          setInitialScrollDone(true);
+        } else if (attempts < maxAttempts) {
+          attempts++;
+          rafHandle = requestAnimationFrame(tryScroll);
+        }
+      };
+      
+      rafHandle = requestAnimationFrame(tryScroll);
+      
+      return () => {
+        cancelled = true;
+        if (rafHandle) {
+          cancelAnimationFrame(rafHandle);
+        }
+      };
+    }
+  }, [loading, projects.length, initialScrollDone, scrollToToday]);
 
   return (
     <div className="gantt-page-container" data-testid="page-gantt">
@@ -120,6 +167,16 @@ const GanttSimple = () => {
         <div className="gantt-page-title">
           <h1>案件別ガントチャート</h1>
           <p>プロジェクト・工程のタイムライン表示</p>
+        </div>
+        <div className="gantt-nav-buttons">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={scrollToToday}
+            data-testid="button-gantt-today"
+          >
+            今日
+          </Button>
         </div>
       </header>
 
