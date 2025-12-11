@@ -225,12 +225,6 @@ const GanttSimple = () => {
         </div>
 
         <GanttFilters
-          startDate={startDate}
-          endDate={endDate}
-          projectFilter={projectFilter}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-          onProjectFilterChange={setProjectFilter}
           onToday={handleToday}
           onReset={handleReset}
           onShiftPeriod={shiftPeriod}
