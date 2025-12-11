@@ -76,19 +76,6 @@ export const GanttGrid = ({
 
   const totalWidth = dateColumns.length * columnWidth;
 
-  const totalRows = useMemo(() => {
-    let count = 0;
-    for (const project of projects) {
-      count++; // project row
-      if (project.isExpanded) {
-        count += project.tasks.length;
-      }
-    }
-    return count;
-  }, [projects]);
-
-  const totalHeight = totalRows * rowHeight;
-
   const getBarPosition = (taskStart: string, taskEnd: string) => {
     const taskStartStr = taskStart.split('T')[0];
     const taskEndStr = taskEnd.split('T')[0];
@@ -149,7 +136,7 @@ export const GanttGrid = ({
           </div>
         </div>
 
-        <div className="gantt-grid-body" style={{ height: `${totalHeight}px` }}>
+        <div className="gantt-grid-body">
           {dateColumns.map((col, idx) => (
             <div
               key={idx}

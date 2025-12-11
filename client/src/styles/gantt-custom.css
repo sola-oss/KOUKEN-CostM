@@ -12,17 +12,11 @@
   flex-shrink: 0;
 }
 
-.gantt-header-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
 .gantt-page-title {
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .gantt-page-title h1 {
@@ -96,7 +90,6 @@
   display: flex;
   flex: 1;
   overflow: hidden;
-  min-height: 0;
 }
 
 .gantt-task-list {
@@ -213,13 +206,11 @@
   flex: 1;
   overflow-x: auto;
   overflow-y: auto;
-  min-width: 0;
 }
 
 .gantt-grid {
   position: relative;
   min-height: 100%;
-  display: inline-block;
 }
 
 .gantt-grid-header {
