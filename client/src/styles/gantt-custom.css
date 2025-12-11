@@ -7,7 +7,7 @@
 }
 
 .gantt-page-header {
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
   border-bottom: 1px solid hsl(var(--border));
   flex-shrink: 0;
 }
