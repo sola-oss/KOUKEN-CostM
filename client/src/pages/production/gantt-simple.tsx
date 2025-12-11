@@ -55,11 +55,15 @@ const GanttSimple = () => {
   }, []);
 
   const visibleTasks = useMemo(() => {
+    const minYear = 2025;
     const filtered = tasks.filter((task) => {
       const taskStartStr = task.start.split("T")[0];
       const taskEndStr = task.end.split("T")[0];
       const taskStart = new Date(taskStartStr);
       const taskEnd = new Date(taskEndStr);
+
+      // Filter out data before 2025
+      if (taskEnd.getFullYear() < minYear) return false;
 
       if (startDate) {
         const filterStart = new Date(startDate);
@@ -210,7 +214,7 @@ const GanttSimple = () => {
             選択されたフィルター条件に一致するタスクがありません
           </p>
         ) : (
-          <GanttChart tasks={visibleTasks} />
+          <GanttChart tasks={visibleTasks} viewMode="Day" />
         )}
       </div>
     </div>
