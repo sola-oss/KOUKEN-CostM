@@ -228,7 +228,6 @@ const GanttSimple = () => {
           onToday={handleToday}
           onReset={handleReset}
           onShiftPeriod={shiftPeriod}
-          onPeriodPreset={handlePeriodPreset}
         />
       </header>
 
