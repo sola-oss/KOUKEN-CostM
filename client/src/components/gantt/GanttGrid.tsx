@@ -77,14 +77,28 @@ export const GanttGrid = ({
   const totalWidth = dateColumns.length * columnWidth;
 
   const getBarPosition = (taskStart: string, taskEnd: string) => {
-    const startIdx = dateColumns.findIndex(
-      (c) => c.dateStr >= taskStart.split('T')[0]
-    );
-    const endIdx = dateColumns.findIndex(
-      (c) => c.dateStr >= taskEnd.split('T')[0]
-    );
+    const taskStartStr = taskStart.split('T')[0];
+    const taskEndStr = taskEnd.split('T')[0];
     
-    if (startIdx === -1 || endIdx === -1) return null;
+    let startIdx = dateColumns.findIndex((c) => c.dateStr >= taskStartStr);
+    let endIdx = dateColumns.findIndex((c) => c.dateStr >= taskEndStr);
+    
+    if (startIdx === -1) {
+      startIdx = taskStartStr < dateColumns[0]?.dateStr ? 0 : dateColumns.length - 1;
+    }
+    
+    if (endIdx === -1) {
+      endIdx = taskEndStr > dateColumns[dateColumns.length - 1]?.dateStr 
+        ? dateColumns.length - 1 
+        : 0;
+    }
+    
+    startIdx = Math.max(0, Math.min(startIdx, dateColumns.length - 1));
+    endIdx = Math.max(0, Math.min(endIdx, dateColumns.length - 1));
+    
+    if (startIdx > endIdx) {
+      [startIdx, endIdx] = [endIdx, startIdx];
+    }
     
     const left = startIdx * columnWidth;
     const width = Math.max((endIdx - startIdx + 1) * columnWidth - 4, columnWidth - 4);

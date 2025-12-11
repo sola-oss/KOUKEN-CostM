@@ -164,8 +164,42 @@ const GanttSimple = () => {
     console.log("Task clicked:", taskId, orderId);
   }, []);
 
-  const displayStartDate = startDate || "2025-01-01";
-  const displayEndDate = endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const displayDates = useMemo(() => {
+    if (startDate && endDate) {
+      return { start: startDate, end: endDate };
+    }
+    
+    const allDates: Date[] = [];
+    for (const project of filteredProjects) {
+      for (const task of project.tasks) {
+        if (task.startDate) allDates.push(new Date(task.startDate));
+        if (task.endDate) allDates.push(new Date(task.endDate));
+      }
+    }
+    
+    if (allDates.length === 0) {
+      const today = new Date();
+      const threeMonthsLater = new Date(today);
+      threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+      return {
+        start: today.toISOString().split("T")[0],
+        end: threeMonthsLater.toISOString().split("T")[0],
+      };
+    }
+    
+    const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
+    const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
+    minDate.setDate(minDate.getDate() - 7);
+    maxDate.setDate(maxDate.getDate() + 14);
+    
+    return {
+      start: startDate || minDate.toISOString().split("T")[0],
+      end: endDate || maxDate.toISOString().split("T")[0],
+    };
+  }, [startDate, endDate, filteredProjects]);
+
+  const displayStartDate = displayDates.start;
+  const displayEndDate = displayDates.end;
 
   return (
     <div className="gantt-page-container" data-testid="page-gantt">
