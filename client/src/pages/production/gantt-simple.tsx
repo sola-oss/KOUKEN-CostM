@@ -42,11 +42,10 @@ interface ApiProject {
 }
 
 const GanttSimple = () => {
-  const defaultDates = getDefaultDates();
   const [rawProjects, setRawProjects] = useState<ApiProject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState<string>(defaultDates.start);
-  const [endDate, setEndDate] = useState<string>(defaultDates.end);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("");
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   
@@ -60,6 +59,28 @@ const GanttSimple = () => {
         setRawProjects(data);
         const allOrderIds = new Set(data.map((p) => p.orderId));
         setExpandedProjects(allOrderIds);
+        
+        const allDates: Date[] = [];
+        for (const project of data) {
+          for (const task of project.tasks) {
+            if (task.startDate) allDates.push(new Date(task.startDate.split("T")[0]));
+            if (task.endDate) allDates.push(new Date(task.endDate.split("T")[0]));
+          }
+        }
+        
+        if (allDates.length > 0) {
+          const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
+          const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
+          minDate.setDate(minDate.getDate() - 7);
+          maxDate.setDate(maxDate.getDate() + 14);
+          setStartDate(minDate.toISOString().split("T")[0]);
+          setEndDate(maxDate.toISOString().split("T")[0]);
+        } else {
+          const defaultDates = getDefaultDates();
+          setStartDate(defaultDates.start);
+          setEndDate(defaultDates.end);
+        }
+        
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -149,11 +170,28 @@ const GanttSimple = () => {
   }, []);
 
   const handleReset = useCallback(() => {
-    const dates = getDefaultDates();
-    setStartDate(dates.start);
-    setEndDate(dates.end);
+    const allDates: Date[] = [];
+    for (const project of rawProjects) {
+      for (const task of project.tasks) {
+        if (task.startDate) allDates.push(new Date(task.startDate.split("T")[0]));
+        if (task.endDate) allDates.push(new Date(task.endDate.split("T")[0]));
+      }
+    }
+    
+    if (allDates.length > 0) {
+      const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
+      const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
+      minDate.setDate(minDate.getDate() - 7);
+      maxDate.setDate(maxDate.getDate() + 14);
+      setStartDate(minDate.toISOString().split("T")[0]);
+      setEndDate(maxDate.toISOString().split("T")[0]);
+    } else {
+      const dates = getDefaultDates();
+      setStartDate(dates.start);
+      setEndDate(dates.end);
+    }
     setProjectFilter("");
-  }, []);
+  }, [rawProjects]);
 
   const handlePeriodPreset = useCallback((months: number) => {
     const dates = getPeriodDates(months);
