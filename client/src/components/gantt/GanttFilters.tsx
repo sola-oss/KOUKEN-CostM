@@ -26,7 +26,7 @@ export const GanttFilters = ({
   onShiftPeriod,
 }: GanttFiltersProps) => {
   return (
-    <div className="gantt-filters" data-testid="gantt-filters">
+    <div className="gantt-filters mt-[3px] mb-[3px]" data-testid="gantt-filters">
       <div className="gantt-filters-left">
         <Button
           variant="ghost"
@@ -66,7 +66,6 @@ export const GanttFilters = ({
           すべて
         </Button>
       </div>
-
       <div className="gantt-filters-right">
         <div className="gantt-filter-group">
           <label htmlFor="start-date" className="gantt-filter-label">
