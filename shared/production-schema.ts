@@ -50,10 +50,6 @@ export const orders = sqliteTable("orders", {
   status: text("status", { enum: ['pending', 'in_progress', 'completed'] }).default('pending'), // ワークフローステータス
   customer_name: text("customer_name"),          // → client_name に移行
   
-  // アーカイブ管理
-  is_archived: integer("is_archived", { mode: 'boolean' }).default(false),
-  archived_at: text("archived_at"),                // アーカイブ日時（ISO8601）
-  
   // システム管理
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),
@@ -63,7 +59,6 @@ export const orders = sqliteTable("orders", {
   startDateIdx: index("idx_orders_start").on(table.start_date),
   orderDateIdx: index("idx_orders_order_date").on(table.order_date),
   invoiceMonthIdx: index("idx_orders_invoice_month").on(table.invoice_month),
-  archivedIdx: index("idx_orders_archived").on(table.is_archived),
 }));
 
 // 手配 (Procurements) - 購買(purchase) と 製造(manufacture) を統合

@@ -91,8 +91,7 @@ router.get('/api/production/orders', async (req, res) => {
       to, 
       search, 
       page = '1', 
-      page_size = '20',
-      include_archived = 'false'
+      page_size = '20' 
     } = req.query as Record<string, string>;
 
     const options = {
@@ -100,8 +99,7 @@ router.get('/api/production/orders', async (req, res) => {
       to: to ? toUTC(to) : undefined,
       search,
       page: parseInt(page),
-      pageSize: parseInt(page_size),
-      includeArchived: include_archived === 'true'
+      pageSize: parseInt(page_size)
     };
 
     const result = await dao.getOrders(options);
