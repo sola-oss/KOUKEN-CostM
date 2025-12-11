@@ -221,6 +221,7 @@ const GanttSimple = () => {
       <header className="gantt-page-header">
         <div className="gantt-page-title">
           <h1>案件別ガントチャート</h1>
+          <p>プロジェクト・工程のタイムライン表示</p>
         </div>
 
         <GanttFilters
