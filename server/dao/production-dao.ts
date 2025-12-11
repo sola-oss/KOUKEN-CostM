@@ -513,7 +513,6 @@ export class ProductionDAO {
       type: 'task' | 'procurement' | 'order';
     }[] = [];
 
-    // 1. Tasks (作業計画)
     const tasks = this.db.prepare(`
       SELECT 
         t.id,
@@ -554,7 +553,6 @@ export class ProductionDAO {
       });
     }
 
-    // 2. Procurements (調達管理) - kind='purchase' has eta (delivery date)
     const procurements = this.db.prepare(`
       SELECT 
         p.id,
@@ -581,7 +579,6 @@ export class ProductionDAO {
     }[];
 
     for (const proc of procurements) {
-      // For procurements, use eta as end date and 7 days before as start
       const endDate = proc.eta || proc.completed_at;
       if (!endDate) continue;
       
@@ -604,7 +601,6 @@ export class ProductionDAO {
       });
     }
 
-    // Sort by start date
     results.sort((a, b) => {
       const aStart = a.start || '';
       const bStart = b.start || '';
@@ -612,6 +608,135 @@ export class ProductionDAO {
     });
 
     return results;
+  }
+
+  async getGanttHierarchy(): Promise<{
+    orderId: string;
+    projectName: string;
+    tasks: {
+      id: string;
+      taskName: string;
+      startDate: string;
+      endDate: string;
+      progress: number;
+      type: 'task' | 'procurement';
+    }[];
+  }[]> {
+    const projectsMap = new Map<string, {
+      orderId: string;
+      projectName: string;
+      tasks: {
+        id: string;
+        taskName: string;
+        startDate: string;
+        endDate: string;
+        progress: number;
+        type: 'task' | 'procurement';
+      }[];
+    }>();
+
+    const tasks = this.db.prepare(`
+      SELECT 
+        t.id,
+        t.task_name,
+        t.planned_start,
+        t.planned_end,
+        t.status,
+        t.order_id,
+        COALESCE(o.project_title, o.product_name, o.order_id) as project_name
+      FROM tasks t
+      LEFT JOIN orders o ON t.order_id = o.order_id
+      WHERE t.planned_start IS NOT NULL AND t.planned_end IS NOT NULL
+      ORDER BY t.order_id, t.planned_start ASC
+    `).all() as {
+      id: number;
+      task_name: string;
+      planned_start: string;
+      planned_end: string;
+      status: string;
+      order_id: string;
+      project_name: string;
+    }[];
+
+    for (const task of tasks) {
+      const orderId = task.order_id || 'unknown';
+      if (!projectsMap.has(orderId)) {
+        projectsMap.set(orderId, {
+          orderId,
+          projectName: task.project_name || orderId,
+          tasks: []
+        });
+      }
+      
+      const progress = task.status === 'completed' ? 100 : 
+                       task.status === 'in_progress' ? 50 : 0;
+      
+      projectsMap.get(orderId)!.tasks.push({
+        id: `task-${task.id}`,
+        taskName: task.task_name,
+        startDate: task.planned_start,
+        endDate: task.planned_end,
+        progress,
+        type: 'task'
+      });
+    }
+
+    const procurements = this.db.prepare(`
+      SELECT 
+        p.id,
+        p.item_name,
+        p.order_id,
+        p.eta,
+        p.received_at,
+        p.completed_at,
+        COALESCE(o.project_title, o.product_name, p.order_id) as project_name
+      FROM procurements p
+      LEFT JOIN orders o ON p.order_id = o.order_id
+      WHERE p.eta IS NOT NULL OR p.completed_at IS NOT NULL
+      ORDER BY p.order_id, COALESCE(p.eta, p.completed_at) ASC
+    `).all() as {
+      id: number;
+      item_name: string;
+      order_id: string | null;
+      eta: string | null;
+      received_at: string | null;
+      completed_at: string | null;
+      project_name: string;
+    }[];
+
+    for (const proc of procurements) {
+      const orderId = proc.order_id || 'unknown';
+      const endDate = proc.eta || proc.completed_at;
+      if (!endDate) continue;
+
+      if (!projectsMap.has(orderId)) {
+        projectsMap.set(orderId, {
+          orderId,
+          projectName: proc.project_name || orderId,
+          tasks: []
+        });
+      }
+
+      const startDateObj = new Date(endDate);
+      startDateObj.setDate(startDateObj.getDate() - 7);
+      const startDate = startDateObj.toISOString().split('T')[0];
+      const isCompleted = proc.received_at !== null || proc.completed_at !== null;
+
+      projectsMap.get(orderId)!.tasks.push({
+        id: `proc-${proc.id}`,
+        taskName: `${proc.item_name} (調達)`,
+        startDate,
+        endDate,
+        progress: isCompleted ? 100 : 0,
+        type: 'procurement'
+      });
+    }
+
+    return Array.from(projectsMap.values()).sort((a, b) => {
+      const aMinStart = a.tasks.length > 0 ? Math.min(...a.tasks.map(t => new Date(t.startDate).getTime())) : Infinity;
+      const bMinStart = b.tasks.length > 0 ? Math.min(...b.tasks.map(t => new Date(t.startDate).getTime())) : Infinity;
+      return aMinStart - bMinStart;
+    });
   }
 
   // ========== Tasks CRUD ==========

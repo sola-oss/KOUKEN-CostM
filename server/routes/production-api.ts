@@ -177,6 +177,34 @@ router.get('/api/production/orders/gantt', async (req, res) => {
   }
 });
 
+// GET /api/production/gantt/hierarchy - Get hierarchical Gantt data (projects -> tasks)
+router.get('/api/production/gantt/hierarchy', async (req, res) => {
+  try {
+    const hierarchyData = await dao.getGanttHierarchy();
+    
+    const convertedData = hierarchyData.map(project => ({
+      orderId: project.orderId,
+      projectName: project.projectName,
+      tasks: project.tasks.map(task => ({
+        id: task.id,
+        taskName: task.taskName,
+        startDate: task.startDate ? toJST(task.startDate) : null,
+        endDate: task.endDate ? toJST(task.endDate) : null,
+        progress: task.progress,
+        type: task.type
+      }))
+    }));
+    
+    res.json(convertedData);
+  } catch (error) {
+    console.error('Gantt hierarchy data error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch Gantt hierarchy data'
+    });
+  }
+});
+
 // GET /api/production/orders/:id - Get order details with KPI
 router.get('/api/production/orders/:id', async (req, res) => {
   try {
