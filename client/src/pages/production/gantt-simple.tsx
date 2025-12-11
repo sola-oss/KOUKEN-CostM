@@ -10,13 +10,21 @@ const COLUMN_WIDTH = 32;
 
 const getDefaultDates = () => {
   const today = new Date();
-  const oneMonthBefore = new Date(today);
-  oneMonthBefore.setMonth(oneMonthBefore.getMonth() - 1);
-  const twoMonthsLater = new Date(today);
-  twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
+  const threeMonthsLater = new Date(today);
+  threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
   return {
-    start: oneMonthBefore.toISOString().split("T")[0],
-    end: twoMonthsLater.toISOString().split("T")[0],
+    start: today.toISOString().split("T")[0],
+    end: threeMonthsLater.toISOString().split("T")[0],
+  };
+};
+
+const getPeriodDates = (months: number) => {
+  const today = new Date();
+  const endDate = new Date(today);
+  endDate.setMonth(endDate.getMonth() + months);
+  return {
+    start: today.toISOString().split("T")[0],
+    end: endDate.toISOString().split("T")[0],
   };
 };
 
@@ -141,9 +149,16 @@ const GanttSimple = () => {
   }, []);
 
   const handleReset = useCallback(() => {
-    setStartDate("");
-    setEndDate("");
+    const dates = getDefaultDates();
+    setStartDate(dates.start);
+    setEndDate(dates.end);
     setProjectFilter("");
+  }, []);
+
+  const handlePeriodPreset = useCallback((months: number) => {
+    const dates = getPeriodDates(months);
+    setStartDate(dates.start);
+    setEndDate(dates.end);
   }, []);
 
   const shiftPeriod = useCallback((direction: number) => {
@@ -219,6 +234,7 @@ const GanttSimple = () => {
           onToday={handleToday}
           onReset={handleReset}
           onShiftPeriod={shiftPeriod}
+          onPeriodPreset={handlePeriodPreset}
         />
       </header>
 

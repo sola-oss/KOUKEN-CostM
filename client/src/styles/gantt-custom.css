@@ -38,6 +38,15 @@
   gap: 0.5rem;
 }
 
+.gantt-period-presets {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid hsl(var(--border));
+}
+
 .gantt-filters-right {
   display: flex;
   align-items: center;
