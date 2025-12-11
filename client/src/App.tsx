@@ -54,7 +54,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider defaultTheme="light" storageKey="production-management-theme">
-          <SidebarProvider style={style as CSSProperties}>
+          <SidebarProvider defaultOpen={true} style={style as CSSProperties}>
             <div className="flex h-screen w-full">
               <AppSidebar />
               <div className="flex flex-col flex-1">
