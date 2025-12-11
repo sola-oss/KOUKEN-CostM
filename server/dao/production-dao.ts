@@ -107,12 +107,18 @@ export class ProductionDAO {
     search?: string;
     page?: number;
     pageSize?: number;
+    includeArchived?: boolean;
   } = {}): Promise<{ orders: Array<Order & { kpi: OrderKPI | null }>, total: number }> {
-    const { from, to, search, page = 1, pageSize = 20 } = options;
+    const { from, to, search, page = 1, pageSize = 20, includeArchived = false } = options;
     
     // Build WHERE clause
     let whereConditions: string[] = [];
     let params: any[] = [];
+    
+    // Filter out archived by default
+    if (!includeArchived) {
+      whereConditions.push('(is_archived = 0 OR is_archived IS NULL)');
+    }
     
     if (from) {
       whereConditions.push('order_date >= ?');
@@ -250,6 +256,67 @@ export class ProductionDAO {
     const stmt = this.db.prepare(`DELETE FROM orders WHERE order_id = ?`);
     const result = stmt.run(orderId);
     return result.changes > 0;
+  }
+
+  async archiveOrder(orderId: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      UPDATE orders SET is_archived = 1, archived_at = ?, updated_at = ?
+      WHERE order_id = ?
+    `);
+    const result = stmt.run(now, now, orderId);
+    return result.changes > 0;
+  }
+
+  async unarchiveOrder(orderId: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      UPDATE orders SET is_archived = 0, archived_at = NULL, updated_at = ?
+      WHERE order_id = ?
+    `);
+    const result = stmt.run(now, orderId);
+    return result.changes > 0;
+  }
+
+  async getArchivedOrders(options: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}): Promise<{ orders: Array<Order & { kpi: OrderKPI | null }>, total: number }> {
+    const { search, page = 1, pageSize = 20 } = options;
+    
+    let whereConditions: string[] = ['is_archived = 1'];
+    let params: any[] = [];
+    
+    if (search) {
+      whereConditions.push('(order_id LIKE ? OR client_name LIKE ? OR project_title LIKE ? OR client_order_no LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+    
+    const totalQuery = `SELECT COUNT(*) as count FROM orders ${whereClause}`;
+    const totalResult = this.db.prepare(totalQuery).get(params) as { count: number };
+    
+    const offset = (page - 1) * pageSize;
+    const ordersQuery = `
+      SELECT * FROM orders 
+      ${whereClause}
+      ORDER BY archived_at DESC, order_id DESC
+      LIMIT ? OFFSET ?
+    `;
+    
+    const orders = this.db.prepare(ordersQuery).all([...params, pageSize, offset]) as Order[];
+    
+    const ordersWithKPI = orders.map(order => ({
+      ...order,
+      kpi: this.metricsService.calculateOrderKPI(order.order_id)
+    }));
+
+    return {
+      orders: ordersWithKPI,
+      total: totalResult.count
+    };
   }
 
   // ========== Procurements CRUD ==========
