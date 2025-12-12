@@ -2,13 +2,11 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface GanttFiltersProps {
-  onToday: () => void;
   onReset: () => void;
   onShiftPeriod: (direction: number) => void;
 }
 
 export const GanttFilters = ({
-  onToday,
   onReset,
   onShiftPeriod,
 }: GanttFiltersProps) => {
@@ -28,10 +26,10 @@ export const GanttFilters = ({
         <Button
           variant="outline"
           size="sm"
-          onClick={onToday}
-          data-testid="button-gantt-today"
+          onClick={onReset}
+          data-testid="button-gantt-reset"
         >
-          今日
+          リセット
         </Button>
 
         <Button
@@ -42,15 +40,6 @@ export const GanttFilters = ({
           title="次へ"
         >
           <ChevronRight className="h-4 w-4" />
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onReset}
-          data-testid="button-gantt-reset"
-        >
-          リセット
         </Button>
       </div>
     </div>

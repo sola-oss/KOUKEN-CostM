@@ -18,16 +18,6 @@ const getDefaultDates = () => {
   };
 };
 
-const getPeriodDates = (months: number) => {
-  const today = new Date();
-  const endDate = new Date(today);
-  endDate.setMonth(endDate.getMonth() + months);
-  return {
-    start: today.toISOString().split("T")[0],
-    end: endDate.toISOString().split("T")[0],
-  };
-};
-
 interface ApiProject {
   orderId: string;
   projectName: string;
@@ -152,23 +142,6 @@ const GanttSimple = () => {
     });
   }, []);
 
-  const handleToday = useCallback(() => {
-    const dates = getDefaultDates();
-    setStartDate(dates.start);
-    setEndDate(dates.end);
-    setProjectFilter("");
-    
-    setTimeout(() => {
-      if (gridRef.current) {
-        const today = new Date();
-        const start = new Date(dates.start);
-        const daysDiff = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-        const scrollLeft = Math.max(0, daysDiff * COLUMN_WIDTH - gridRef.current.clientWidth / 2);
-        gridRef.current.scrollLeft = scrollLeft;
-      }
-    }, 100);
-  }, []);
-
   const handleReset = useCallback(() => {
     const allDates: Date[] = [];
     for (const project of rawProjects) {
@@ -192,12 +165,6 @@ const GanttSimple = () => {
     }
     setProjectFilter("");
   }, [rawProjects]);
-
-  const handlePeriodPreset = useCallback((months: number) => {
-    const dates = getPeriodDates(months);
-    setStartDate(dates.start);
-    setEndDate(dates.end);
-  }, []);
 
   const shiftPeriod = useCallback((direction: number) => {
     if (!startDate || !endDate) return;
@@ -263,7 +230,6 @@ const GanttSimple = () => {
         </div>
 
         <GanttFilters
-          onToday={handleToday}
           onReset={handleReset}
           onShiftPeriod={shiftPeriod}
         />
