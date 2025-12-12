@@ -74,7 +74,6 @@ export function AppSidebar() {
           </div>
         </div>
       </SidebarHeader>
-      
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>メインメニュー</SidebarGroupLabel>
@@ -88,7 +87,7 @@ export function AppSidebar() {
                 >
                   <Link href="/projects">
                     <Package className="h-4 w-4" />
-                    <span className="flex-1">案件管理</span>
+                    <span className="flex-1">受注管理</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
