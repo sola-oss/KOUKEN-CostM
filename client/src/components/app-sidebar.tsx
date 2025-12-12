@@ -1,6 +1,6 @@
 // Production Management System Sidebar
 import { 
-  Package, Calendar, ClipboardCheck, Settings, BarChart3, 
+  Package, Calendar, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown, Timer,
   ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet
 } from "lucide-react";
@@ -18,10 +18,8 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-  SidebarHeader,
-  SidebarFooter
+  SidebarHeader
 } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Work Instructions Sub-menu
@@ -54,14 +52,6 @@ const materialManagementSubItems = [
     title: "材料マスタ",
     url: "/materials-master",
     icon: Database
-  }
-];
-
-const bottomMenuItems = [
-  {
-    title: "設定",
-    url: "/settings",
-    icon: Settings
   }
 ];
 
@@ -143,7 +133,20 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* 3. 作業実績入力 */}
+              {/* 3. ガントチャート */}
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  asChild
+                  className={location === '/gantt' ? 'bg-sidebar-accent' : ''}
+                >
+                  <Link href="/gantt">
+                    <GanttChart className="h-4 w-4" />
+                    <span className="flex-1">ガントチャート</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* 4. 作業実績入力 */}
               <SidebarMenuItem>
                 <SidebarMenuButton 
                   asChild
@@ -156,7 +159,7 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* 4. 進捗カレンダー */}
+              {/* 5. 進捗カレンダー */}
               <SidebarMenuItem>
                 <SidebarMenuButton 
                   asChild
@@ -169,7 +172,7 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* 5. 材料管理 (Collapsible) - 進捗カレンダーと集計・承認の間 */}
+              {/* 6. 材料管理 (Collapsible) */}
               <Collapsible
                 open={isMaterialManagementOpen}
                 onOpenChange={setIsMaterialManagementOpen}
@@ -208,41 +211,10 @@ export function AppSidebar() {
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
-
-              {/* 6. ガントチャート */}
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  asChild
-                  className={location === '/gantt' ? 'bg-sidebar-accent' : ''}
-                >
-                  <Link href="/gantt">
-                    <GanttChart className="h-4 w-4" />
-                    <span className="flex-1">ガントチャート</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      
-      <SidebarFooter className="border-t">
-        <SidebarMenu>
-          {bottomMenuItems.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton 
-                asChild
-                className={location === item.url ? 'bg-sidebar-accent' : ''}
-              >
-                <Link href={item.url}>
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.title}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   );
 }
