@@ -2,8 +2,8 @@
 import Database from 'better-sqlite3';
 import { MetricsService } from '../services/metrics.js';
 import type { 
-  Order, Procurement, WorkerLog, Task, WorkLog, Material,
-  InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial,
+  Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
+  InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
   OrderKPI, DashboardKPI, CalendarEvent 
 } from '../../shared/production-schema.js';
 
@@ -1155,6 +1155,154 @@ export class ProductionDAO {
     `).all() as Array<{ material_type: string }>;
     
     return rows.map(r => r.material_type);
+  }
+
+  // ========== Material Usages CRUD ==========
+  
+  async getMaterialUsages(options?: {
+    project_id?: string;
+    material_id?: number;
+    area?: string;
+    zone?: string;
+  }): Promise<MaterialUsageWithMaterial[]> {
+    let query = `
+      SELECT 
+        mu.*,
+        m.material_type,
+        m.name AS material_name,
+        m.size AS material_size,
+        m.unit,
+        m.unit_weight,
+        CASE 
+          WHEN m.unit_weight IS NOT NULL AND mu.length IS NOT NULL 
+          THEN m.unit_weight * mu.length * mu.quantity
+          ELSE NULL
+        END AS total_weight
+      FROM material_usages mu
+      JOIN materials m ON mu.material_id = m.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    
+    if (options?.project_id) {
+      query += ` AND mu.project_id = ?`;
+      params.push(options.project_id);
+    }
+    if (options?.material_id) {
+      query += ` AND mu.material_id = ?`;
+      params.push(options.material_id);
+    }
+    if (options?.area) {
+      query += ` AND mu.area = ?`;
+      params.push(options.area);
+    }
+    if (options?.zone) {
+      query += ` AND mu.zone = ?`;
+      params.push(options.zone);
+    }
+    
+    query += ` ORDER BY mu.project_id, mu.area, mu.zone, m.material_type, m.name`;
+    
+    return this.db.prepare(query).all(...params) as MaterialUsageWithMaterial[];
+  }
+
+  async getMaterialUsageById(id: number): Promise<MaterialUsageWithMaterial | undefined> {
+    return this.db.prepare(`
+      SELECT 
+        mu.*,
+        m.material_type,
+        m.name AS material_name,
+        m.size AS material_size,
+        m.unit,
+        m.unit_weight,
+        CASE 
+          WHEN m.unit_weight IS NOT NULL AND mu.length IS NOT NULL 
+          THEN m.unit_weight * mu.length * mu.quantity
+          ELSE NULL
+        END AS total_weight
+      FROM material_usages mu
+      JOIN materials m ON mu.material_id = m.id
+      WHERE mu.id = ?
+    `).get(id) as MaterialUsageWithMaterial | undefined;
+  }
+
+  async createMaterialUsage(data: InsertMaterialUsage): Promise<number> {
+    const now = new Date().toISOString();
+    
+    const stmt = this.db.prepare(`
+      INSERT INTO material_usages (project_id, area, zone, drawing_no, material_id, quantity, length, remark, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const result = stmt.run(
+      data.project_id,
+      data.area ?? null,
+      data.zone ?? null,
+      data.drawing_no ?? null,
+      data.material_id,
+      data.quantity ?? 1,
+      data.length ?? null,
+      data.remark ?? null,
+      now
+    );
+    
+    return result.lastInsertRowid as number;
+  }
+
+  async updateMaterialUsage(id: number, data: Partial<InsertMaterialUsage>): Promise<boolean> {
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (data.project_id !== undefined) {
+      updates.push('project_id = ?');
+      params.push(data.project_id);
+    }
+    if (data.area !== undefined) {
+      updates.push('area = ?');
+      params.push(data.area);
+    }
+    if (data.zone !== undefined) {
+      updates.push('zone = ?');
+      params.push(data.zone);
+    }
+    if (data.drawing_no !== undefined) {
+      updates.push('drawing_no = ?');
+      params.push(data.drawing_no);
+    }
+    if (data.material_id !== undefined) {
+      updates.push('material_id = ?');
+      params.push(data.material_id);
+    }
+    if (data.quantity !== undefined) {
+      updates.push('quantity = ?');
+      params.push(data.quantity);
+    }
+    if (data.length !== undefined) {
+      updates.push('length = ?');
+      params.push(data.length);
+    }
+    if (data.remark !== undefined) {
+      updates.push('remark = ?');
+      params.push(data.remark);
+    }
+    
+    if (updates.length === 0) return false;
+    
+    params.push(id);
+    const stmt = this.db.prepare(`
+      UPDATE material_usages SET ${updates.join(', ')} WHERE id = ?
+    `);
+    
+    const result = stmt.run(...params);
+    return result.changes > 0;
+  }
+
+  async deleteMaterialUsage(id: number): Promise<boolean> {
+    const result = this.db.prepare(`
+      DELETE FROM material_usages WHERE id = ?
+    `).run(id);
+    
+    return result.changes > 0;
   }
 
   close(): void {

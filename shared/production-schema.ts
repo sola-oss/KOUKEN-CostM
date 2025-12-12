@@ -391,3 +391,49 @@ export const insertMaterialSchema = createInsertSchema(materials).omit({
 
 export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
 export type Material = typeof materials.$inferSelect;
+
+// ========== Material Usages (材料使用) ==========
+// プロジェクト別・工区別の材料使用管理
+export const materialUsages = sqliteTable("material_usages", {
+  id: integer("id").primaryKey(),
+  project_id: text("project_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
+  area: text("area"),                                 // エリア（2F など）
+  zone: text("zone"),                                 // 工区（N工区 / S工区）
+  drawing_no: text("drawing_no"),                     // 図面番号
+  material_id: integer("material_id").notNull().references(() => materials.id, { onDelete: "restrict" }),
+  quantity: real("quantity").notNull().default(1),    // 数量
+  length: real("length"),                             // 長さ（m）
+  remark: text("remark"),                             // 備考
+  created_at: text("created_at").notNull(),
+}, (table) => ({
+  projectIdx: index("idx_material_usages_project").on(table.project_id),
+  materialIdx: index("idx_material_usages_material").on(table.material_id),
+}));
+
+// Insert Schema for Material Usages
+export const insertMaterialUsageSchema = createInsertSchema(materialUsages).omit({
+  id: true,
+  created_at: true,
+}).extend({
+  project_id: z.string().min(1, "案件IDは必須です"),
+  area: z.string().optional(),
+  zone: z.string().optional(),
+  drawing_no: z.string().optional(),
+  material_id: z.coerce.number().int().positive("材料IDは必須です"),
+  quantity: z.coerce.number().positive("数量は1以上にしてください").default(1),
+  length: z.coerce.number().positive().optional(),
+  remark: z.string().optional(),
+});
+
+export type InsertMaterialUsage = z.infer<typeof insertMaterialUsageSchema>;
+export type MaterialUsage = typeof materialUsages.$inferSelect;
+
+// Material Usage with joined material info (for API response)
+export interface MaterialUsageWithMaterial extends MaterialUsage {
+  material_type: string;
+  material_name: string;
+  material_size: string;
+  unit: string;
+  unit_weight: number | null;
+  total_weight: number | null;  // Calculated: unit_weight × length × quantity
+}

@@ -1412,4 +1412,157 @@ router.delete('/api/materials/:id', async (req, res) => {
   }
 });
 
+// ========== Material Usages API ==========
+
+// GET /api/material-usages - Get material usages with filters
+router.get('/api/material-usages', async (req, res) => {
+  try {
+    const { project_id, material_id, area, zone } = req.query;
+    
+    const usages = await dao.getMaterialUsages({
+      project_id: project_id as string | undefined,
+      material_id: material_id ? parseInt(material_id as string, 10) : undefined,
+      area: area as string | undefined,
+      zone: zone as string | undefined,
+    });
+    
+    res.json({ data: usages });
+  } catch (error) {
+    console.error('Get material usages error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch material usages'
+    });
+  }
+});
+
+// GET /api/material-usages/:id - Get a single material usage
+router.get('/api/material-usages/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid material usage ID' });
+    }
+    
+    const usage = await dao.getMaterialUsageById(id);
+    if (!usage) {
+      return res.status(404).json({ error: 'Material usage not found' });
+    }
+    
+    res.json(usage);
+  } catch (error) {
+    console.error('Get material usage error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch material usage'
+    });
+  }
+});
+
+// POST /api/material-usages - Create a new material usage
+router.post('/api/material-usages', async (req, res) => {
+  try {
+    const { insertMaterialUsageSchema } = await import('../../shared/production-schema.js');
+    const parseResult = insertMaterialUsageSchema.safeParse(req.body);
+    
+    if (!parseResult.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parseResult.error.flatten().fieldErrors
+      });
+    }
+    
+    const id = await dao.createMaterialUsage(parseResult.data);
+    const created = await dao.getMaterialUsageById(id);
+    
+    res.status(201).json(created);
+  } catch (error: any) {
+    console.error('Create material usage error:', error);
+    
+    // Handle foreign key constraint errors
+    if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+      return res.status(400).json({ 
+        error: 'Invalid reference',
+        message: 'Project ID or Material ID does not exist'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to create material usage'
+    });
+  }
+});
+
+// PATCH /api/material-usages/:id - Update a material usage
+router.patch('/api/material-usages/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid material usage ID' });
+    }
+    
+    const { insertMaterialUsageSchema } = await import('../../shared/production-schema.js');
+    const updateSchema = insertMaterialUsageSchema.partial();
+    const parseResult = updateSchema.safeParse(req.body);
+    
+    if (!parseResult.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parseResult.error.flatten().fieldErrors
+      });
+    }
+    
+    const validData = parseResult.data;
+    if (Object.keys(validData).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided for update' });
+    }
+    
+    const updated = await dao.updateMaterialUsage(id, validData);
+    if (!updated) {
+      return res.status(404).json({ error: 'Material usage not found' });
+    }
+    
+    const result = await dao.getMaterialUsageById(id);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Update material usage error:', error);
+    
+    if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+      return res.status(400).json({ 
+        error: 'Invalid reference',
+        message: 'Project ID or Material ID does not exist'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update material usage'
+    });
+  }
+});
+
+// DELETE /api/material-usages/:id - Delete a material usage
+router.delete('/api/material-usages/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid material usage ID' });
+    }
+    
+    const deleted = await dao.deleteMaterialUsage(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Material usage not found' });
+    }
+    
+    res.json({ message: 'Material usage deleted successfully' });
+  } catch (error) {
+    console.error('Delete material usage error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to delete material usage'
+    });
+  }
+});
+
 export default router;
