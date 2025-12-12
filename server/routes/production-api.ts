@@ -1414,13 +1414,17 @@ router.delete('/api/materials/:id', async (req, res) => {
 
 // ========== Material Usages API ==========
 
-// GET /api/material-usages/summary - Get aggregated weight summary by project_id and zone
+// GET /api/material-usages/summary - Get aggregated weight summary by project_id, zone, and material_type
+// Query params:
+//   project_id: filter by project
+//   group_by_material_type: 'true' (default) or 'false'
 router.get('/api/material-usages/summary', async (req, res) => {
   try {
-    const { project_id } = req.query;
+    const { project_id, group_by_material_type } = req.query;
     
     const summary = await dao.getMaterialUsageSummary({
       project_id: project_id as string | undefined,
+      group_by_material_type: group_by_material_type !== 'false',
     });
     
     res.json({ data: summary });

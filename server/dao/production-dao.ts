@@ -1305,20 +1305,25 @@ export class ProductionDAO {
     return result.changes > 0;
   }
 
-  // Material Usages Summary - Aggregate by project_id and zone
+  // Material Usages Summary - Aggregate by project_id, zone, and material_type
   async getMaterialUsageSummary(options?: {
     project_id?: string;
+    group_by_material_type?: boolean;
   }): Promise<Array<{
     project_id: string;
     zone: string | null;
+    material_type: string | null;
     total_quantity: number;
     total_weight: number | null;
     record_count: number;
   }>> {
+    const groupByMaterialType = options?.group_by_material_type ?? true;
+    
     let query = `
       SELECT 
         mu.project_id,
         mu.zone,
+        ${groupByMaterialType ? 'm.material_type,' : 'NULL AS material_type,'}
         SUM(mu.quantity) AS total_quantity,
         SUM(
           CASE 
@@ -1339,11 +1344,16 @@ export class ProductionDAO {
       params.push(options.project_id);
     }
     
-    query += ` GROUP BY mu.project_id, mu.zone ORDER BY mu.project_id, mu.zone`;
+    if (groupByMaterialType) {
+      query += ` GROUP BY mu.project_id, mu.zone, m.material_type ORDER BY mu.project_id, mu.zone, m.material_type`;
+    } else {
+      query += ` GROUP BY mu.project_id, mu.zone ORDER BY mu.project_id, mu.zone`;
+    }
     
     const rows = this.db.prepare(query).all(...params) as Array<{
       project_id: string;
       zone: string | null;
+      material_type: string | null;
       total_quantity: number;
       total_weight: number | null;
       record_count: number;
