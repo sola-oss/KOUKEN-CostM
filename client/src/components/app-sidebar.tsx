@@ -70,7 +70,6 @@ export function AppSidebar() {
           <Package className="h-6 w-6 text-primary" />
           <div className="flex flex-col">
             <span className="text-sm font-semibold">工数管理</span>
-            <span className="text-xs text-muted-foreground">Production Management MVP</span>
           </div>
         </div>
       </SidebarHeader>
