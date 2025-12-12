@@ -2,9 +2,9 @@
 import Database from 'better-sqlite3';
 import { MetricsService } from '../services/metrics.js';
 import type { 
-  Order, Procurement, WorkerLog, Task, WorkLog,
-  InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog,
-  OrderKPI, DashboardKPI, CalendarEvent, MaterialCostAnalysis 
+  Order, Procurement, WorkerLog, Task, WorkLog, Material,
+  InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial,
+  OrderKPI, DashboardKPI, CalendarEvent 
 } from '../../shared/production-schema.js';
 
 export class ProductionDAO {
@@ -1049,52 +1049,112 @@ export class ProductionDAO {
     `).all(orderId) as Task[];
   }
 
-  // ========== Material Cost Analysis ==========
+  // ========== Materials Master CRUD ==========
   
-  async getMaterialCostAnalysis(): Promise<MaterialCostAnalysis[]> {
-    const query = `
-      SELECT 
-        o.order_id,
-        o.product_name,
-        o.customer_name,
-        o.estimated_material_cost,
-        o.status,
-        COALESCE(SUM(CASE WHEN p.kind = 'purchase' THEN p.qty * p.unit_price ELSE 0 END), 0) as actual_material_cost,
-        COUNT(CASE WHEN p.kind = 'purchase' THEN 1 END) as purchase_count
-      FROM orders o
-      LEFT JOIN procurements p ON o.order_id = p.order_id
-      GROUP BY o.order_id, o.product_name, o.customer_name, o.estimated_material_cost, o.status
-      ORDER BY o.order_id ASC
-    `;
+  async getMaterials(options?: {
+    material_type?: string;
+    search?: string;
+  }): Promise<Material[]> {
+    let query = `SELECT * FROM materials WHERE 1=1`;
+    const params: any[] = [];
     
-    const results = this.db.prepare(query).all() as Array<{
-      order_id: string;
-      product_name: string;
-      customer_name: string | null;
-      estimated_material_cost: number;
-      actual_material_cost: number;
-      purchase_count: number;
-      status: 'pending' | 'in_progress' | 'completed';
-    }>;
+    if (options?.material_type) {
+      query += ` AND material_type = ?`;
+      params.push(options.material_type);
+    }
     
-    return results.map(row => {
-      const variance = row.actual_material_cost - row.estimated_material_cost;
-      const variance_pct = row.estimated_material_cost > 0 
-        ? (variance / row.estimated_material_cost) * 100 
-        : 0;
-      
-      return {
-        order_id: row.order_id,
-        product_name: row.product_name,
-        customer_name: row.customer_name || undefined,
-        estimated_material_cost: row.estimated_material_cost,
-        actual_material_cost: row.actual_material_cost,
-        variance,
-        variance_pct,
-        purchase_count: row.purchase_count,
-        status: row.status
-      };
-    });
+    if (options?.search) {
+      query += ` AND (name LIKE ? OR size LIKE ? OR remark LIKE ?)`;
+      const searchTerm = `%${options.search}%`;
+      params.push(searchTerm, searchTerm, searchTerm);
+    }
+    
+    query += ` ORDER BY material_type, name, size`;
+    
+    return this.db.prepare(query).all(...params) as Material[];
+  }
+
+  async getMaterialById(id: number): Promise<Material | undefined> {
+    return this.db.prepare(`
+      SELECT * FROM materials WHERE id = ?
+    `).get(id) as Material | undefined;
+  }
+
+  async createMaterial(data: InsertMaterial): Promise<number> {
+    const now = new Date().toISOString();
+    
+    const stmt = this.db.prepare(`
+      INSERT INTO materials (material_type, name, size, unit, unit_weight, remark, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const result = stmt.run(
+      data.material_type,
+      data.name,
+      data.size,
+      data.unit,
+      data.unit_weight ?? null,
+      data.remark ?? null,
+      now
+    );
+    
+    return result.lastInsertRowid as number;
+  }
+
+  async updateMaterial(id: number, data: Partial<InsertMaterial>): Promise<boolean> {
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (data.material_type !== undefined) {
+      updates.push('material_type = ?');
+      params.push(data.material_type);
+    }
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.size !== undefined) {
+      updates.push('size = ?');
+      params.push(data.size);
+    }
+    if (data.unit !== undefined) {
+      updates.push('unit = ?');
+      params.push(data.unit);
+    }
+    if (data.unit_weight !== undefined) {
+      updates.push('unit_weight = ?');
+      params.push(data.unit_weight);
+    }
+    if (data.remark !== undefined) {
+      updates.push('remark = ?');
+      params.push(data.remark);
+    }
+    
+    if (updates.length === 0) return false;
+    
+    params.push(id);
+    const stmt = this.db.prepare(`
+      UPDATE materials SET ${updates.join(', ')} WHERE id = ?
+    `);
+    
+    const result = stmt.run(...params);
+    return result.changes > 0;
+  }
+
+  async deleteMaterial(id: number): Promise<boolean> {
+    const result = this.db.prepare(`
+      DELETE FROM materials WHERE id = ?
+    `).run(id);
+    
+    return result.changes > 0;
+  }
+
+  async getMaterialTypes(): Promise<string[]> {
+    const rows = this.db.prepare(`
+      SELECT DISTINCT material_type FROM materials ORDER BY material_type
+    `).all() as Array<{ material_type: string }>;
+    
+    return rows.map(r => r.material_type);
   }
 
   close(): void {

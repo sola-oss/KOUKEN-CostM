@@ -1265,18 +1265,149 @@ router.post('/api/work-logs/upload-csv', upload.single('file'), async (req, res)
   }
 });
 
-// ========== Material Cost Analysis API ==========
+// ========== Materials Master API ==========
 
-// GET /api/production/material-costs - Get material cost analysis for all orders
-router.get('/api/production/material-costs', async (req, res) => {
+// GET /api/materials - Get all materials with optional filters
+router.get('/api/materials', async (req, res) => {
   try {
-    const analysis = await dao.getMaterialCostAnalysis();
-    res.json({ data: analysis });
+    const { material_type, search } = req.query;
+    
+    const materials = await dao.getMaterials({
+      material_type: material_type as string | undefined,
+      search: search as string | undefined,
+    });
+    
+    res.json({ data: materials });
   } catch (error) {
-    console.error('Material cost analysis error:', error);
+    console.error('Get materials error:', error);
     res.status(500).json({ 
       error: 'Internal server error',
-      message: 'Failed to fetch material cost analysis'
+      message: 'Failed to fetch materials'
+    });
+  }
+});
+
+// GET /api/materials/types - Get distinct material types
+router.get('/api/materials/types', async (req, res) => {
+  try {
+    const types = await dao.getMaterialTypes();
+    res.json({ data: types });
+  } catch (error) {
+    console.error('Get material types error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch material types'
+    });
+  }
+});
+
+// GET /api/materials/:id - Get material by ID
+router.get('/api/materials/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid material ID' });
+    }
+    
+    const material = await dao.getMaterialById(id);
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+    
+    res.json(material);
+  } catch (error) {
+    console.error('Get material error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch material'
+    });
+  }
+});
+
+// POST /api/materials - Create a new material
+router.post('/api/materials', async (req, res) => {
+  try {
+    const { insertMaterialSchema } = await import('../../shared/production-schema.js');
+    const parseResult = insertMaterialSchema.safeParse(req.body);
+    
+    if (!parseResult.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parseResult.error.flatten().fieldErrors
+      });
+    }
+    
+    const id = await dao.createMaterial(parseResult.data);
+    const created = await dao.getMaterialById(id);
+    
+    res.status(201).json(created);
+  } catch (error) {
+    console.error('Create material error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to create material'
+    });
+  }
+});
+
+// PATCH /api/materials/:id - Update a material
+router.patch('/api/materials/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid material ID' });
+    }
+    
+    const { insertMaterialSchema } = await import('../../shared/production-schema.js');
+    const updateSchema = insertMaterialSchema.partial();
+    const parseResult = updateSchema.safeParse(req.body);
+    
+    if (!parseResult.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parseResult.error.flatten().fieldErrors
+      });
+    }
+    
+    const validData = parseResult.data;
+    if (Object.keys(validData).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided for update' });
+    }
+    
+    const updated = await dao.updateMaterial(id, validData);
+    if (!updated) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+    
+    res.json({ message: 'Material updated successfully' });
+  } catch (error) {
+    console.error('Update material error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update material'
+    });
+  }
+});
+
+// DELETE /api/materials/:id - Delete a material
+router.delete('/api/materials/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid material ID' });
+    }
+    
+    const deleted = await dao.deleteMaterial(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+    
+    res.json({ message: 'Material deleted successfully' });
+  } catch (error) {
+    console.error('Delete material error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to delete material'
     });
   }
 });

@@ -361,14 +361,33 @@ export interface CalendarEvent {
   procurement_id?: number;
 }
 
-export interface MaterialCostAnalysis {
-  order_id: string;
-  product_name: string;
-  customer_name?: string;
-  estimated_material_cost: number;  // 見込み材料費
-  actual_material_cost: number;     // 実際の購買費用合計
-  variance: number;                 // 差異（実際 - 見込み）
-  variance_pct: number;             // 差異率%
-  purchase_count: number;           // 購買件数
-  status: 'pending' | 'in_progress' | 'completed';
-}
+// ========== Materials Master (材料マスタ) ==========
+// 共通の材料マスタ - プロジェクト非依存
+export const materials = sqliteTable("materials", {
+  id: integer("id").primaryKey(),
+  material_type: text("material_type").notNull(),    // 材料種別（鋼材、配管、など）
+  name: text("name").notNull(),                       // 材料名（C鋼、H鋼、など）
+  size: text("size").notNull(),                       // サイズ（C100×50×5×7.5）
+  unit: text("unit").notNull(),                       // 単位（m、本、kg）
+  unit_weight: real("unit_weight"),                   // 単位重量（kg/m など）
+  remark: text("remark"),                             // 備考
+  created_at: text("created_at").notNull(),
+}, (table) => ({
+  typeNameIdx: index("idx_materials_type_name").on(table.material_type, table.name),
+}));
+
+// Insert Schema for Materials
+export const insertMaterialSchema = createInsertSchema(materials).omit({
+  id: true,
+  created_at: true,
+}).extend({
+  material_type: z.string().min(1, "材料種別は必須です"),
+  name: z.string().min(1, "材料名は必須です"),
+  size: z.string().min(1, "サイズは必須です"),
+  unit: z.string().min(1, "単位は必須です"),
+  unit_weight: z.coerce.number().optional(),
+  remark: z.string().optional(),
+});
+
+export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
+export type Material = typeof materials.$inferSelect;
