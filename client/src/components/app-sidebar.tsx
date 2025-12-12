@@ -1,8 +1,7 @@
 // Production Management System Sidebar
 import { 
-  Home, Package, Calendar, ClipboardCheck, FileText, 
-  Truck, Receipt, Users, Settings, BarChart3, 
-  ChevronRight, ChevronDown, Building2, Clock, Timer, CheckSquare,
+  Package, Calendar, ClipboardCheck, Settings, BarChart3, 
+  ChevronRight, ChevronDown, Timer,
   ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -210,33 +209,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* 6. 集計・承認 */}
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  asChild
-                  className={location === '/summary-approval' ? 'bg-sidebar-accent' : ''}
-                >
-                  <Link href="/summary-approval">
-                    <CheckSquare className="h-4 w-4" />
-                    <span className="flex-1">集計・承認</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* 7. 原価・粗利分析 */}
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  asChild
-                  className={location === '/cost-analysis' ? 'bg-sidebar-accent' : ''}
-                >
-                  <Link href="/cost-analysis">
-                    <BarChart3 className="h-4 w-4" />
-                    <span className="flex-1">原価・粗利分析</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* 8. ガントチャート */}
+              {/* 6. ガントチャート */}
               <SidebarMenuItem>
                 <SidebarMenuButton 
                   asChild
