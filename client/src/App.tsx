@@ -20,6 +20,7 @@ import SummaryApproval from "@/pages/production/summary-approval";
 import CostAnalysis from "@/pages/production/cost-analysis";
 import GanttSimple from "@/pages/production/gantt-simple";
 import MaterialUsages from "@/pages/production/material-usages";
+import MaterialSummary from "@/pages/production/material-summary";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/cost-analysis" component={CostAnalysis} />
       <Route path="/gantt" component={GanttSimple} />
       <Route path="/material-usages" component={MaterialUsages} />
+      <Route path="/material-summary" component={MaterialSummary} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
