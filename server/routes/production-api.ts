@@ -1414,6 +1414,25 @@ router.delete('/api/materials/:id', async (req, res) => {
 
 // ========== Material Usages API ==========
 
+// GET /api/material-usages/summary - Get aggregated weight summary by project_id and zone
+router.get('/api/material-usages/summary', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    
+    const summary = await dao.getMaterialUsageSummary({
+      project_id: project_id as string | undefined,
+    });
+    
+    res.json({ data: summary });
+  } catch (error) {
+    console.error('Get material usages summary error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch material usages summary'
+    });
+  }
+});
+
 // GET /api/material-usages - Get material usages with filters
 router.get('/api/material-usages', async (req, res) => {
   try {

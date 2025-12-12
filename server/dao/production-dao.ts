@@ -1305,6 +1305,53 @@ export class ProductionDAO {
     return result.changes > 0;
   }
 
+  // Material Usages Summary - Aggregate by project_id and zone
+  async getMaterialUsageSummary(options?: {
+    project_id?: string;
+  }): Promise<Array<{
+    project_id: string;
+    zone: string | null;
+    total_quantity: number;
+    total_weight: number | null;
+    record_count: number;
+  }>> {
+    let query = `
+      SELECT 
+        mu.project_id,
+        mu.zone,
+        SUM(mu.quantity) AS total_quantity,
+        SUM(
+          CASE 
+            WHEN m.unit_weight IS NOT NULL AND mu.length IS NOT NULL 
+            THEN m.unit_weight * mu.length * mu.quantity
+            ELSE NULL
+          END
+        ) AS total_weight,
+        COUNT(*) AS record_count
+      FROM material_usages mu
+      JOIN materials m ON mu.material_id = m.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    
+    if (options?.project_id) {
+      query += ` AND mu.project_id = ?`;
+      params.push(options.project_id);
+    }
+    
+    query += ` GROUP BY mu.project_id, mu.zone ORDER BY mu.project_id, mu.zone`;
+    
+    const rows = this.db.prepare(query).all(...params) as Array<{
+      project_id: string;
+      zone: string | null;
+      total_quantity: number;
+      total_weight: number | null;
+      record_count: number;
+    }>;
+    
+    return rows;
+  }
+
   close(): void {
     this.db.close();
   }
