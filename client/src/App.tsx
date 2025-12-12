@@ -65,7 +65,7 @@ function App() {
                 <header className="flex items-center justify-between px-4 py-3 border-b bg-background">
                   <div className="flex items-center gap-3">
                     <SidebarTrigger data-testid="button-sidebar-toggle" />
-                    <h1 className="text-lg font-semibold">生産管理ミニMVP</h1>
+                    <h1 className="text-lg font-semibold">工数管理</h1>
                   </div>
                   <ThemeToggle />
                 </header>
