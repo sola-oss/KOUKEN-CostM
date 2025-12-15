@@ -1,5 +1,5 @@
 // Production Management MVP - Material Usages (材料使用管理)
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Layers, Plus, Trash2 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -67,6 +68,8 @@ type MaterialUsageFormData = z.infer<typeof materialUsageFormSchema>;
 export default function MaterialUsages() {
   const { toast } = useToast();
   const [filterProjectId, setFilterProjectId] = useState<string>("");
+  const [selectedUsage, setSelectedUsage] = useState<MaterialUsageWithMaterial | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const { data: usagesResponse, isLoading: isLoadingUsages } = useQuery({
     queryKey: ['/api/material-usages', filterProjectId],
@@ -112,9 +115,42 @@ export default function MaterialUsages() {
     }
   });
 
+  const editForm = useForm<MaterialUsageFormData>({
+    resolver: zodResolver(materialUsageFormSchema),
+    defaultValues: {
+      project_id: "",
+      area: "",
+      zone: "",
+      drawing_no: "",
+      material_id: 0,
+      quantity: 1,
+      length: "",
+      remark: "",
+    }
+  });
+
+  useEffect(() => {
+    if (selectedUsage) {
+      editForm.reset({
+        project_id: selectedUsage.project_id,
+        area: selectedUsage.area || "",
+        zone: selectedUsage.zone || "",
+        drawing_no: selectedUsage.drawing_no || "",
+        material_id: selectedUsage.material_id,
+        quantity: selectedUsage.quantity,
+        length: selectedUsage.length ?? "",
+        remark: selectedUsage.remark || "",
+      });
+    }
+  }, [selectedUsage, editForm]);
+
   const watchMaterialId = form.watch("material_id");
   const watchLength = form.watch("length");
   const watchQuantity = form.watch("quantity");
+
+  const editWatchMaterialId = editForm.watch("material_id");
+  const editWatchLength = editForm.watch("length");
+  const editWatchQuantity = editForm.watch("quantity");
 
   const calculatedWeight = useMemo(() => {
     if (!watchMaterialId || !watchLength || !watchQuantity) return null;
@@ -124,6 +160,15 @@ export default function MaterialUsages() {
     if (isNaN(len) || len <= 0) return null;
     return material.unit_weight * len * watchQuantity;
   }, [watchMaterialId, watchLength, watchQuantity, materials]);
+
+  const editCalculatedWeight = useMemo(() => {
+    if (!editWatchMaterialId || !editWatchLength || !editWatchQuantity) return null;
+    const material = materials.find(m => m.id === Number(editWatchMaterialId));
+    if (!material?.unit_weight) return null;
+    const len = typeof editWatchLength === 'string' ? parseFloat(editWatchLength) : editWatchLength;
+    if (isNaN(len) || len <= 0) return null;
+    return material.unit_weight * len * editWatchQuantity;
+  }, [editWatchMaterialId, editWatchLength, editWatchQuantity, materials]);
 
   const createMutation = useMutation({
     mutationFn: async (data: MaterialUsageFormData) => {
@@ -160,11 +205,79 @@ export default function MaterialUsages() {
     }
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: MaterialUsageFormData }) => {
+      const payload = {
+        ...data,
+        length: data.length === "" ? null : data.length,
+      };
+      const res = await apiRequest('PATCH', `/api/material-usages/${id}`, payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/material-usages'] });
+      toast({
+        title: "材料使用を更新しました",
+        description: "変更が保存されました"
+      });
+      setIsDialogOpen(false);
+      setSelectedUsage(null);
+    },
+    onError: () => {
+      toast({
+        title: "エラー",
+        description: "材料使用の更新に失敗しました",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest('DELETE', `/api/material-usages/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/material-usages'] });
+      toast({
+        title: "材料使用を削除しました",
+        description: "データが削除されました"
+      });
+      setIsDialogOpen(false);
+      setSelectedUsage(null);
+    },
+    onError: () => {
+      toast({
+        title: "エラー",
+        description: "材料使用の削除に失敗しました",
+        variant: "destructive"
+      });
+    }
+  });
+
   const onSubmit = (data: MaterialUsageFormData) => {
     createMutation.mutate(data);
   };
 
+  const onEditSubmit = (data: MaterialUsageFormData) => {
+    if (selectedUsage) {
+      updateMutation.mutate({ id: selectedUsage.id, data });
+    }
+  };
+
+  const handleDelete = () => {
+    if (selectedUsage && confirm("この材料使用を削除しますか？")) {
+      deleteMutation.mutate(selectedUsage.id);
+    }
+  };
+
+  const handleRowClick = (usage: MaterialUsageWithMaterial) => {
+    setSelectedUsage(usage);
+    setIsDialogOpen(true);
+  };
+
   const selectedMaterial = materials.find(m => m.id === Number(watchMaterialId));
+  const editSelectedMaterial = materials.find(m => m.id === Number(editWatchMaterialId));
 
   return (
     <div className="p-6 space-y-6">
@@ -443,7 +556,12 @@ export default function MaterialUsages() {
                   </TableHeader>
                   <TableBody>
                     {usages.map((usage) => (
-                      <TableRow key={usage.id} data-testid={`row-usage-${usage.id}`}>
+                      <TableRow 
+                        key={usage.id} 
+                        data-testid={`row-usage-${usage.id}`}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => handleRowClick(usage)}
+                      >
                         <TableCell className="font-medium">{usage.project_id}</TableCell>
                         <TableCell>{usage.area || "-"}</TableCell>
                         <TableCell>{usage.zone || "-"}</TableCell>
@@ -470,6 +588,239 @@ export default function MaterialUsages() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>材料使用 詳細・編集</DialogTitle>
+          </DialogHeader>
+          {selectedUsage && (
+            <Form {...editForm}>
+              <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+                <FormField
+                  control={editForm.control}
+                  name="project_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>案件ID *</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value || ""}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="edit-select-project-id">
+                            <SelectValue placeholder="案件を選択" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {orders.map((order) => (
+                            <SelectItem key={order.id} value={order.order_id}>
+                              {order.order_id} - {order.client_name || order.project_title || ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editForm.control}
+                  name="material_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>材料 *</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value ? String(field.value) : ""}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="edit-select-material">
+                            <SelectValue placeholder="材料を選択" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {materials.map((material) => (
+                            <SelectItem key={material.id} value={String(material.id)}>
+                              {material.material_type} - {material.name} ({material.size})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {editSelectedMaterial && (
+                  <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
+                    単位: {editSelectedMaterial.unit}
+                    {editSelectedMaterial.unit_weight && (
+                      <span className="ml-2">
+                        単位重量: {editSelectedMaterial.unit_weight} kg/{editSelectedMaterial.unit}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="area"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>エリア</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="例: 2F" 
+                            {...field} 
+                            data-testid="edit-input-area"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editForm.control}
+                    name="zone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>工区</FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="edit-select-zone">
+                              <SelectValue placeholder="選択" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="N工区">N工区</SelectItem>
+                            <SelectItem value="S工区">S工区</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={editForm.control}
+                  name="drawing_no"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>図面番号</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="例: A-001" 
+                          {...field} 
+                          data-testid="edit-input-drawing-no"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>数量 *</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min="1"
+                            {...field} 
+                            data-testid="edit-input-quantity"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editForm.control}
+                    name="length"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>長さ (m)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.01"
+                            min="0"
+                            placeholder="例: 3.5"
+                            {...field}
+                            value={field.value === undefined ? "" : field.value}
+                            data-testid="edit-input-length"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {editCalculatedWeight !== null && (
+                  <div className="text-sm font-medium bg-primary/10 text-primary p-3 rounded">
+                    計算重量: {editCalculatedWeight.toFixed(2)} kg
+                    <span className="text-muted-foreground ml-2 text-xs">
+                      ({editSelectedMaterial?.unit_weight} × {editWatchLength} × {editWatchQuantity})
+                    </span>
+                  </div>
+                )}
+
+                <FormField
+                  control={editForm.control}
+                  name="remark"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>備考</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="備考" 
+                          {...field} 
+                          data-testid="edit-input-remark"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <DialogFooter className="flex gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                    data-testid="button-delete"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    削除
+                  </Button>
+                  <Button 
+                    type="submit"
+                    disabled={updateMutation.isPending}
+                    data-testid="button-update"
+                  >
+                    {updateMutation.isPending ? "更新中..." : "更新"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
