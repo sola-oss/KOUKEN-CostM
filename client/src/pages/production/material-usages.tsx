@@ -15,6 +15,13 @@ import { Layers, Plus } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+interface Order {
+  id: number;
+  order_id: string;
+  client_name: string | null;
+  project_title: string | null;
+}
+
 interface Material {
   id: number;
   material_type: string;
@@ -79,8 +86,17 @@ export default function MaterialUsages() {
     }
   });
 
+  const { data: ordersResponse } = useQuery({
+    queryKey: ['/api/production/orders'],
+    queryFn: async () => {
+      const res = await fetch('/api/production/orders');
+      return res.json();
+    }
+  });
+
   const usages: MaterialUsageWithMaterial[] = usagesResponse?.data || [];
   const materials: Material[] = materialsResponse?.data || [];
+  const orders: Order[] = ordersResponse?.data || [];
 
   const form = useForm<MaterialUsageFormData>({
     resolver: zodResolver(materialUsageFormSchema),
@@ -174,13 +190,23 @@ export default function MaterialUsages() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>案件ID *</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="例: ko130149" 
-                          {...field} 
-                          data-testid="input-project-id"
-                        />
-                      </FormControl>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value || ""}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-project-id">
+                            <SelectValue placeholder="案件を選択" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {orders.map((order) => (
+                            <SelectItem key={order.id} value={order.order_id}>
+                              {order.order_id} - {order.client_name || order.project_title || ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
