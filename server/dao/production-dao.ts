@@ -643,6 +643,8 @@ export class ProductionDAO {
         t.planned_end,
         t.status,
         t.order_id,
+        t.std_time_per_unit,
+        t.qty,
         COALESCE(o.project_title, o.product_name, o.order_id) as project_name
       FROM tasks t
       LEFT JOIN orders o ON t.order_id = o.order_id
@@ -655,8 +657,57 @@ export class ProductionDAO {
       planned_end: string;
       status: string;
       order_id: string;
+      std_time_per_unit: number | null;
+      qty: number | null;
       project_name: string;
     }[];
+
+    const workLogsByTask = new Map<string, number>();
+    const ordersWithTaskLogs = new Set<string>();
+    const workLogsByTaskResult = this.db.prepare(`
+      SELECT 
+        order_id,
+        task_name,
+        SUM(COALESCE(duration_hours, 0)) as total_hours
+      FROM work_logs
+      WHERE order_id IS NOT NULL AND task_name IS NOT NULL AND task_name != ''
+      GROUP BY order_id, task_name
+    `).all() as {
+      order_id: string;
+      task_name: string;
+      total_hours: number;
+    }[];
+    
+    for (const log of workLogsByTaskResult) {
+      const key = `${log.order_id}|${log.task_name}`;
+      workLogsByTask.set(key, log.total_hours);
+      ordersWithTaskLogs.add(log.order_id);
+    }
+
+    const actualHoursByOrder = new Map<string, number>();
+    const workersLogTotals = this.db.prepare(`
+      SELECT 
+        order_id,
+        SUM(COALESCE(qty, 0) * COALESCE(act_time_per_unit, 0)) as total_hours
+      FROM workers_log
+      WHERE order_id IS NOT NULL
+      GROUP BY order_id
+    `).all() as {
+      order_id: string;
+      total_hours: number;
+    }[];
+    
+    for (const log of workersLogTotals) {
+      actualHoursByOrder.set(log.order_id, log.total_hours);
+    }
+
+    const orderPlannedHours = new Map<string, number>();
+
+    for (const task of tasks) {
+      const orderId = task.order_id || 'unknown';
+      const plannedHours = (task.std_time_per_unit || 0) * (task.qty || 0);
+      orderPlannedHours.set(orderId, (orderPlannedHours.get(orderId) || 0) + plannedHours);
+    }
 
     for (const task of tasks) {
       const orderId = task.order_id || 'unknown';
@@ -668,8 +719,31 @@ export class ProductionDAO {
         });
       }
       
-      const progress = task.status === 'completed' ? 100 : 
-                       task.status === 'in_progress' ? 50 : 0;
+      const taskPlannedHours = (task.std_time_per_unit || 0) * (task.qty || 0);
+      
+      let progress = 0;
+      if (task.status === 'completed') {
+        progress = 100;
+      } else {
+        const taskKey = `${orderId}|${task.task_name}`;
+        const taskSpecificHours = workLogsByTask.get(taskKey);
+        
+        if (taskSpecificHours !== undefined && taskPlannedHours > 0) {
+          progress = Math.min(100, Math.round((taskSpecificHours / taskPlannedHours) * 100));
+        } else if (!ordersWithTaskLogs.has(orderId)) {
+          const orderActualHours = actualHoursByOrder.get(orderId) || 0;
+          const totalOrderPlanned = orderPlannedHours.get(orderId) || 0;
+          
+          if (totalOrderPlanned > 0 && orderActualHours > 0) {
+            const orderProgress = Math.min(100, Math.round((orderActualHours / totalOrderPlanned) * 100));
+            progress = orderProgress;
+          } else if (task.status === 'in_progress') {
+            progress = 50;
+          }
+        } else if (task.status === 'in_progress') {
+          progress = 50;
+        }
+      }
       
       projectsMap.get(orderId)!.tasks.push({
         id: `task-${task.id}`,

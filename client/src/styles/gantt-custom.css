@@ -329,9 +329,10 @@
   top: 0;
   left: 0;
   bottom: 0;
-  background: hsl(210 100% 50%);
+  background: hsl(var(--primary));
   border-radius: 4px;
   min-width: 2px;
+  transition: width 0.3s ease;
 }
 
 .gantt-bar-label {

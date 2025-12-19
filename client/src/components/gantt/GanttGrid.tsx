@@ -182,7 +182,7 @@ export const GanttGrid = ({
                           width: `${pos.width}px`,
                         }}
                         onClick={() => onTaskClick?.(task.id, project.orderId)}
-                        title={`${task.taskName} (${task.progress}%)`}
+                        title={`${task.taskName} (進捗: ${task.progress}%)`}
                         data-testid={`gantt-bar-${task.id}`}
                       >
                         <div className="gantt-bar-plan" />
@@ -191,7 +191,7 @@ export const GanttGrid = ({
                           style={{ width: `${task.progress}%` }}
                         />
                         <span className="gantt-bar-label">
-                          {task.taskName}
+                          {task.taskName} {task.progress > 0 && `(${task.progress}%)`}
                         </span>
                       </div>
                     </div>
