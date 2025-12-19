@@ -172,7 +172,7 @@ export function AppSidebar() {
               <Calculator className="h-6 w-6 text-primary" />
             )}
             <span className="text-sm font-semibold">
-              {appMode === "production" ? "生産管理" : "原価管理"}
+              {appMode === "production" ? "工数管理" : "原価管理"}
             </span>
           </div>
           <div className="flex rounded-md border border-sidebar-border overflow-hidden" data-testid="mode-toggle">
