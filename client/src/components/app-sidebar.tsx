@@ -6,7 +6,7 @@ import {
   Calculator, TrendingUp, DollarSign
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -24,6 +24,51 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type AppMode = "production" | "cost";
+
+// Color themes for each mode (HSL format: H S% L%)
+// Separate configs for light and dark modes
+const modeColors = {
+  production: {
+    light: {
+      primary: "215 70% 45%",
+      primaryForeground: "215 10% 95%",
+      ring: "215 70% 45%",
+      sidebarPrimary: "215 70% 45%",
+      sidebarPrimaryForeground: "215 10% 95%",
+      sidebarRing: "215 70% 45%",
+      chart1: "215 70% 45%",
+    },
+    dark: {
+      primary: "215 60% 55%",
+      primaryForeground: "215 10% 95%",
+      ring: "215 60% 55%",
+      sidebarPrimary: "215 60% 55%",
+      sidebarPrimaryForeground: "215 10% 95%",
+      sidebarRing: "215 60% 55%",
+      chart1: "215 60% 65%",
+    }
+  },
+  cost: {
+    light: {
+      primary: "160 60% 40%",
+      primaryForeground: "160 10% 95%",
+      ring: "160 60% 40%",
+      sidebarPrimary: "160 60% 40%",
+      sidebarPrimaryForeground: "160 10% 95%",
+      sidebarRing: "160 60% 40%",
+      chart1: "160 60% 40%",
+    },
+    dark: {
+      primary: "160 55% 50%",
+      primaryForeground: "160 10% 95%",
+      ring: "160 55% 50%",
+      sidebarPrimary: "160 55% 50%",
+      sidebarPrimaryForeground: "160 10% 95%",
+      sidebarRing: "160 55% 50%",
+      chart1: "160 55% 60%",
+    }
+  }
+};
 
 // Work Instructions Sub-menu
 const workInstructionsSubItems = [
@@ -85,6 +130,36 @@ export function AppSidebar() {
 
   const isWorkInstructionsActive = workInstructionsSubItems.some(item => location === item.url);
   const isMaterialManagementActive = materialManagementSubItems.some(item => location === item.url);
+
+  useEffect(() => {
+    const applyColors = () => {
+      const isDark = document.documentElement.classList.contains("dark");
+      const theme = isDark ? "dark" : "light";
+      const colors = modeColors[appMode][theme];
+      const root = document.documentElement;
+      root.style.setProperty("--primary", colors.primary);
+      root.style.setProperty("--primary-foreground", colors.primaryForeground);
+      root.style.setProperty("--ring", colors.ring);
+      root.style.setProperty("--sidebar-primary", colors.sidebarPrimary);
+      root.style.setProperty("--sidebar-primary-foreground", colors.sidebarPrimaryForeground);
+      root.style.setProperty("--sidebar-ring", colors.sidebarRing);
+      root.style.setProperty("--chart-1", colors.chart1);
+    };
+
+    applyColors();
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === "class") {
+          applyColors();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, { attributes: true });
+
+    return () => observer.disconnect();
+  }, [appMode]);
 
   return (
     <Sidebar>
