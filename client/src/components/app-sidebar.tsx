@@ -184,9 +184,7 @@ export function AppSidebar() {
                   : "bg-sidebar hover:bg-sidebar-accent"
               }`}
               data-testid="button-mode-production"
-            >
-              生産管理
-            </button>
+            >工数管理</button>
             <button
               onClick={() => setAppMode("cost")}
               className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${
