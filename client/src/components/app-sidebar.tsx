@@ -2,7 +2,8 @@
 import { 
   Package, Calendar, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown, Timer,
-  ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet
+  ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet,
+  Calculator, TrendingUp, DollarSign
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -21,6 +22,8 @@ import {
   SidebarHeader
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
+type AppMode = "production" | "cost";
 
 // Work Instructions Sub-menu
 const workInstructionsSubItems = [
@@ -55,8 +58,28 @@ const materialManagementSubItems = [
   }
 ];
 
+// Cost Management menu items (原価管理)
+const costManagementItems = [
+  {
+    title: "原価集計",
+    url: "/cost-summary",
+    icon: Calculator
+  },
+  {
+    title: "予実比較",
+    url: "/cost-comparison",
+    icon: TrendingUp
+  },
+  {
+    title: "単価マスタ",
+    url: "/unit-prices",
+    icon: DollarSign
+  }
+];
+
 export function AppSidebar() {
   const [location] = useLocation();
+  const [appMode, setAppMode] = useState<AppMode>("production");
   const [isWorkInstructionsOpen, setIsWorkInstructionsOpen] = useState(true);
   const [isMaterialManagementOpen, setIsMaterialManagementOpen] = useState(true);
 
@@ -66,149 +89,202 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="border-b">
-        <div className="flex items-center gap-2 px-2 py-4">
-          <Package className="h-6 w-6 text-primary" />
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold">工数管理</span>
+        <div className="flex flex-col gap-3 px-2 py-4">
+          <div className="flex items-center gap-2">
+            {appMode === "production" ? (
+              <Package className="h-6 w-6 text-primary" />
+            ) : (
+              <Calculator className="h-6 w-6 text-primary" />
+            )}
+            <span className="text-sm font-semibold">
+              {appMode === "production" ? "生産管理" : "原価管理"}
+            </span>
+          </div>
+          <div className="flex rounded-md border border-sidebar-border overflow-hidden" data-testid="mode-toggle">
+            <button
+              onClick={() => setAppMode("production")}
+              className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${
+                appMode === "production"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-sidebar hover:bg-sidebar-accent"
+              }`}
+              data-testid="button-mode-production"
+            >
+              生産管理
+            </button>
+            <button
+              onClick={() => setAppMode("cost")}
+              className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${
+                appMode === "cost"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-sidebar hover:bg-sidebar-accent"
+              }`}
+              data-testid="button-mode-cost"
+            >
+              原価管理
+            </button>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>メインメニュー</SidebarGroupLabel>
+          <SidebarGroupLabel>
+            {appMode === "production" ? "生産管理メニュー" : "原価管理メニュー"}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* 1. 案件管理 */}
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  asChild
-                  className={location === '/projects' ? 'bg-sidebar-accent' : ''}
-                >
-                  <Link href="/projects">
-                    <Package className="h-4 w-4" />
-                    <span className="flex-1">受注管理</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* 2. 作業指示 (Collapsible) */}
-              <Collapsible
-                open={isWorkInstructionsOpen}
-                onOpenChange={setIsWorkInstructionsOpen}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
+              {appMode === "production" ? (
+                <>
+                  {/* 1. 案件管理 */}
+                  <SidebarMenuItem>
                     <SidebarMenuButton 
-                      className={isWorkInstructionsActive ? 'bg-sidebar-accent' : ''}
+                      asChild
+                      className={location === '/projects' ? 'bg-sidebar-accent' : ''}
                     >
-                      <ClipboardCheck className="h-4 w-4" />
-                      <span className="flex-1">作業指示</span>
-                      {isWorkInstructionsOpen ? (
-                        <ChevronDown className="h-4 w-4 transition-transform" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 transition-transform" />
-                      )}
+                      <Link href="/projects">
+                        <Package className="h-4 w-4" />
+                        <span className="flex-1">受注管理</span>
+                      </Link>
                     </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {workInstructionsSubItems.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton 
-                            asChild
-                            className={location === subItem.url ? 'bg-sidebar-accent' : ''}
-                          >
-                            <Link href={subItem.url}>
-                              <subItem.icon className="h-4 w-4" />
-                              <span>{subItem.title}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+                  </SidebarMenuItem>
 
-              {/* 3. ガントチャート */}
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  asChild
-                  className={location === '/gantt' ? 'bg-sidebar-accent' : ''}
-                >
-                  <Link href="/gantt">
-                    <GanttChart className="h-4 w-4" />
-                    <span className="flex-1">ガントチャート</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+                  {/* 2. 作業指示 (Collapsible) */}
+                  <Collapsible
+                    open={isWorkInstructionsOpen}
+                    onOpenChange={setIsWorkInstructionsOpen}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton 
+                          className={isWorkInstructionsActive ? 'bg-sidebar-accent' : ''}
+                        >
+                          <ClipboardCheck className="h-4 w-4" />
+                          <span className="flex-1">作業指示</span>
+                          {isWorkInstructionsOpen ? (
+                            <ChevronDown className="h-4 w-4 transition-transform" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 transition-transform" />
+                          )}
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {workInstructionsSubItems.map((subItem) => (
+                            <SidebarMenuSubItem key={subItem.title}>
+                              <SidebarMenuSubButton 
+                                asChild
+                                className={location === subItem.url ? 'bg-sidebar-accent' : ''}
+                              >
+                                <Link href={subItem.url}>
+                                  <subItem.icon className="h-4 w-4" />
+                                  <span>{subItem.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
 
-              {/* 4. 作業実績入力 */}
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  asChild
-                  className={location === '/work-results' ? 'bg-sidebar-accent' : ''}
-                >
-                  <Link href="/work-results">
-                    <Timer className="h-4 w-4" />
-                    <span className="flex-1">作業実績入力</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* 5. 進捗カレンダー */}
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  asChild
-                  className={location === '/calendar' ? 'bg-sidebar-accent' : ''}
-                >
-                  <Link href="/calendar">
-                    <Calendar className="h-4 w-4" />
-                    <span className="flex-1">進捗カレンダー</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* 6. 材料管理 (Collapsible) */}
-              <Collapsible
-                open={isMaterialManagementOpen}
-                onOpenChange={setIsMaterialManagementOpen}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
+                  {/* 3. ガントチャート */}
+                  <SidebarMenuItem>
                     <SidebarMenuButton 
-                      className={isMaterialManagementActive ? 'bg-sidebar-accent' : ''}
+                      asChild
+                      className={location === '/gantt' ? 'bg-sidebar-accent' : ''}
                     >
-                      <Layers className="h-4 w-4" />
-                      <span className="flex-1">材料管理</span>
-                      {isMaterialManagementOpen ? (
-                        <ChevronDown className="h-4 w-4 transition-transform" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 transition-transform" />
-                      )}
+                      <Link href="/gantt">
+                        <GanttChart className="h-4 w-4" />
+                        <span className="flex-1">ガントチャート</span>
+                      </Link>
                     </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {materialManagementSubItems.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton 
-                            asChild
-                            className={location === subItem.url ? 'bg-sidebar-accent' : ''}
-                          >
-                            <Link href={subItem.url}>
-                              <subItem.icon className="h-4 w-4" />
-                              <span>{subItem.title}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+                  </SidebarMenuItem>
+
+                  {/* 4. 作業実績入力 */}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      asChild
+                      className={location === '/work-results' ? 'bg-sidebar-accent' : ''}
+                    >
+                      <Link href="/work-results">
+                        <Timer className="h-4 w-4" />
+                        <span className="flex-1">作業実績入力</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+
+                  {/* 5. 進捗カレンダー */}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      asChild
+                      className={location === '/calendar' ? 'bg-sidebar-accent' : ''}
+                    >
+                      <Link href="/calendar">
+                        <Calendar className="h-4 w-4" />
+                        <span className="flex-1">進捗カレンダー</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+
+                  {/* 6. 材料管理 (Collapsible) */}
+                  <Collapsible
+                    open={isMaterialManagementOpen}
+                    onOpenChange={setIsMaterialManagementOpen}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton 
+                          className={isMaterialManagementActive ? 'bg-sidebar-accent' : ''}
+                        >
+                          <Layers className="h-4 w-4" />
+                          <span className="flex-1">材料管理</span>
+                          {isMaterialManagementOpen ? (
+                            <ChevronDown className="h-4 w-4 transition-transform" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 transition-transform" />
+                          )}
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {materialManagementSubItems.map((subItem) => (
+                            <SidebarMenuSubItem key={subItem.title}>
+                              <SidebarMenuSubButton 
+                                asChild
+                                className={location === subItem.url ? 'bg-sidebar-accent' : ''}
+                              >
+                                <Link href={subItem.url}>
+                                  <subItem.icon className="h-4 w-4" />
+                                  <span>{subItem.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                </>
+              ) : (
+                <>
+                  {/* Cost Management Menu Items */}
+                  {costManagementItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton 
+                        asChild
+                        className={location === item.url ? 'bg-sidebar-accent' : ''}
+                      >
+                        <Link href={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span className="flex-1">{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
