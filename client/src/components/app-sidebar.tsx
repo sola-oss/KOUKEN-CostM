@@ -202,7 +202,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>
-            {appMode === "production" ? "生産管理メニュー" : "原価管理メニュー"}
+            {appMode === "production" ? "工数管理メニュー" : "原価管理メニュー"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -299,8 +299,25 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                </>
+              ) : (
+                <>
+                  {/* Cost Management Menu Items */}
+                  {costManagementItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton 
+                        asChild
+                        className={location === item.url ? 'bg-sidebar-accent' : ''}
+                      >
+                        <Link href={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span className="flex-1">{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
 
-                  {/* 6. 材料管理 (Collapsible) */}
+                  {/* 材料管理 (Collapsible) */}
                   <Collapsible
                     open={isMaterialManagementOpen}
                     onOpenChange={setIsMaterialManagementOpen}
@@ -339,23 +356,6 @@ export function AppSidebar() {
                       </CollapsibleContent>
                     </SidebarMenuItem>
                   </Collapsible>
-                </>
-              ) : (
-                <>
-                  {/* Cost Management Menu Items */}
-                  {costManagementItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
-                        asChild
-                        className={location === item.url ? 'bg-sidebar-accent' : ''}
-                      >
-                        <Link href={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          <span className="flex-1">{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
                 </>
               )}
             </SidebarMenu>
