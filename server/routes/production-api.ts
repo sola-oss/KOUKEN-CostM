@@ -1588,4 +1588,59 @@ router.delete('/api/material-usages/:id', async (req, res) => {
   }
 });
 
+// ========== Cost Settings API ==========
+
+// GET /api/cost-settings - Get cost settings
+router.get('/api/cost-settings', async (req, res) => {
+  try {
+    const settings = await dao.getCostSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Get cost settings error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch cost settings'
+    });
+  }
+});
+
+// PUT /api/cost-settings - Update cost settings
+router.put('/api/cost-settings', async (req, res) => {
+  try {
+    const { labor_rate_per_hour } = req.body;
+    
+    if (typeof labor_rate_per_hour !== 'number' || labor_rate_per_hour <= 0) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        message: 'labor_rate_per_hour must be a positive number'
+      });
+    }
+    
+    const settings = await dao.updateCostSettings(labor_rate_per_hour);
+    res.json(settings);
+  } catch (error) {
+    console.error('Update cost settings error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update cost settings'
+    });
+  }
+});
+
+// ========== Cost Aggregation API ==========
+
+// GET /api/cost-aggregation - Get cost aggregation by order
+router.get('/api/cost-aggregation', async (req, res) => {
+  try {
+    const result = await dao.getCostAggregation();
+    res.json(result);
+  } catch (error) {
+    console.error('Cost aggregation error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch cost aggregation'
+    });
+  }
+});
+
 export default router;

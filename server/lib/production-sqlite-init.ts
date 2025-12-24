@@ -32,18 +32,26 @@ export class ProductionSqliteInitializer {
       // Enable foreign keys
       db.pragma('foreign_keys = ON');
       
-      // Read and execute migration
-      const migrationPath = join(__dirname, '../migrations/001_production_schema.sql');
-      const migrationSQL = readFileSync(migrationPath, 'utf8');
+      // Read and execute migrations
+      const migrations = [
+        '001_production_schema.sql',
+        '003_materials.sql',
+        '004_material_usages.sql',
+        '005_cost_settings.sql'
+      ];
       
-      // Execute migration directly (contains full schema)
-      try {
-        db.exec(migrationSQL);
-      } catch (error: any) {
-        if (!error.message?.includes('already exists')) {
-          throw error;
+      for (const migrationFile of migrations) {
+        const migrationPath = join(__dirname, '../migrations', migrationFile);
+        try {
+          const migrationSQL = readFileSync(migrationPath, 'utf8');
+          db.exec(migrationSQL);
+          console.log(`✓ Migration ${migrationFile} applied`);
+        } catch (error: any) {
+          if (!error.message?.includes('already exists') && 
+              !error.message?.includes('duplicate column name')) {
+            console.log(`Note: ${migrationFile} - ${error.message}`);
+          }
         }
-        console.log('Database tables already exist, skipping schema creation');
       }
       
       // Verify tables exist

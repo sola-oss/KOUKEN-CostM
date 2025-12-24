@@ -4,7 +4,7 @@ import { MetricsService } from '../services/metrics.js';
 import type { 
   Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
-  OrderKPI, DashboardKPI, CalendarEvent 
+  OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse
 } from '../../shared/production-schema.js';
 
 export class ProductionDAO {
@@ -1434,6 +1434,151 @@ export class ProductionDAO {
     }>;
     
     return rows;
+  }
+
+  // ========== Cost Settings CRUD ==========
+  
+  async getCostSettings(): Promise<CostSettings> {
+    const settings = this.db.prepare(`
+      SELECT * FROM cost_settings WHERE id = 1
+    `).get() as CostSettings | undefined;
+    
+    if (!settings) {
+      const now = new Date().toISOString();
+      this.db.prepare(`
+        INSERT INTO cost_settings (id, labor_rate_per_hour, updated_at)
+        VALUES (1, 3000, ?)
+      `).run(now);
+      
+      return {
+        id: 1,
+        labor_rate_per_hour: 3000,
+        updated_at: now
+      };
+    }
+    
+    return settings;
+  }
+
+  async updateCostSettings(laborRatePerHour: number): Promise<CostSettings> {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE cost_settings SET labor_rate_per_hour = ?, updated_at = ? WHERE id = 1
+    `).run(laborRatePerHour, now);
+    
+    return this.getCostSettings();
+  }
+
+  // ========== Cost Aggregation ==========
+  
+  async getCostAggregation(): Promise<CostAggregationResponse> {
+    const settings = await this.getCostSettings();
+    const laborRate = settings.labor_rate_per_hour;
+
+    const materialCostsByOrder = this.db.prepare(`
+      SELECT 
+        mu.project_id AS order_id,
+        SUM(
+          CASE 
+            WHEN m.unit_price IS NOT NULL 
+            THEN m.unit_price * mu.quantity * COALESCE(
+              CASE 
+                WHEN m.unit = 'kg' AND m.unit_weight IS NOT NULL AND mu.length IS NOT NULL
+                THEN mu.length * m.unit_weight
+                WHEN m.unit = 'm' AND mu.length IS NOT NULL
+                THEN mu.length
+                ELSE 1
+              END,
+              1
+            )
+            ELSE 0
+          END
+        ) AS material_cost,
+        SUM(
+          CASE 
+            WHEN m.unit_price IS NULL 
+            THEN 1
+            ELSE 0
+          END
+        ) AS missing_prices_count
+      FROM material_usages mu
+      JOIN materials m ON mu.material_id = m.id
+      GROUP BY mu.project_id
+    `).all() as { order_id: string; material_cost: number; missing_prices_count: number }[];
+
+    const laborCostsByOrder = this.db.prepare(`
+      SELECT 
+        order_id,
+        SUM(COALESCE(qty, 0) * COALESCE(act_time_per_unit, 0)) AS total_hours
+      FROM workers_log
+      WHERE order_id IS NOT NULL
+      GROUP BY order_id
+    `).all() as { order_id: string; total_hours: number }[];
+
+    const orders = this.db.prepare(`
+      SELECT 
+        order_id,
+        project_title,
+        client_name,
+        estimated_amount
+      FROM orders
+    `).all() as { order_id: string; project_title: string | null; client_name: string | null; estimated_amount: number | null }[];
+
+    const materialCostMap = new Map<string, { cost: number; hasMissing: boolean }>();
+    for (const row of materialCostsByOrder) {
+      materialCostMap.set(row.order_id, {
+        cost: row.material_cost || 0,
+        hasMissing: row.missing_prices_count > 0
+      });
+    }
+
+    const laborCostMap = new Map<string, number>();
+    for (const row of laborCostsByOrder) {
+      laborCostMap.set(row.order_id, (row.total_hours || 0) * laborRate);
+    }
+
+    const orderSummaries: OrderCostSummary[] = [];
+    let totalMaterialCost = 0;
+    let totalLaborCost = 0;
+
+    for (const order of orders) {
+      const materialData = materialCostMap.get(order.order_id) || { cost: 0, hasMissing: false };
+      const laborCost = laborCostMap.get(order.order_id) || 0;
+      const totalCost = materialData.cost + laborCost;
+      
+      const profit = order.estimated_amount !== null ? order.estimated_amount - totalCost : null;
+      const profitRate = order.estimated_amount !== null && order.estimated_amount > 0 
+        ? Math.round((profit! / order.estimated_amount) * 100 * 10) / 10 
+        : null;
+
+      if (materialData.cost > 0 || laborCost > 0) {
+        orderSummaries.push({
+          order_id: order.order_id,
+          project_title: order.project_title,
+          client_name: order.client_name,
+          material_cost: Math.round(materialData.cost),
+          labor_cost: Math.round(laborCost),
+          total_cost: Math.round(totalCost),
+          estimated_amount: order.estimated_amount,
+          profit: profit !== null ? Math.round(profit) : null,
+          profit_rate: profitRate,
+          has_missing_prices: materialData.hasMissing
+        });
+
+        totalMaterialCost += materialData.cost;
+        totalLaborCost += laborCost;
+      }
+    }
+
+    orderSummaries.sort((a, b) => b.total_cost - a.total_cost);
+
+    return {
+      orders: orderSummaries,
+      labor_rate_per_hour: laborRate,
+      total_material_cost: Math.round(totalMaterialCost),
+      total_labor_cost: Math.round(totalLaborCost),
+      total_cost: Math.round(totalMaterialCost + totalLaborCost)
+    };
   }
 
   close(): void {

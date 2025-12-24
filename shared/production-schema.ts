@@ -361,6 +361,23 @@ export interface CalendarEvent {
   procurement_id?: number;
 }
 
+// ========== Cost Settings (原価設定) ==========
+// 労務単価などの原価計算設定
+export const costSettings = sqliteTable("cost_settings", {
+  id: integer("id").primaryKey(),
+  labor_rate_per_hour: real("labor_rate_per_hour").notNull().default(3000), // 労務単価（円/時間）
+  updated_at: text("updated_at").notNull(),
+});
+
+export const insertCostSettingsSchema = createInsertSchema(costSettings).omit({
+  id: true,
+}).extend({
+  labor_rate_per_hour: z.coerce.number().positive("労務単価は0より大きい値にしてください"),
+});
+
+export type CostSettings = typeof costSettings.$inferSelect;
+export type InsertCostSettings = z.infer<typeof insertCostSettingsSchema>;
+
 // ========== Materials Master (材料マスタ) ==========
 // 共通の材料マスタ - プロジェクト非依存
 export const materials = sqliteTable("materials", {
@@ -370,6 +387,7 @@ export const materials = sqliteTable("materials", {
   size: text("size").notNull(),                       // サイズ（C100×50×5×7.5）
   unit: text("unit").notNull(),                       // 単位（m、本、kg）
   unit_weight: real("unit_weight"),                   // 単位重量（kg/m など）
+  unit_price: real("unit_price"),                     // 単価（円/単位）
   remark: text("remark"),                             // 備考
   created_at: text("created_at").notNull(),
 }, (table) => ({
@@ -386,6 +404,7 @@ export const insertMaterialSchema = createInsertSchema(materials).omit({
   size: z.string().min(1, "サイズは必須です"),
   unit: z.string().min(1, "単位は必須です"),
   unit_weight: z.coerce.number().optional(),
+  unit_price: z.coerce.number().optional(),
   remark: z.string().optional(),
 });
 
@@ -435,5 +454,29 @@ export interface MaterialUsageWithMaterial extends MaterialUsage {
   material_size: string;
   unit: string;
   unit_weight: number | null;
+  unit_price: number | null;
   total_weight: number | null;  // Calculated: unit_weight × length × quantity
+  total_cost: number | null;    // Calculated: unit_price × quantity × (length or 1)
+}
+
+// ========== Cost Aggregation Types (原価集計) ==========
+export interface OrderCostSummary {
+  order_id: string;
+  project_title: string | null;
+  client_name: string | null;
+  material_cost: number;        // 材料費
+  labor_cost: number;           // 労務費
+  total_cost: number;           // 総原価
+  estimated_amount: number | null; // 見積金額
+  profit: number | null;        // 利益（見積金額 - 総原価）
+  profit_rate: number | null;   // 利益率（%）
+  has_missing_prices: boolean;  // 単価未設定の材料があるか
+}
+
+export interface CostAggregationResponse {
+  orders: OrderCostSummary[];
+  labor_rate_per_hour: number;
+  total_material_cost: number;
+  total_labor_cost: number;
+  total_cost: number;
 }
