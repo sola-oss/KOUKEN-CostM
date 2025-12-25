@@ -24,6 +24,7 @@ interface Material {
   size: string;
   unit: string;
   unit_weight: number | null;
+  unit_price: number | null;
   remark: string | null;
   created_at: string;
 }
@@ -33,7 +34,8 @@ const materialFormSchema = z.object({
   name: z.string().min(1, "材料名は必須です"),
   size: z.string().min(1, "サイズは必須です"),
   unit: z.string().min(1, "単位は必須です"),
-  unit_weight: z.coerce.number().positive().optional().or(z.literal("")),
+  unit_weight: z.coerce.number().nonnegative().optional().or(z.literal("")),
+  unit_price: z.coerce.number().nonnegative().optional().or(z.literal("")),
   remark: z.string().optional(),
 });
 
@@ -66,6 +68,7 @@ export default function MaterialsMaster() {
       size: "",
       unit: "m",
       unit_weight: "",
+      unit_price: "",
       remark: "",
     }
   });
@@ -78,6 +81,7 @@ export default function MaterialsMaster() {
       size: "",
       unit: "m",
       unit_weight: "",
+      unit_price: "",
       remark: "",
     }
   });
@@ -87,6 +91,7 @@ export default function MaterialsMaster() {
       const payload = {
         ...data,
         unit_weight: data.unit_weight === "" ? null : data.unit_weight,
+        unit_price: data.unit_price === "" ? null : data.unit_price,
       };
       const res = await apiRequest('POST', '/api/materials', payload);
       return res.json();
@@ -107,6 +112,7 @@ export default function MaterialsMaster() {
       const payload = {
         ...data,
         unit_weight: data.unit_weight === "" ? null : data.unit_weight,
+        unit_price: data.unit_price === "" ? null : data.unit_price,
       };
       const res = await apiRequest('PATCH', `/api/materials/${id}`, payload);
       return res.json();
@@ -154,6 +160,7 @@ export default function MaterialsMaster() {
       size: material.size,
       unit: material.unit,
       unit_weight: material.unit_weight ?? "",
+      unit_price: material.unit_price ?? "",
       remark: material.remark ?? "",
     });
   };
@@ -197,6 +204,7 @@ export default function MaterialsMaster() {
                     <TableHead>サイズ</TableHead>
                     <TableHead>単位</TableHead>
                     <TableHead className="text-right">単位重量 (kg)</TableHead>
+                    <TableHead className="text-right">単価 (円)</TableHead>
                     <TableHead>備考</TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
@@ -211,6 +219,9 @@ export default function MaterialsMaster() {
                       <TableCell>{material.unit}</TableCell>
                       <TableCell className="text-right">
                         {material.unit_weight !== null ? material.unit_weight : "-"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {material.unit_price !== null ? material.unit_price.toLocaleString() : "-"}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {material.remark || "-"}
@@ -351,6 +362,27 @@ export default function MaterialsMaster() {
 
               <FormField
                 control={form.control}
+                name="unit_price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>単価 (円)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="1"
+                        placeholder="例: 1500"
+                        {...field}
+                        value={field.value === undefined ? "" : field.value}
+                        data-testid="input-unit-price"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="remark"
                 render={({ field }) => (
                   <FormItem>
@@ -474,6 +506,27 @@ export default function MaterialsMaster() {
                   )}
                 />
               </div>
+
+              <FormField
+                control={editForm.control}
+                name="unit_price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>単価 (円)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="1"
+                        placeholder="例: 1500"
+                        {...field}
+                        value={field.value === undefined ? "" : field.value}
+                        data-testid="input-edit-unit-price"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={editForm.control}

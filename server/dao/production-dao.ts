@@ -1158,8 +1158,8 @@ export class ProductionDAO {
     const now = new Date().toISOString();
     
     const stmt = this.db.prepare(`
-      INSERT INTO materials (material_type, name, size, unit, unit_weight, remark, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO materials (material_type, name, size, unit, unit_weight, unit_price, remark, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     const result = stmt.run(
@@ -1168,6 +1168,7 @@ export class ProductionDAO {
       data.size,
       data.unit,
       data.unit_weight ?? null,
+      data.unit_price ?? null,
       data.remark ?? null,
       now
     );
@@ -1198,6 +1199,10 @@ export class ProductionDAO {
     if (data.unit_weight !== undefined) {
       updates.push('unit_weight = ?');
       params.push(data.unit_weight);
+    }
+    if (data.unit_price !== undefined) {
+      updates.push('unit_price = ?');
+      params.push(data.unit_price);
     }
     if (data.remark !== undefined) {
       updates.push('remark = ?');
