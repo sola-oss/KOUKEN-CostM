@@ -460,6 +460,16 @@ export interface MaterialUsageWithMaterial extends MaterialUsage {
 }
 
 // ========== Cost Aggregation Types (原価集計) ==========
+
+// 工区別コスト集計（材料費のみ - 労務費は案件単位でのみ取得可能）
+export interface ZoneCostSummary {
+  zone: string;                 // 工区名（未設定の場合は "未設定"）
+  area: string | null;          // エリア（2F など）
+  material_cost: number;        // 材料費（工区別で取得可能）
+  has_missing_prices: boolean;  // 単価未設定の材料があるか
+}
+
+// 案件別コスト集計（工区別内訳を含む）
 export interface OrderCostSummary {
   order_id: string;
   project_title: string | null;
@@ -471,6 +481,7 @@ export interface OrderCostSummary {
   profit: number | null;        // 利益（見積金額 - 総原価）
   profit_rate: number | null;   // 利益率（%）
   has_missing_prices: boolean;  // 単価未設定の材料があるか
+  zones: ZoneCostSummary[];     // 工区別内訳
 }
 
 export interface CostAggregationResponse {

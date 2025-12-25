@@ -4,7 +4,7 @@ import { MetricsService } from '../services/metrics.js';
 import type { 
   Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
-  OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse
+  OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse, ZoneCostSummary
 } from '../../shared/production-schema.js';
 
 export class ProductionDAO {
@@ -1480,6 +1480,41 @@ export class ProductionDAO {
     const settings = await this.getCostSettings();
     const laborRate = settings.labor_rate_per_hour;
 
+    // 案件×工区別の材料費を取得
+    const materialCostsByOrderZone = this.db.prepare(`
+      SELECT 
+        mu.project_id AS order_id,
+        COALESCE(mu.zone, '未設定') AS zone,
+        mu.area,
+        SUM(
+          CASE 
+            WHEN m.unit_price IS NOT NULL 
+            THEN m.unit_price * mu.quantity * COALESCE(
+              CASE 
+                WHEN m.unit = 'kg' AND m.unit_weight IS NOT NULL AND mu.length IS NOT NULL
+                THEN mu.length * m.unit_weight
+                WHEN m.unit = 'm' AND mu.length IS NOT NULL
+                THEN mu.length
+                ELSE 1
+              END,
+              1
+            )
+            ELSE 0
+          END
+        ) AS material_cost,
+        SUM(
+          CASE 
+            WHEN m.unit_price IS NULL 
+            THEN 1
+            ELSE 0
+          END
+        ) AS missing_prices_count
+      FROM material_usages mu
+      JOIN materials m ON mu.material_id = m.id
+      GROUP BY mu.project_id, COALESCE(mu.zone, '未設定'), mu.area
+    `).all() as { order_id: string; zone: string; area: string | null; material_cost: number; missing_prices_count: number }[];
+
+    // 案件別の材料費合計を取得
     const materialCostsByOrder = this.db.prepare(`
       SELECT 
         mu.project_id AS order_id,
@@ -1529,6 +1564,21 @@ export class ProductionDAO {
       FROM orders
     `).all() as { order_id: string; project_title: string | null; client_name: string | null; estimated_amount: number | null }[];
 
+    // 工区別材料費をマップに整理（order_id -> zone配列）
+    // 注: 労務費は工区単位では取得できないため、工区別は材料費のみ
+    const zoneCostMap = new Map<string, ZoneCostSummary[]>();
+    for (const row of materialCostsByOrderZone) {
+      if (!zoneCostMap.has(row.order_id)) {
+        zoneCostMap.set(row.order_id, []);
+      }
+      zoneCostMap.get(row.order_id)!.push({
+        zone: row.zone,
+        area: row.area,
+        material_cost: Math.round(row.material_cost || 0),
+        has_missing_prices: row.missing_prices_count > 0
+      });
+    }
+
     const materialCostMap = new Map<string, { cost: number; hasMissing: boolean }>();
     for (const row of materialCostsByOrder) {
       materialCostMap.set(row.order_id, {
@@ -1550,6 +1600,7 @@ export class ProductionDAO {
       const materialData = materialCostMap.get(order.order_id) || { cost: 0, hasMissing: false };
       const laborCost = laborCostMap.get(order.order_id) || 0;
       const totalCost = materialData.cost + laborCost;
+      const zones = zoneCostMap.get(order.order_id) || [];
       
       const profit = order.estimated_amount !== null ? order.estimated_amount - totalCost : null;
       const profitRate = order.estimated_amount !== null && order.estimated_amount > 0 
@@ -1567,7 +1618,8 @@ export class ProductionDAO {
           estimated_amount: order.estimated_amount,
           profit: profit !== null ? Math.round(profit) : null,
           profit_rate: profitRate,
-          has_missing_prices: materialData.hasMissing
+          has_missing_prices: materialData.hasMissing,
+          zones: zones.sort((a, b) => a.zone.localeCompare(b.zone))
         });
 
         totalMaterialCost += materialData.cost;

@@ -4,18 +4,119 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings } from "lucide-react";
+import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, ChevronRight, ChevronDown, MapPin } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { CostAggregationResponse } from "@shared/production-schema";
+import type { CostAggregationResponse, OrderCostSummary } from "@shared/production-schema";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+
+function OrderRow({ 
+  order, 
+  isExpanded, 
+  onToggle, 
+  formatCurrency, 
+  formatPercent 
+}: { 
+  order: OrderCostSummary;
+  isExpanded: boolean;
+  onToggle: () => void;
+  formatCurrency: (value: number | null) => string;
+  formatPercent: (value: number | null) => string;
+}) {
+  const hasZones = order.zones && order.zones.length > 0;
+  
+  return (
+    <>
+      <TableRow 
+        key={order.order_id} 
+        data-testid={`row-order-${order.order_id}`}
+        className={hasZones ? "cursor-pointer hover-elevate" : ""}
+        onClick={hasZones ? onToggle : undefined}
+      >
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-2">
+            {hasZones && (
+              <span className="text-muted-foreground">
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </span>
+            )}
+            <span>{order.order_id}</span>
+            {order.has_missing_prices && (
+              <Badge variant="outline" className="text-amber-600 border-amber-600">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                単価未設定
+              </Badge>
+            )}
+          </div>
+        </TableCell>
+        <TableCell>{order.project_title || "-"}</TableCell>
+        <TableCell>{order.client_name || "-"}</TableCell>
+        <TableCell className="text-right">{formatCurrency(order.material_cost)}</TableCell>
+        <TableCell className="text-right">{formatCurrency(order.labor_cost)}</TableCell>
+        <TableCell className="text-right font-medium">{formatCurrency(order.total_cost)}</TableCell>
+        <TableCell className="text-right">{formatCurrency(order.estimated_amount)}</TableCell>
+        <TableCell className="text-right">
+          {order.profit !== null ? (
+            <span className={order.profit >= 0 ? "text-green-600" : "text-red-600"}>
+              {order.profit >= 0 ? (
+                <TrendingUp className="h-4 w-4 inline mr-1" />
+              ) : (
+                <TrendingDown className="h-4 w-4 inline mr-1" />
+              )}
+              {formatCurrency(order.profit)}
+            </span>
+          ) : "-"}
+        </TableCell>
+        <TableCell className="text-right">
+          {order.profit_rate !== null ? (
+            <Badge variant={order.profit_rate >= 0 ? "default" : "destructive"}>
+              {formatPercent(order.profit_rate)}
+            </Badge>
+          ) : "-"}
+        </TableCell>
+      </TableRow>
+      {isExpanded && hasZones && order.zones.map((zone, zoneIdx) => (
+        <TableRow 
+          key={`${order.order_id}-zone-${zoneIdx}`}
+          className="bg-muted/30"
+          data-testid={`row-zone-${order.order_id}-${zone.zone}`}
+        >
+          <TableCell className="pl-10">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <MapPin className="h-3 w-3" />
+              <span className="text-sm">
+                {zone.area ? `${zone.area} / ` : ""}{zone.zone}
+              </span>
+              {zone.has_missing_prices && (
+                <Badge variant="outline" className="text-amber-600 border-amber-600 text-xs">
+                  <AlertTriangle className="h-2 w-2 mr-1" />
+                  単価未設定
+                </Badge>
+              )}
+            </div>
+          </TableCell>
+          <TableCell colSpan={2} className="text-sm text-muted-foreground">
+            工区別材料費
+          </TableCell>
+          <TableCell className="text-right text-sm font-medium">{formatCurrency(zone.material_cost)}</TableCell>
+          <TableCell colSpan={5}></TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
 
 export default function CostSummaryPage() {
   const { toast } = useToast();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [laborRate, setLaborRate] = useState<string>("");
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = useQuery<CostAggregationResponse>({
     queryKey: ['/api/cost-aggregation'],
@@ -55,6 +156,18 @@ export default function CostSummaryPage() {
     updateSettingsMutation.mutate(rate);
   };
 
+  const toggleOrderExpanded = (orderId: string) => {
+    setExpandedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
   const formatCurrency = (value: number | null) => {
     if (value === null) return "-";
     return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
@@ -91,7 +204,7 @@ export default function CostSummaryPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Calculator className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">原価集計</h1>
+          <h1 className="text-2xl font-bold">案件・工区別集計</h1>
         </div>
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
           <DialogTrigger asChild>
@@ -185,7 +298,12 @@ export default function CostSummaryPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle>案件別原価集計</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            案件・工区別原価集計
+            <span className="text-sm font-normal text-muted-foreground">
+              （クリックで工区別詳細を表示）
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {data?.orders && data.orders.length > 0 ? (
@@ -205,42 +323,14 @@ export default function CostSummaryPage() {
               </TableHeader>
               <TableBody>
                 {data.orders.map((order) => (
-                  <TableRow key={order.order_id} data-testid={`row-order-${order.order_id}`}>
-                    <TableCell className="font-medium">
-                      {order.order_id}
-                      {order.has_missing_prices && (
-                        <Badge variant="outline" className="ml-2 text-amber-600 border-amber-600">
-                          <AlertTriangle className="h-3 w-3 mr-1" />
-                          単価未設定
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>{order.project_title || "-"}</TableCell>
-                    <TableCell>{order.client_name || "-"}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(order.material_cost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(order.labor_cost)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(order.total_cost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(order.estimated_amount)}</TableCell>
-                    <TableCell className="text-right">
-                      {order.profit !== null ? (
-                        <span className={order.profit >= 0 ? "text-green-600" : "text-red-600"}>
-                          {order.profit >= 0 ? (
-                            <TrendingUp className="h-4 w-4 inline mr-1" />
-                          ) : (
-                            <TrendingDown className="h-4 w-4 inline mr-1" />
-                          )}
-                          {formatCurrency(order.profit)}
-                        </span>
-                      ) : "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {order.profit_rate !== null ? (
-                        <Badge variant={order.profit_rate >= 0 ? "default" : "destructive"}>
-                          {formatPercent(order.profit_rate)}
-                        </Badge>
-                      ) : "-"}
-                    </TableCell>
-                  </TableRow>
+                  <OrderRow 
+                    key={order.order_id}
+                    order={order}
+                    isExpanded={expandedOrders.has(order.order_id)}
+                    onToggle={() => toggleOrderExpanded(order.order_id)}
+                    formatCurrency={formatCurrency}
+                    formatPercent={formatPercent}
+                  />
                 ))}
               </TableBody>
             </Table>
