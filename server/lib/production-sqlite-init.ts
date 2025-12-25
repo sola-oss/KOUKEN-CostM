@@ -38,7 +38,8 @@ export class ProductionSqliteInitializer {
         '003_materials.sql',
         '004_material_usages.sql',
         '005_cost_settings.sql',
-        '006_workers_master.sql'
+        '006_workers_master.sql',
+        '007_vendors_outsourcing.sql'
       ];
       
       for (const migrationFile of migrations) {

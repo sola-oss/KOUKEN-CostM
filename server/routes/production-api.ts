@@ -8,6 +8,8 @@ import {
   insertTaskSchema,
   insertWorkLogSchema,
   insertWorkerMasterSchema,
+  insertVendorMasterSchema,
+  insertOutsourcingCostSchema,
   updateOrderSchema,
   updateProcurementSchema,
   updateTaskSchema,
@@ -1770,6 +1772,279 @@ router.delete('/api/workers-master/:id', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal server error',
       message: 'Failed to delete worker'
+    });
+  }
+});
+
+// ========== Vendors Master API ==========
+
+// GET /api/vendors-master - Get all vendors
+router.get('/api/vendors-master', async (req, res) => {
+  try {
+    const includeInactive = req.query.include_inactive === 'true';
+    const vendors = await dao.getVendorsMaster(includeInactive);
+    res.json(vendors);
+  } catch (error) {
+    console.error('Get vendors master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch vendors'
+    });
+  }
+});
+
+// GET /api/vendors-master/:id - Get single vendor
+router.get('/api/vendors-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+    
+    const vendor = await dao.getVendorMasterById(id);
+    if (!vendor) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+    
+    res.json(vendor);
+  } catch (error) {
+    console.error('Get vendor master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch vendor'
+    });
+  }
+});
+
+// POST /api/vendors-master - Create vendor
+router.post('/api/vendors-master', async (req, res) => {
+  try {
+    const parsed = insertVendorMasterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parsed.error.flatten()
+      });
+    }
+    
+    const id = await dao.createVendorMaster(parsed.data);
+    const vendor = await dao.getVendorMasterById(id);
+    res.status(201).json(vendor);
+  } catch (error: any) {
+    console.error('Create vendor master error:', error);
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        message: 'この外注先名は既に登録されています'
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to create vendor'
+    });
+  }
+});
+
+// PUT /api/vendors-master/:id - Update vendor
+router.put('/api/vendors-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+    
+    const parsed = insertVendorMasterSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parsed.error.flatten()
+      });
+    }
+    
+    const success = await dao.updateVendorMaster(id, parsed.data);
+    if (!success) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+    
+    const vendor = await dao.getVendorMasterById(id);
+    res.json(vendor);
+  } catch (error: any) {
+    console.error('Update vendor master error:', error);
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        message: 'この外注先名は既に登録されています'
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update vendor'
+    });
+  }
+});
+
+// DELETE /api/vendors-master/:id - Delete vendor
+router.delete('/api/vendors-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+    
+    const success = await dao.deleteVendorMaster(id);
+    if (!success) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+    
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('Delete vendor master error:', error);
+    if (error.message?.includes('FOREIGN KEY constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Deletion error',
+        message: 'この外注先は外注費で使用されているため削除できません'
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to delete vendor'
+    });
+  }
+});
+
+// ========== Outsourcing Costs API ==========
+
+// GET /api/outsourcing-costs - Get all outsourcing costs
+router.get('/api/outsourcing-costs', async (req, res) => {
+  try {
+    const filters: { project_id?: string; vendor_id?: number } = {};
+    if (req.query.project_id) {
+      filters.project_id = req.query.project_id as string;
+    }
+    if (req.query.vendor_id) {
+      filters.vendor_id = parseInt(req.query.vendor_id as string);
+    }
+    
+    const costs = await dao.getOutsourcingCosts(filters);
+    res.json(costs);
+  } catch (error) {
+    console.error('Get outsourcing costs error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch outsourcing costs'
+    });
+  }
+});
+
+// GET /api/outsourcing-costs/:id - Get single outsourcing cost
+router.get('/api/outsourcing-costs/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid outsourcing cost ID' });
+    }
+    
+    const cost = await dao.getOutsourcingCostById(id);
+    if (!cost) {
+      return res.status(404).json({ error: 'Outsourcing cost not found' });
+    }
+    
+    res.json(cost);
+  } catch (error) {
+    console.error('Get outsourcing cost error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch outsourcing cost'
+    });
+  }
+});
+
+// POST /api/outsourcing-costs - Create outsourcing cost
+router.post('/api/outsourcing-costs', async (req, res) => {
+  try {
+    const parsed = insertOutsourcingCostSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parsed.error.flatten()
+      });
+    }
+    
+    const id = await dao.createOutsourcingCost(parsed.data);
+    const cost = await dao.getOutsourcingCostById(id);
+    res.status(201).json(cost);
+  } catch (error: any) {
+    console.error('Create outsourcing cost error:', error);
+    if (error.message?.includes('FOREIGN KEY constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        message: '指定された案件または外注先が存在しません'
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to create outsourcing cost'
+    });
+  }
+});
+
+// PUT /api/outsourcing-costs/:id - Update outsourcing cost
+router.put('/api/outsourcing-costs/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid outsourcing cost ID' });
+    }
+    
+    const parsed = insertOutsourcingCostSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parsed.error.flatten()
+      });
+    }
+    
+    const success = await dao.updateOutsourcingCost(id, parsed.data);
+    if (!success) {
+      return res.status(404).json({ error: 'Outsourcing cost not found' });
+    }
+    
+    const cost = await dao.getOutsourcingCostById(id);
+    res.json(cost);
+  } catch (error: any) {
+    console.error('Update outsourcing cost error:', error);
+    if (error.message?.includes('FOREIGN KEY constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        message: '指定された案件または外注先が存在しません'
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update outsourcing cost'
+    });
+  }
+});
+
+// DELETE /api/outsourcing-costs/:id - Delete outsourcing cost
+router.delete('/api/outsourcing-costs/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid outsourcing cost ID' });
+    }
+    
+    const success = await dao.deleteOutsourcingCost(id);
+    if (!success) {
+      return res.status(404).json({ error: 'Outsourcing cost not found' });
+    }
+    
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete outsourcing cost error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to delete outsourcing cost'
     });
   }
 });

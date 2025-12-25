@@ -485,6 +485,76 @@ export interface MaterialUsageWithMaterial extends MaterialUsage {
   total_cost: number | null;    // Calculated: unit_price × quantity × (length or 1)
 }
 
+// ========== Vendors Master (外注先マスタ) ==========
+// 外注先（業者）の登録管理
+export const vendorsMaster = sqliteTable("vendors_master", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull().unique(),              // 外注先名（業者名）
+  contact_person: text("contact_person"),             // 担当者名
+  phone: text("phone"),                               // 電話番号
+  email: text("email"),                               // メールアドレス
+  address: text("address"),                           // 住所
+  note: text("note"),                                 // 備考
+  is_active: integer("is_active", { mode: 'boolean' }).default(true), // 有効フラグ
+  created_at: text("created_at").notNull(),
+  updated_at: text("updated_at").notNull(),
+}, (table) => ({
+  nameIdx: index("idx_vendors_master_name").on(table.name),
+}));
+
+export const insertVendorMasterSchema = createInsertSchema(vendorsMaster).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+}).extend({
+  name: z.string().min(1, "外注先名は必須です"),
+  contact_person: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.union([z.string().email("正しいメールアドレスを入力してください"), z.literal("")]).optional(),
+  address: z.string().optional(),
+  note: z.string().optional(),
+  is_active: z.boolean().default(true),
+});
+
+export type VendorMaster = typeof vendorsMaster.$inferSelect;
+export type InsertVendorMaster = z.infer<typeof insertVendorMasterSchema>;
+
+// ========== Outsourcing Costs (外注費) ==========
+// プロジェクト別の外注費管理
+export const outsourcingCosts = sqliteTable("outsourcing_costs", {
+  id: integer("id").primaryKey(),
+  project_id: text("project_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
+  vendor_id: integer("vendor_id").notNull().references(() => vendorsMaster.id, { onDelete: "restrict" }),
+  description: text("description").notNull(),         // 内容・摘要
+  amount: real("amount").notNull(),                   // 金額
+  date: text("date").notNull(),                       // 発注日/請求日（YYYY-MM-DD）
+  note: text("note"),                                 // 備考
+  created_at: text("created_at").notNull(),
+}, (table) => ({
+  projectIdx: index("idx_outsourcing_costs_project").on(table.project_id),
+  vendorIdx: index("idx_outsourcing_costs_vendor").on(table.vendor_id),
+}));
+
+export const insertOutsourcingCostSchema = createInsertSchema(outsourcingCosts).omit({
+  id: true,
+  created_at: true,
+}).extend({
+  project_id: z.string().min(1, "案件IDは必須です"),
+  vendor_id: z.coerce.number().int().positive("外注先IDは必須です"),
+  description: z.string().min(1, "内容は必須です"),
+  amount: z.coerce.number().positive("金額は0より大きい値にしてください"),
+  date: z.string().min(1, "日付は必須です"),
+  note: z.string().optional(),
+});
+
+export type OutsourcingCost = typeof outsourcingCosts.$inferSelect;
+export type InsertOutsourcingCost = z.infer<typeof insertOutsourcingCostSchema>;
+
+// Outsourcing cost with joined vendor info (for API response)
+export interface OutsourcingCostWithVendor extends OutsourcingCost {
+  vendor_name: string;
+}
+
 // ========== Cost Aggregation Types (原価集計) ==========
 
 // 工区別コスト集計（材料費のみ - 労務費は案件単位でのみ取得可能）
@@ -504,6 +574,7 @@ export interface OrderCostSummary {
   labor_cost: number;           // 労務費
   labor_hours: number;          // 作業時間（時間）
   labor_source: 'actual' | 'estimated' | 'none'; // 実績 / 推定 / データなし
+  outsourcing_cost: number;     // 外注費
   total_cost: number;           // 総原価
   estimated_amount: number | null; // 見積金額
   profit: number | null;        // 利益（見積金額 - 総原価）
@@ -517,5 +588,6 @@ export interface CostAggregationResponse {
   labor_rate_per_hour: number;
   total_material_cost: number;
   total_labor_cost: number;
+  total_outsourcing_cost: number;
   total_cost: number;
 }

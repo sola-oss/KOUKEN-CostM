@@ -5,7 +5,7 @@ import type {
   Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
   OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse, ZoneCostSummary,
-  WorkerMaster, InsertWorkerMaster
+  WorkerMaster, InsertWorkerMaster, VendorMaster, InsertVendorMaster, OutsourcingCost, InsertOutsourcingCost, OutsourcingCostWithVendor
 } from '../../shared/production-schema.js';
 
 export class ProductionDAO {
@@ -1636,13 +1636,29 @@ export class ProductionDAO {
       entry.totalCost += cost;
     }
 
+    // 外注費を案件別に集計
+    const outsourcingCostsByOrder = this.db.prepare(`
+      SELECT 
+        project_id AS order_id,
+        SUM(amount) AS outsourcing_cost
+      FROM outsourcing_costs
+      GROUP BY project_id
+    `).all() as { order_id: string; outsourcing_cost: number }[];
+
+    const outsourcingCostMap = new Map<string, number>();
+    for (const row of outsourcingCostsByOrder) {
+      outsourcingCostMap.set(row.order_id, row.outsourcing_cost || 0);
+    }
+
     const orderSummaries: OrderCostSummary[] = [];
     let totalMaterialCost = 0;
     let totalLaborCost = 0;
+    let totalOutsourcingCost = 0;
 
     for (const order of orders) {
       const materialData = materialCostMap.get(order.order_id) || { cost: 0, hasMissing: false };
       const zones = zoneCostMap.get(order.order_id) || [];
+      const outsourcingCost = outsourcingCostMap.get(order.order_id) || 0;
       
       // 実績労務費を優先、なければ推定労務費を使用（作業者別単価で計算済み）
       const actualLabor = actualLaborMap.get(order.order_id);
@@ -1666,14 +1682,14 @@ export class ProductionDAO {
         laborSource = 'none';
       }
       
-      const totalCost = materialData.cost + laborCost;
+      const totalCost = materialData.cost + laborCost + outsourcingCost;
       
       const profit = order.estimated_amount !== null ? order.estimated_amount - totalCost : null;
       const profitRate = order.estimated_amount !== null && order.estimated_amount > 0 
         ? Math.round((profit! / order.estimated_amount) * 100 * 10) / 10 
         : null;
 
-      if (materialData.cost > 0 || laborCost > 0) {
+      if (materialData.cost > 0 || laborCost > 0 || outsourcingCost > 0) {
         orderSummaries.push({
           order_id: order.order_id,
           project_title: order.project_title,
@@ -1682,6 +1698,7 @@ export class ProductionDAO {
           labor_cost: Math.round(laborCost),
           labor_hours: Math.round(laborHours * 100) / 100, // 小数点2桁
           labor_source: laborSource,
+          outsourcing_cost: Math.round(outsourcingCost),
           total_cost: Math.round(totalCost),
           estimated_amount: order.estimated_amount,
           profit: profit !== null ? Math.round(profit) : null,
@@ -1692,6 +1709,7 @@ export class ProductionDAO {
 
         totalMaterialCost += materialData.cost;
         totalLaborCost += laborCost;
+        totalOutsourcingCost += outsourcingCost;
       }
     }
 
@@ -1702,7 +1720,8 @@ export class ProductionDAO {
       labor_rate_per_hour: laborRate,
       total_material_cost: Math.round(totalMaterialCost),
       total_labor_cost: Math.round(totalLaborCost),
-      total_cost: Math.round(totalMaterialCost + totalLaborCost)
+      total_outsourcing_cost: Math.round(totalOutsourcingCost),
+      total_cost: Math.round(totalMaterialCost + totalLaborCost + totalOutsourcingCost)
     };
   }
 
@@ -1798,6 +1817,200 @@ export class ProductionDAO {
       map.set(w.name, w.hourly_rate);
     }
     return map;
+  }
+
+  // ========== Vendors Master CRUD ==========
+  
+  async createVendorMaster(data: InsertVendorMaster): Promise<number> {
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      INSERT INTO vendors_master (name, contact_person, phone, email, address, note, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const result = stmt.run(
+      data.name,
+      data.contact_person || null,
+      data.phone || null,
+      data.email || null,
+      data.address || null,
+      data.note || null,
+      data.is_active ? 1 : 0,
+      now,
+      now
+    );
+    
+    return result.lastInsertRowid as number;
+  }
+
+  async getVendorsMaster(includeInactive: boolean = false): Promise<VendorMaster[]> {
+    const query = includeInactive
+      ? 'SELECT * FROM vendors_master ORDER BY name'
+      : 'SELECT * FROM vendors_master WHERE is_active = 1 ORDER BY name';
+    
+    return this.db.prepare(query).all() as VendorMaster[];
+  }
+
+  async getVendorMasterById(id: number): Promise<VendorMaster | null> {
+    const row = this.db.prepare('SELECT * FROM vendors_master WHERE id = ?').get(id);
+    return row as VendorMaster | null;
+  }
+
+  async updateVendorMaster(id: number, data: Partial<InsertVendorMaster>): Promise<boolean> {
+    const now = new Date().toISOString();
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.contact_person !== undefined) {
+      updates.push('contact_person = ?');
+      params.push(data.contact_person || null);
+    }
+    if (data.phone !== undefined) {
+      updates.push('phone = ?');
+      params.push(data.phone || null);
+    }
+    if (data.email !== undefined) {
+      updates.push('email = ?');
+      params.push(data.email || null);
+    }
+    if (data.address !== undefined) {
+      updates.push('address = ?');
+      params.push(data.address || null);
+    }
+    if (data.note !== undefined) {
+      updates.push('note = ?');
+      params.push(data.note || null);
+    }
+    if (data.is_active !== undefined) {
+      updates.push('is_active = ?');
+      params.push(data.is_active ? 1 : 0);
+    }
+
+    if (updates.length === 0) return false;
+
+    updates.push('updated_at = ?');
+    params.push(now);
+    params.push(id);
+
+    const stmt = this.db.prepare(`UPDATE vendors_master SET ${updates.join(', ')} WHERE id = ?`);
+    const result = stmt.run(...params);
+    return result.changes > 0;
+  }
+
+  async deleteVendorMaster(id: number): Promise<boolean> {
+    const stmt = this.db.prepare('DELETE FROM vendors_master WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  // ========== Outsourcing Costs CRUD ==========
+
+  async createOutsourcingCost(data: InsertOutsourcingCost): Promise<number> {
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      INSERT INTO outsourcing_costs (project_id, vendor_id, description, amount, date, note, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const result = stmt.run(
+      data.project_id,
+      data.vendor_id,
+      data.description,
+      data.amount,
+      data.date,
+      data.note || null,
+      now
+    );
+    
+    return result.lastInsertRowid as number;
+  }
+
+  async getOutsourcingCosts(filters: { project_id?: string; vendor_id?: number }): Promise<OutsourcingCostWithVendor[]> {
+    let query = `
+      SELECT 
+        oc.*,
+        v.name AS vendor_name
+      FROM outsourcing_costs oc
+      JOIN vendors_master v ON oc.vendor_id = v.id
+    `;
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (filters.project_id) {
+      conditions.push('oc.project_id = ?');
+      params.push(filters.project_id);
+    }
+    if (filters.vendor_id) {
+      conditions.push('oc.vendor_id = ?');
+      params.push(filters.vendor_id);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ' ORDER BY oc.date DESC, oc.id DESC';
+
+    return this.db.prepare(query).all(...params) as OutsourcingCostWithVendor[];
+  }
+
+  async getOutsourcingCostById(id: number): Promise<OutsourcingCostWithVendor | null> {
+    const row = this.db.prepare(`
+      SELECT 
+        oc.*,
+        v.name AS vendor_name
+      FROM outsourcing_costs oc
+      JOIN vendors_master v ON oc.vendor_id = v.id
+      WHERE oc.id = ?
+    `).get(id);
+    return row as OutsourcingCostWithVendor | null;
+  }
+
+  async updateOutsourcingCost(id: number, data: Partial<InsertOutsourcingCost>): Promise<boolean> {
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (data.project_id !== undefined) {
+      updates.push('project_id = ?');
+      params.push(data.project_id);
+    }
+    if (data.vendor_id !== undefined) {
+      updates.push('vendor_id = ?');
+      params.push(data.vendor_id);
+    }
+    if (data.description !== undefined) {
+      updates.push('description = ?');
+      params.push(data.description);
+    }
+    if (data.amount !== undefined) {
+      updates.push('amount = ?');
+      params.push(data.amount);
+    }
+    if (data.date !== undefined) {
+      updates.push('date = ?');
+      params.push(data.date);
+    }
+    if (data.note !== undefined) {
+      updates.push('note = ?');
+      params.push(data.note || null);
+    }
+
+    if (updates.length === 0) return false;
+
+    params.push(id);
+
+    const stmt = this.db.prepare(`UPDATE outsourcing_costs SET ${updates.join(', ')} WHERE id = ?`);
+    const result = stmt.run(...params);
+    return result.changes > 0;
+  }
+
+  async deleteOutsourcingCost(id: number): Promise<boolean> {
+    const stmt = this.db.prepare('DELETE FROM outsourcing_costs WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
   }
 
   close(): void {

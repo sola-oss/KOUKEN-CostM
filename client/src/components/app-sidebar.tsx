@@ -3,7 +3,7 @@ import {
   Package, Calendar, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown, Timer,
   ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet,
-  Calculator, TrendingUp, Users, Settings
+  Calculator, TrendingUp, Users, Settings, Building2, Truck
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -105,6 +105,11 @@ const costManagementItems = [
     title: "予実比較",
     url: "/cost-comparison",
     icon: TrendingUp
+  },
+  {
+    title: "外注費入力",
+    url: "/outsourcing-costs",
+    icon: Truck
   }
 ];
 
@@ -119,6 +124,11 @@ const masterSubItems = [
     title: "材料マスタ",
     url: "/materials-master",
     icon: Database
+  },
+  {
+    title: "外注先マスタ",
+    url: "/vendors-master",
+    icon: Building2
   }
 ];
 
