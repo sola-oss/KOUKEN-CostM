@@ -22,7 +22,6 @@ import GanttSimple from "@/pages/production/gantt-simple";
 import MaterialUsages from "@/pages/production/material-usages";
 import MaterialSummary from "@/pages/production/material-summary";
 import MaterialsMaster from "@/pages/production/materials-master";
-import CostSummary from "@/pages/cost/cost-summary";
 import CostComparison from "@/pages/cost/cost-comparison";
 import UnitPrices from "@/pages/cost/unit-prices";
 import Settings from "@/pages/settings";
@@ -45,7 +44,6 @@ function Router() {
       <Route path="/material-usages" component={MaterialUsages} />
       <Route path="/material-summary" component={MaterialSummary} />
       <Route path="/materials-master" component={MaterialsMaster} />
-      <Route path="/cost-summary" component={CostSummary} />
       <Route path="/cost-comparison" component={CostComparison} />
       <Route path="/unit-prices" component={UnitPrices} />
       <Route path="/settings" component={Settings} />
