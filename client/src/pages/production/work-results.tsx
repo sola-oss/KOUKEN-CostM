@@ -111,7 +111,7 @@ export default function WorkResults() {
   const [keepOrderTask, setKeepOrderTask] = useState(false);
   const [editingLog, setEditingLog] = useState<WorkLog | null>(null);
   const [overlapWarning, setOverlapWarning] = useState<WorkLog[]>([]);
-  const [currentWorker] = useState("田中"); // TODO: Get from auth/session
+  const [currentWorker, setCurrentWorker] = useState(""); // Selected from workers master
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   
@@ -123,7 +123,7 @@ export default function WorkResults() {
     resolver: zodResolver(workLogSchema),
     defaultValues: {
       date: todayDate,
-      worker: currentWorker,
+      worker: "",
       start_time: "",
       end_time: "",
       quantity: 0,
@@ -132,16 +132,46 @@ export default function WorkResults() {
     },
   });
 
-  // Fetch today's work logs for current worker
-  const { data: workLogsData, isLoading: logsLoading } = useQuery({
-    queryKey: ['/api/work-logs', todayDate, currentWorker],
-    queryFn: () => listWorkLogs({ date: todayDate, worker: currentWorker }),
-  });
-
   // Fetch orders for dropdown
   const { data: ordersData } = useQuery({
     queryKey: ['/api/orders'],
     queryFn: () => listOrders({ page_size: 1000 }),
+  });
+
+  // Fetch workers from workers master
+  const { data: workersData } = useQuery({
+    queryKey: ['/api/workers-master'],
+    queryFn: async () => {
+      const res = await fetch('/api/workers-master');
+      if (!res.ok) throw new Error('Failed to fetch workers');
+      return res.json() as Promise<{ id: number; name: string; hourly_rate: number; is_active: boolean }[]>;
+    },
+  });
+
+  // Update currentWorker when form worker changes (for filtering work logs)
+  const workerValue = form.watch('worker');
+  useEffect(() => {
+    if (workerValue) {
+      setCurrentWorker(workerValue);
+    }
+  }, [workerValue]);
+
+  // Auto-select first active worker when workers load
+  useEffect(() => {
+    if (workersData && workersData.length > 0 && !currentWorker) {
+      const firstActiveWorker = workersData.find(w => w.is_active);
+      if (firstActiveWorker) {
+        form.setValue('worker', firstActiveWorker.name);
+        setCurrentWorker(firstActiveWorker.name);
+      }
+    }
+  }, [workersData, currentWorker, form]);
+
+  // Fetch today's work logs for current worker (only when worker is selected)
+  const { data: workLogsData, isLoading: logsLoading } = useQuery({
+    queryKey: ['/api/work-logs', todayDate, currentWorker],
+    queryFn: () => listWorkLogs({ date: todayDate, worker: currentWorker }),
+    enabled: !!currentWorker,
   });
 
   // Fetch tasks for selected order
@@ -495,15 +525,41 @@ export default function WorkResults() {
                   <FormField
                     control={form.control}
                     name="worker"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>作業者 *</FormLabel>
-                        <FormControl>
-                          <Input {...field} data-testid="input-worker" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      // Build worker options: active workers + editing log's worker if inactive
+                      const activeWorkers = workersData?.filter(w => w.is_active) || [];
+                      const editingWorkerName = editingLog?.worker;
+                      const showEditingWorker = editingWorkerName && !activeWorkers.some(w => w.name === editingWorkerName);
+                      
+                      return (
+                        <FormItem>
+                          <FormLabel>作業者 *</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-worker">
+                                <SelectValue placeholder="作業者を選択" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {showEditingWorker && (
+                                <SelectItem key={`editing-${editingWorkerName}`} value={editingWorkerName}>
+                                  {editingWorkerName} (非アクティブ)
+                                </SelectItem>
+                              )}
+                              {activeWorkers.map((worker) => (
+                                <SelectItem key={worker.id} value={worker.name}>
+                                  {worker.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
                 </div>
 
