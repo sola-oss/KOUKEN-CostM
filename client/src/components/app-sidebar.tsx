@@ -3,13 +3,14 @@ import {
   Package, Calendar, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown, Timer,
   ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet,
-  Calculator, TrendingUp, Users
+  Calculator, TrendingUp, Users, Settings
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -90,11 +91,6 @@ const materialManagementSubItems = [
     title: "材料使用入力",
     url: "/material-usages",
     icon: FileSpreadsheet
-  },
-  {
-    title: "材料マスタ",
-    url: "/materials-master",
-    icon: Database
   }
 ];
 
@@ -109,11 +105,20 @@ const costManagementItems = [
     title: "予実比較",
     url: "/cost-comparison",
     icon: TrendingUp
-  },
+  }
+];
+
+// Master Sub-menu (マスタ) - shown at bottom of sidebar
+const masterSubItems = [
   {
     title: "作業者マスタ",
     url: "/workers-master",
     icon: Users
+  },
+  {
+    title: "材料マスタ",
+    url: "/materials-master",
+    icon: Database
   }
 ];
 
@@ -122,9 +127,11 @@ export function AppSidebar() {
   const [appMode, setAppMode] = useState<AppMode>("production");
   const [isWorkInstructionsOpen, setIsWorkInstructionsOpen] = useState(true);
   const [isMaterialManagementOpen, setIsMaterialManagementOpen] = useState(true);
+  const [isMasterOpen, setIsMasterOpen] = useState(true);
 
   const isWorkInstructionsActive = workInstructionsSubItems.some(item => location === item.url);
   const isMaterialManagementActive = materialManagementSubItems.some(item => location === item.url);
+  const isMasterActive = masterSubItems.some(item => location === item.url);
 
   useEffect(() => {
     const applyColors = () => {
@@ -357,6 +364,50 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      {/* Master Menu at Bottom */}
+      <SidebarFooter className="border-t">
+        <SidebarMenu>
+          <Collapsible
+            open={isMasterOpen}
+            onOpenChange={setIsMasterOpen}
+            className="group/collapsible"
+          >
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton 
+                  className={isMasterActive ? 'bg-sidebar-accent' : ''}
+                >
+                  <Settings className="h-4 w-4" />
+                  <span className="flex-1">マスタ</span>
+                  {isMasterOpen ? (
+                    <ChevronDown className="h-4 w-4 transition-transform" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 transition-transform" />
+                  )}
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarMenuSub>
+                  {masterSubItems.map((subItem) => (
+                    <SidebarMenuSubItem key={subItem.title}>
+                      <SidebarMenuSubButton 
+                        asChild
+                        className={location === subItem.url ? 'bg-sidebar-accent' : ''}
+                      >
+                        <Link href={subItem.url}>
+                          <subItem.icon className="h-4 w-4" />
+                          <span>{subItem.title}</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ))}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </SidebarMenuItem>
+          </Collapsible>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }
