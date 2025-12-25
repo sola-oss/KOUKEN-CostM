@@ -106,6 +106,11 @@ const materialManagementSubItems = [
 // Cost Management menu items (原価管理)
 const costManagementItems = [
   {
+    title: "原価集計",
+    url: "/cost-summary",
+    icon: Calculator
+  },
+  {
     title: "予実比較",
     url: "/cost-comparison",
     icon: TrendingUp
