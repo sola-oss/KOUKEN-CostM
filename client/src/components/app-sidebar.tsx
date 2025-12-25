@@ -92,11 +92,6 @@ const materialManagementSubItems = [
     icon: FileSpreadsheet
   },
   {
-    title: "案件・工区別 集計",
-    url: "/material-summary",
-    icon: BarChart3
-  },
-  {
     title: "材料マスタ",
     url: "/materials-master",
     icon: Database
