@@ -4,7 +4,8 @@ import { MetricsService } from '../services/metrics.js';
 import type { 
   Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
-  OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse, ZoneCostSummary
+  OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse, ZoneCostSummary,
+  WorkerMaster, InsertWorkerMaster
 } from '../../shared/production-schema.js';
 
 export class ProductionDAO {
@@ -1546,25 +1547,31 @@ export class ProductionDAO {
       GROUP BY mu.project_id
     `).all() as { order_id: string; material_cost: number; missing_prices_count: number }[];
 
-    // 実績時間（work_logsのduration_hours）を取得 - 優先的に使用
-    const actualHoursByOrder = this.db.prepare(`
+    // 作業者別単価マップを取得（マスタに登録された作業者の単価）
+    const workerRatesMap = this.getWorkerRatesMap();
+    const defaultRate = laborRate; // デフォルト単価（マスタにない作業者用）
+
+    // 実績時間（work_logsのduration_hours）を作業者別に取得 - 優先的に使用
+    const actualHoursByOrderWorker = this.db.prepare(`
       SELECT 
         order_id,
+        COALESCE(worker, employee_name, '不明') AS worker_name,
         SUM(COALESCE(duration_hours, 0)) AS total_hours
       FROM work_logs
       WHERE order_id IS NOT NULL AND duration_hours IS NOT NULL AND duration_hours > 0
-      GROUP BY order_id
-    `).all() as { order_id: string; total_hours: number }[];
+      GROUP BY order_id, COALESCE(worker, employee_name, '不明')
+    `).all() as { order_id: string; worker_name: string; total_hours: number }[];
 
-    // 推定時間（workers_logのqty × act_time_per_unit）を取得 - 実績がない場合のフォールバック
-    const estimatedHoursByOrder = this.db.prepare(`
+    // 推定時間（workers_logのqty × act_time_per_unit）を作業者別に取得 - 実績がない場合のフォールバック
+    const estimatedHoursByOrderWorker = this.db.prepare(`
       SELECT 
         order_id,
+        worker AS worker_name,
         SUM(COALESCE(qty, 0) * COALESCE(act_time_per_unit, 0)) AS total_hours
       FROM workers_log
       WHERE order_id IS NOT NULL
-      GROUP BY order_id
-    `).all() as { order_id: string; total_hours: number }[];
+      GROUP BY order_id, worker
+    `).all() as { order_id: string; worker_name: string; total_hours: number }[];
 
     const orders = this.db.prepare(`
       SELECT 
@@ -1598,16 +1605,35 @@ export class ProductionDAO {
       });
     }
 
-    // 実績時間マップ（work_logsから）
-    const actualHoursMap = new Map<string, number>();
-    for (const row of actualHoursByOrder) {
-      actualHoursMap.set(row.order_id, row.total_hours || 0);
+    // 実績労務費マップ（work_logsから・作業者別単価で計算）
+    // 構造: order_id -> { totalHours, totalCost }
+    const actualLaborMap = new Map<string, { totalHours: number; totalCost: number }>();
+    for (const row of actualHoursByOrderWorker) {
+      const hours = row.total_hours || 0;
+      const rate = workerRatesMap.get(row.worker_name) || defaultRate;
+      const cost = hours * rate;
+      
+      if (!actualLaborMap.has(row.order_id)) {
+        actualLaborMap.set(row.order_id, { totalHours: 0, totalCost: 0 });
+      }
+      const entry = actualLaborMap.get(row.order_id)!;
+      entry.totalHours += hours;
+      entry.totalCost += cost;
     }
 
-    // 推定時間マップ（workers_logから）
-    const estimatedHoursMap = new Map<string, number>();
-    for (const row of estimatedHoursByOrder) {
-      estimatedHoursMap.set(row.order_id, row.total_hours || 0);
+    // 推定労務費マップ（workers_logから・作業者別単価で計算）
+    const estimatedLaborMap = new Map<string, { totalHours: number; totalCost: number }>();
+    for (const row of estimatedHoursByOrderWorker) {
+      const hours = row.total_hours || 0;
+      const rate = workerRatesMap.get(row.worker_name) || defaultRate;
+      const cost = hours * rate;
+      
+      if (!estimatedLaborMap.has(row.order_id)) {
+        estimatedLaborMap.set(row.order_id, { totalHours: 0, totalCost: 0 });
+      }
+      const entry = estimatedLaborMap.get(row.order_id)!;
+      entry.totalHours += hours;
+      entry.totalCost += cost;
     }
 
     const orderSummaries: OrderCostSummary[] = [];
@@ -1618,25 +1644,28 @@ export class ProductionDAO {
       const materialData = materialCostMap.get(order.order_id) || { cost: 0, hasMissing: false };
       const zones = zoneCostMap.get(order.order_id) || [];
       
-      // 実績時間を優先、なければ推定時間を使用
-      const actualHours = actualHoursMap.get(order.order_id) || 0;
-      const estimatedHours = estimatedHoursMap.get(order.order_id) || 0;
+      // 実績労務費を優先、なければ推定労務費を使用（作業者別単価で計算済み）
+      const actualLabor = actualLaborMap.get(order.order_id);
+      const estimatedLabor = estimatedLaborMap.get(order.order_id);
       
       let laborHours: number;
+      let laborCost: number;
       let laborSource: 'actual' | 'estimated' | 'none';
       
-      if (actualHours > 0) {
-        laborHours = actualHours;
+      if (actualLabor && actualLabor.totalHours > 0) {
+        laborHours = actualLabor.totalHours;
+        laborCost = actualLabor.totalCost;
         laborSource = 'actual';
-      } else if (estimatedHours > 0) {
-        laborHours = estimatedHours;
+      } else if (estimatedLabor && estimatedLabor.totalHours > 0) {
+        laborHours = estimatedLabor.totalHours;
+        laborCost = estimatedLabor.totalCost;
         laborSource = 'estimated';
       } else {
         laborHours = 0;
+        laborCost = 0;
         laborSource = 'none';
       }
       
-      const laborCost = laborHours * laborRate;
       const totalCost = materialData.cost + laborCost;
       
       const profit = order.estimated_amount !== null ? order.estimated_amount - totalCost : null;
@@ -1675,6 +1704,99 @@ export class ProductionDAO {
       total_labor_cost: Math.round(totalLaborCost),
       total_cost: Math.round(totalMaterialCost + totalLaborCost)
     };
+  }
+
+  // ========== Workers Master CRUD ==========
+  
+  async createWorkerMaster(data: InsertWorkerMaster): Promise<number> {
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      INSERT INTO workers_master (name, hourly_rate, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    const result = stmt.run(
+      data.name,
+      data.hourly_rate,
+      data.is_active ? 1 : 0,
+      now,
+      now
+    );
+    
+    return result.lastInsertRowid as number;
+  }
+
+  async getWorkersMaster(includeInactive: boolean = false): Promise<WorkerMaster[]> {
+    const query = includeInactive
+      ? 'SELECT * FROM workers_master ORDER BY name'
+      : 'SELECT * FROM workers_master WHERE is_active = 1 ORDER BY name';
+    
+    return this.db.prepare(query).all() as WorkerMaster[];
+  }
+
+  async getWorkerMasterById(id: number): Promise<WorkerMaster | null> {
+    const row = this.db.prepare('SELECT * FROM workers_master WHERE id = ?').get(id);
+    return row as WorkerMaster | null;
+  }
+
+  async getWorkerMasterByName(name: string): Promise<WorkerMaster | null> {
+    const row = this.db.prepare('SELECT * FROM workers_master WHERE name = ?').get(name);
+    return row as WorkerMaster | null;
+  }
+
+  async updateWorkerMaster(id: number, data: Partial<InsertWorkerMaster>): Promise<boolean> {
+    const now = new Date().toISOString();
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.hourly_rate !== undefined) {
+      updates.push('hourly_rate = ?');
+      params.push(data.hourly_rate);
+    }
+    if (data.is_active !== undefined) {
+      updates.push('is_active = ?');
+      params.push(data.is_active ? 1 : 0);
+    }
+
+    if (updates.length === 0) return false;
+
+    updates.push('updated_at = ?');
+    params.push(now);
+    params.push(id);
+
+    const stmt = this.db.prepare(`UPDATE workers_master SET ${updates.join(', ')} WHERE id = ?`);
+    const result = stmt.run(...params);
+    return result.changes > 0;
+  }
+
+  async deleteWorkerMaster(id: number): Promise<boolean> {
+    const stmt = this.db.prepare('DELETE FROM workers_master WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  // 作業者名から時間単価を取得（マスタにない場合はデフォルト単価を返す）
+  async getWorkerHourlyRate(workerName: string): Promise<{ rate: number; source: 'worker' | 'default' }> {
+    const worker = await this.getWorkerMasterByName(workerName);
+    if (worker) {
+      return { rate: worker.hourly_rate, source: 'worker' };
+    }
+    const settings = await this.getCostSettings();
+    return { rate: settings.labor_rate_per_hour, source: 'default' };
+  }
+
+  // 全作業者の単価マップを取得（パフォーマンス用）
+  getWorkerRatesMap(): Map<string, number> {
+    const workers = this.db.prepare('SELECT name, hourly_rate FROM workers_master WHERE is_active = 1').all() as { name: string; hourly_rate: number }[];
+    const map = new Map<string, number>();
+    for (const w of workers) {
+      map.set(w.name, w.hourly_rate);
+    }
+    return map;
   }
 
   close(): void {

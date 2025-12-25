@@ -7,6 +7,7 @@ import {
   insertWorkerLogSchema,
   insertTaskSchema,
   insertWorkLogSchema,
+  insertWorkerMasterSchema,
   updateOrderSchema,
   updateProcurementSchema,
   updateTaskSchema,
@@ -1639,6 +1640,136 @@ router.get('/api/cost-aggregation', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal server error',
       message: 'Failed to fetch cost aggregation'
+    });
+  }
+});
+
+// ========== Workers Master API ==========
+
+// GET /api/workers-master - Get all workers
+router.get('/api/workers-master', async (req, res) => {
+  try {
+    const includeInactive = req.query.include_inactive === 'true';
+    const workers = await dao.getWorkersMaster(includeInactive);
+    res.json(workers);
+  } catch (error) {
+    console.error('Get workers master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch workers'
+    });
+  }
+});
+
+// GET /api/workers-master/:id - Get single worker
+router.get('/api/workers-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid worker ID' });
+    }
+    
+    const worker = await dao.getWorkerMasterById(id);
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+    
+    res.json(worker);
+  } catch (error) {
+    console.error('Get worker master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch worker'
+    });
+  }
+});
+
+// POST /api/workers-master - Create worker
+router.post('/api/workers-master', async (req, res) => {
+  try {
+    const parsed = insertWorkerMasterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parsed.error.flatten()
+      });
+    }
+    
+    const id = await dao.createWorkerMaster(parsed.data);
+    const worker = await dao.getWorkerMasterById(id);
+    res.status(201).json(worker);
+  } catch (error: any) {
+    console.error('Create worker master error:', error);
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        message: 'この作業者名は既に登録されています'
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to create worker'
+    });
+  }
+});
+
+// PUT /api/workers-master/:id - Update worker
+router.put('/api/workers-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid worker ID' });
+    }
+    
+    const parsed = insertWorkerMasterSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parsed.error.flatten()
+      });
+    }
+    
+    const success = await dao.updateWorkerMaster(id, parsed.data);
+    if (!success) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+    
+    const worker = await dao.getWorkerMasterById(id);
+    res.json(worker);
+  } catch (error: any) {
+    console.error('Update worker master error:', error);
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        message: 'この作業者名は既に登録されています'
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update worker'
+    });
+  }
+});
+
+// DELETE /api/workers-master/:id - Delete worker
+router.delete('/api/workers-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid worker ID' });
+    }
+    
+    const success = await dao.deleteWorkerMaster(id);
+    if (!success) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+    
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete worker master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to delete worker'
     });
   }
 });

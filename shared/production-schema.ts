@@ -362,10 +362,10 @@ export interface CalendarEvent {
 }
 
 // ========== Cost Settings (原価設定) ==========
-// 労務単価などの原価計算設定
+// 労務単価などの原価計算設定（デフォルト単価として使用）
 export const costSettings = sqliteTable("cost_settings", {
   id: integer("id").primaryKey(),
-  labor_rate_per_hour: real("labor_rate_per_hour").notNull().default(3000), // 労務単価（円/時間）
+  labor_rate_per_hour: real("labor_rate_per_hour").notNull().default(3000), // デフォルト労務単価（円/時間）
   updated_at: text("updated_at").notNull(),
 });
 
@@ -377,6 +377,32 @@ export const insertCostSettingsSchema = createInsertSchema(costSettings).omit({
 
 export type CostSettings = typeof costSettings.$inferSelect;
 export type InsertCostSettings = z.infer<typeof insertCostSettingsSchema>;
+
+// ========== Workers Master (作業者マスタ) ==========
+// 作業者別の時間単価を管理
+export const workersMaster = sqliteTable("workers_master", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull().unique(),              // 作業者名
+  hourly_rate: real("hourly_rate").notNull(),         // 時間単価（円/時間）
+  is_active: integer("is_active", { mode: 'boolean' }).default(true), // 有効フラグ
+  created_at: text("created_at").notNull(),
+  updated_at: text("updated_at").notNull(),
+}, (table) => ({
+  nameIdx: index("idx_workers_master_name").on(table.name),
+}));
+
+export const insertWorkerMasterSchema = createInsertSchema(workersMaster).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+}).extend({
+  name: z.string().min(1, "作業者名は必須です"),
+  hourly_rate: z.coerce.number().positive("時間単価は0より大きい値にしてください"),
+  is_active: z.boolean().default(true),
+});
+
+export type WorkerMaster = typeof workersMaster.$inferSelect;
+export type InsertWorkerMaster = z.infer<typeof insertWorkerMasterSchema>;
 
 // ========== Materials Master (材料マスタ) ==========
 // 共通の材料マスタ - プロジェクト非依存
