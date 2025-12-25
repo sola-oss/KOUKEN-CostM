@@ -1546,7 +1546,18 @@ export class ProductionDAO {
       GROUP BY mu.project_id
     `).all() as { order_id: string; material_cost: number; missing_prices_count: number }[];
 
-    const laborCostsByOrder = this.db.prepare(`
+    // 実績時間（work_logsのduration_hours）を取得 - 優先的に使用
+    const actualHoursByOrder = this.db.prepare(`
+      SELECT 
+        order_id,
+        SUM(COALESCE(duration_hours, 0)) AS total_hours
+      FROM work_logs
+      WHERE order_id IS NOT NULL AND duration_hours IS NOT NULL AND duration_hours > 0
+      GROUP BY order_id
+    `).all() as { order_id: string; total_hours: number }[];
+
+    // 推定時間（workers_logのqty × act_time_per_unit）を取得 - 実績がない場合のフォールバック
+    const estimatedHoursByOrder = this.db.prepare(`
       SELECT 
         order_id,
         SUM(COALESCE(qty, 0) * COALESCE(act_time_per_unit, 0)) AS total_hours
@@ -1587,9 +1598,16 @@ export class ProductionDAO {
       });
     }
 
-    const laborCostMap = new Map<string, number>();
-    for (const row of laborCostsByOrder) {
-      laborCostMap.set(row.order_id, (row.total_hours || 0) * laborRate);
+    // 実績時間マップ（work_logsから）
+    const actualHoursMap = new Map<string, number>();
+    for (const row of actualHoursByOrder) {
+      actualHoursMap.set(row.order_id, row.total_hours || 0);
+    }
+
+    // 推定時間マップ（workers_logから）
+    const estimatedHoursMap = new Map<string, number>();
+    for (const row of estimatedHoursByOrder) {
+      estimatedHoursMap.set(row.order_id, row.total_hours || 0);
     }
 
     const orderSummaries: OrderCostSummary[] = [];
@@ -1598,9 +1616,28 @@ export class ProductionDAO {
 
     for (const order of orders) {
       const materialData = materialCostMap.get(order.order_id) || { cost: 0, hasMissing: false };
-      const laborCost = laborCostMap.get(order.order_id) || 0;
-      const totalCost = materialData.cost + laborCost;
       const zones = zoneCostMap.get(order.order_id) || [];
+      
+      // 実績時間を優先、なければ推定時間を使用
+      const actualHours = actualHoursMap.get(order.order_id) || 0;
+      const estimatedHours = estimatedHoursMap.get(order.order_id) || 0;
+      
+      let laborHours: number;
+      let laborSource: 'actual' | 'estimated' | 'none';
+      
+      if (actualHours > 0) {
+        laborHours = actualHours;
+        laborSource = 'actual';
+      } else if (estimatedHours > 0) {
+        laborHours = estimatedHours;
+        laborSource = 'estimated';
+      } else {
+        laborHours = 0;
+        laborSource = 'none';
+      }
+      
+      const laborCost = laborHours * laborRate;
+      const totalCost = materialData.cost + laborCost;
       
       const profit = order.estimated_amount !== null ? order.estimated_amount - totalCost : null;
       const profitRate = order.estimated_amount !== null && order.estimated_amount > 0 
@@ -1614,6 +1651,8 @@ export class ProductionDAO {
           client_name: order.client_name,
           material_cost: Math.round(materialData.cost),
           labor_cost: Math.round(laborCost),
+          labor_hours: Math.round(laborHours * 100) / 100, // 小数点2桁
+          labor_source: laborSource,
           total_cost: Math.round(totalCost),
           estimated_amount: order.estimated_amount,
           profit: profit !== null ? Math.round(profit) : null,
