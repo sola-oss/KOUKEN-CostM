@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, ChevronRight, ChevronDown, MapPin } from "lucide-react";
+import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, ChevronRight, ChevronDown, MapPin, Clock, Timer } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { CostAggregationResponse, OrderCostSummary } from "@shared/production-schema";
@@ -58,7 +59,37 @@ function OrderRow({
         <TableCell>{order.project_title || "-"}</TableCell>
         <TableCell>{order.client_name || "-"}</TableCell>
         <TableCell className="text-right">{formatCurrency(order.material_cost)}</TableCell>
-        <TableCell className="text-right">{formatCurrency(order.labor_cost)}</TableCell>
+        <TableCell className="text-right">
+          <div className="flex items-center justify-end gap-1">
+            <span>{formatCurrency(order.labor_cost)}</span>
+            {order.labor_source === 'actual' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Clock className="h-3 w-3 text-green-600" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>実績時間: {order.labor_hours}h</p>
+                    <p className="text-xs text-muted-foreground">実績時間 × 時間単価</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {order.labor_source === 'estimated' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Timer className="h-3 w-3 text-amber-600" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>推定時間: {order.labor_hours}h</p>
+                    <p className="text-xs text-muted-foreground">推定時間 × 時間単価（実績未入力）</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        </TableCell>
         <TableCell className="text-right font-medium">{formatCurrency(order.total_cost)}</TableCell>
         <TableCell className="text-right">{formatCurrency(order.estimated_amount)}</TableCell>
         <TableCell className="text-right">
@@ -270,8 +301,18 @@ export default function CostSummaryPage() {
               {formatCurrency(data?.total_labor_cost || 0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              単価: {formatCurrency(data?.labor_rate_per_hour || 3000)}/時間
+              計算式: 作業時間 × {formatCurrency(data?.labor_rate_per_hour || 3000)}/時間
             </p>
+            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3 text-green-600" />
+                実績
+              </span>
+              <span className="flex items-center gap-1">
+                <Timer className="h-3 w-3 text-amber-600" />
+                推定
+              </span>
+            </div>
           </CardContent>
         </Card>
         <Card>
