@@ -25,6 +25,7 @@ import MaterialsMaster from "@/pages/production/materials-master";
 import CostSummary from "@/pages/cost/cost-summary";
 import CostComparison from "@/pages/cost/cost-comparison";
 import UnitPrices from "@/pages/cost/unit-prices";
+import WorkersMaster from "@/pages/cost/workers-master";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/cost-summary" component={CostSummary} />
       <Route path="/cost-comparison" component={CostComparison} />
       <Route path="/unit-prices" component={UnitPrices} />
+      <Route path="/workers-master" component={WorkersMaster} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

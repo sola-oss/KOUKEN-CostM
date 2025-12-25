@@ -1789,9 +1789,10 @@ export class ProductionDAO {
     return { rate: settings.labor_rate_per_hour, source: 'default' };
   }
 
-  // 全作業者の単価マップを取得（パフォーマンス用）
+  // 全作業者の単価マップを取得（履歴計算用に非アクティブも含む）
   getWorkerRatesMap(): Map<string, number> {
-    const workers = this.db.prepare('SELECT name, hourly_rate FROM workers_master WHERE is_active = 1').all() as { name: string; hourly_rate: number }[];
+    // 非アクティブな作業者も含める（過去の作業記録の正確な労務費計算のため）
+    const workers = this.db.prepare('SELECT name, hourly_rate FROM workers_master').all() as { name: string; hourly_rate: number }[];
     const map = new Map<string, number>();
     for (const w of workers) {
       map.set(w.name, w.hourly_rate);

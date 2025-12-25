@@ -3,7 +3,7 @@ import {
   Package, Calendar, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown, Timer,
   ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet,
-  Calculator, TrendingUp, DollarSign
+  Calculator, TrendingUp, DollarSign, Users
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -114,6 +114,11 @@ const costManagementItems = [
     title: "単価マスタ",
     url: "/unit-prices",
     icon: DollarSign
+  },
+  {
+    title: "作業者マスタ",
+    url: "/workers-master",
+    icon: Users
   }
 ];
 

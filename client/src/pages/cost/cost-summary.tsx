@@ -70,7 +70,7 @@ function OrderRow({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>実績時間: {order.labor_hours}h</p>
-                    <p className="text-xs text-muted-foreground">実績時間 × 時間単価</p>
+                    <p className="text-xs text-muted-foreground">作業者別単価で計算</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -83,7 +83,7 @@ function OrderRow({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>推定時間: {order.labor_hours}h</p>
-                    <p className="text-xs text-muted-foreground">推定時間 × 時間単価（実績未入力）</p>
+                    <p className="text-xs text-muted-foreground">作業者別単価で計算（実績未入力）</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -301,7 +301,10 @@ export default function CostSummaryPage() {
               {formatCurrency(data?.total_labor_cost || 0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              計算式: 作業時間 × {formatCurrency(data?.labor_rate_per_hour || 3000)}/時間
+              計算式: 作業時間 × 作業者単価
+            </p>
+            <p className="text-xs text-muted-foreground">
+              デフォルト単価: {formatCurrency(data?.labor_rate_per_hour || 3000)}/時間
             </p>
             <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
