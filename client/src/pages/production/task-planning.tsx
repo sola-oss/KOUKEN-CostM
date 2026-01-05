@@ -57,8 +57,19 @@ export default function TaskPlanning() {
     queryFn: () => listOrders({ page_size: 100 })
   });
 
+  // Fetch workers from workers master
+  const { data: workersData } = useQuery({
+    queryKey: ['/api/workers-master'],
+    queryFn: async () => {
+      const res = await fetch('/api/workers-master');
+      if (!res.ok) throw new Error('Failed to fetch workers');
+      return res.json() as Promise<{ id: number; name: string; hourly_rate: number; is_active: boolean }[]>;
+    }
+  });
+
   const tasks = tasksResponse?.data || [];
   const orders = ordersResponse?.data || [];
+  const workers = (workersData || []).filter(w => w.is_active);
 
   // Create task form
   const createForm = useForm<TaskFormData>({
@@ -300,11 +311,21 @@ export default function TaskPlanning() {
                     <FormItem>
                       <FormLabel>担当者</FormLabel>
                       <FormControl>
-                        <Input 
-                          {...field} 
-                          placeholder="担当者名" 
-                          data-testid="input-assignee"
-                        />
+                        <Select 
+                          value={field.value} 
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger data-testid="select-assignee">
+                            <SelectValue placeholder="担当者を選択" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {workers.map(worker => (
+                              <SelectItem key={worker.id} value={worker.name}>
+                                {worker.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -596,7 +617,21 @@ export default function TaskPlanning() {
                     <FormItem>
                       <FormLabel>担当者</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="担当者名" />
+                        <Select 
+                          value={field.value} 
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="担当者を選択" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {workers.map(worker => (
+                              <SelectItem key={worker.id} value={worker.name}>
+                                {worker.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
