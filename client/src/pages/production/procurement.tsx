@@ -518,14 +518,14 @@ export default function ProcurementManagement() {
                           <FormLabel>業者マスタ</FormLabel>
                           <FormControl>
                             <Select 
-                              value={field.value?.toString() || ""} 
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || "__none__"} 
+                              onValueChange={(value) => field.onChange(value === "__none__" ? null : parseInt(value))}
                             >
                               <SelectTrigger data-testid="select-vendor-id">
                                 <SelectValue placeholder="業者を選択（任意）" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">未選択</SelectItem>
+                                <SelectItem value="__none__">未選択</SelectItem>
                                 {vendors.map(vendor => (
                                   <SelectItem key={vendor.id} value={vendor.id.toString()}>
                                     {vendor.name}
@@ -1056,14 +1056,14 @@ export default function ProcurementManagement() {
                           <FormLabel>業者マスタ</FormLabel>
                           <FormControl>
                             <Select 
-                              value={field.value?.toString() || ""} 
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || "__none__"} 
+                              onValueChange={(value) => field.onChange(value === "__none__" ? null : parseInt(value))}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="業者を選択（任意）" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">未選択</SelectItem>
+                                <SelectItem value="__none__">未選択</SelectItem>
                                 {vendors.map(vendor => (
                                   <SelectItem key={vendor.id} value={vendor.id.toString()}>
                                     {vendor.name}

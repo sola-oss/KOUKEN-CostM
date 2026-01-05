@@ -9,6 +9,9 @@ import { requestLogger, healthCheckLogger } from './middleware/logging.js';
 
 const app = express();
 
+// Trust proxy for Replit environment (needed for express-rate-limit to work correctly)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmetConfig);
 app.use(corsConfig);
