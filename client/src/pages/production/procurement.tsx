@@ -24,7 +24,7 @@ import { format } from "date-fns";
 
 // Form validation schema
 const procurementFormSchema = z.object({
-  order_id: z.coerce.number().min(1, "受注番号は必須です"),
+  order_id: z.string().min(1, "受注番号は必須です"),
   kind: z.enum(['purchase', 'manufacture']),
   item_name: z.string().min(1, "品目名は必須です"),
   qty: z.coerce.number().min(1, "数量は1以上である必要があります"),
@@ -83,7 +83,7 @@ export default function ProcurementManagement() {
   const form = useForm<ProcurementFormData>({
     resolver: zodResolver(procurementFormSchema),
     defaultValues: {
-      order_id: 0,
+      order_id: "",
       kind: 'purchase',
       item_name: "",
       qty: 1,
@@ -105,7 +105,7 @@ export default function ProcurementManagement() {
   const editForm = useForm<ProcurementFormData>({
     resolver: zodResolver(procurementFormSchema),
     defaultValues: {
-      order_id: 0,
+      order_id: "",
       kind: 'purchase',
       item_name: "",
       qty: 1,
@@ -136,7 +136,7 @@ export default function ProcurementManagement() {
         description: "新しい調達手配が作成されました"
       });
       form.reset({
-        order_id: 0,
+        order_id: "",
         kind: selectedKind,
         item_name: "",
         qty: 1,
@@ -269,7 +269,7 @@ export default function ProcurementManagement() {
   const handleEditClick = (proc: Procurement) => {
     setEditingProcurement(proc);
     editForm.reset({
-      order_id: parseInt(proc.order_id || '') || 0,
+      order_id: proc.order_id || '',
       kind: proc.kind,
       item_name: proc.item_name,
       qty: proc.qty,
@@ -397,8 +397,8 @@ export default function ProcurementManagement() {
                           <FormLabel>受注番号 *</FormLabel>
                           <FormControl>
                             <Select 
-                              value={field.value?.toString() || ""} 
-                              onValueChange={(value) => field.onChange(parseInt(value))}
+                              value={field.value || ""} 
+                              onValueChange={field.onChange}
                             >
                               <SelectTrigger data-testid="select-order-id">
                                 <SelectValue placeholder="受注番号を選択" />
@@ -593,8 +593,8 @@ export default function ProcurementManagement() {
                           <FormLabel>受注番号 *</FormLabel>
                           <FormControl>
                             <Select 
-                              value={field.value?.toString() || ""} 
-                              onValueChange={(value) => field.onChange(parseInt(value))}
+                              value={field.value || ""} 
+                              onValueChange={field.onChange}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="受注番号を選択" />
