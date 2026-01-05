@@ -15,7 +15,6 @@ import WorkInstructions from "@/pages/production/work-instructions";
 import TaskPlanning from "@/pages/production/task-planning";
 import Procurement from "@/pages/production/procurement";
 import WorkResults from "@/pages/production/work-results";
-import Calendar from "@/pages/production/calendar";
 import SummaryApproval from "@/pages/production/summary-approval";
 import CostAnalysis from "@/pages/production/cost-analysis";
 import GanttSimple from "@/pages/production/gantt-simple";
@@ -41,7 +40,6 @@ function Router() {
       <Route path="/task-planning" component={TaskPlanning} />
       <Route path="/procurement" component={Procurement} />
       <Route path="/work-results" component={WorkResults} />
-      <Route path="/calendar" component={Calendar} />
       <Route path="/summary-approval" component={SummaryApproval} />
       <Route path="/cost-analysis" component={CostAnalysis} />
       <Route path="/gantt" component={GanttSimple} />

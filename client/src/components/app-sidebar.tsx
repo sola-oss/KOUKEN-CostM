@@ -298,19 +298,6 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-
-                  {/* 5. 進捗カレンダー */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton 
-                      asChild
-                      className={location === '/calendar' ? 'bg-sidebar-accent' : ''}
-                    >
-                      <Link href="/calendar">
-                        <Calendar className="h-4 w-4" />
-                        <span className="flex-1">進捗カレンダー</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
                 </>
               ) : (
                 <>
