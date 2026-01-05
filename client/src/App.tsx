@@ -1,11 +1,11 @@
 import { type CSSProperties } from "react";
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar, getCurrentPageInfo } from "@/components/app-sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 // Production Management MVP - Main Pages
@@ -60,29 +60,6 @@ function Router() {
   );
 }
 
-function AppHeader() {
-  const [location] = useLocation();
-  const pageInfo = getCurrentPageInfo(location);
-  
-  return (
-    <header className="flex items-center justify-between px-4 py-3 border-b bg-background">
-      <div className="flex items-center gap-3">
-        <SidebarTrigger data-testid="button-sidebar-toggle" />
-        {pageInfo ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{pageInfo.section}</span>
-            <span className="text-muted-foreground">|</span>
-            <h1 className="text-lg font-semibold" data-testid="header-page-title">{pageInfo.page}</h1>
-          </div>
-        ) : (
-          <h1 className="text-lg font-semibold">生産管理システム</h1>
-        )}
-      </div>
-      <ThemeToggle />
-    </header>
-  );
-}
-
 function App() {
   const style = {
     "--sidebar-width": "17rem",
@@ -97,7 +74,13 @@ function App() {
             <div className="flex h-screen w-full">
               <AppSidebar />
               <div className="flex flex-col flex-1">
-                <AppHeader />
+                <header className="flex items-center justify-between px-4 py-3 border-b bg-background">
+                  <div className="flex items-center gap-3">
+                    <SidebarTrigger data-testid="button-sidebar-toggle" />
+                    <h1 className="text-lg font-semibold">工数管理</h1>
+                  </div>
+                  <ThemeToggle />
+                </header>
                 <main className="flex-1 overflow-auto bg-muted/10">
                   <Router />
                 </main>
