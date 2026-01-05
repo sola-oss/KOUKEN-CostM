@@ -204,7 +204,8 @@ export interface WorkLog {
   id: number;
   date: string;
   order_id: string;
-  task_name: string;
+  task_id?: number | null;
+  task_name?: string;
   worker: string;
   start_time?: string;
   end_time?: string;
@@ -219,7 +220,8 @@ export interface WorkLog {
 export interface WorkLogPayload {
   date: string;
   order_id: string;
-  task_name: string;
+  task_id?: number | null;
+  task_name?: string;
   worker: string;
   start_time?: string;
   end_time?: string;

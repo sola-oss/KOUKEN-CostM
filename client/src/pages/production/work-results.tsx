@@ -61,7 +61,7 @@ import { Timer, Save, Plus, Pencil, Trash2, AlertTriangle, Upload, FileText } fr
 const workLogSchema = z.object({
   date: z.string().min(1, "作業日は必須です"),
   order_id: z.string({ required_error: "受注番号は必須です" }).min(1, "受注番号は必須です"),
-  task_name: z.string().min(1, "作業名は必須です"),
+  task_id: z.coerce.number().min(1, "作業を選択してください"),
   worker: z.string().min(1, "作業者は必須です"),
   start_time: z.string().min(1, "開始時刻は必須です"),
   end_time: z.string().min(1, "終了時刻は必須です"),
@@ -124,6 +124,7 @@ export default function WorkResults() {
     defaultValues: {
       date: todayDate,
       worker: "",
+      task_id: 0,
       start_time: "",
       end_time: "",
       quantity: 0,
@@ -212,24 +213,22 @@ export default function WorkResults() {
       
       // Reset form but keep order/task if toggle is on
       if (keepOrderTask) {
-        const keepValues = {
-          order_id: form.getValues('order_id'),
-          task_name: form.getValues('task_name'),
-        };
         form.reset({
           date: todayDate,
           worker: currentWorker,
+          order_id: form.getValues('order_id'),
+          task_id: form.getValues('task_id'),
           start_time: "",
           end_time: "",
           quantity: 0,
           duration_hours: 0,
           status: "下書き",
-          ...keepValues,
         });
       } else {
         form.reset({
           date: todayDate,
           worker: currentWorker,
+          task_id: 0,
           start_time: "",
           end_time: "",
           quantity: 0,
@@ -296,7 +295,7 @@ export default function WorkResults() {
     form.reset({
       date: dayjs(log.date).format('YYYY-MM-DD'),
       order_id: log.order_id,
-      task_name: log.task_name,
+      task_id: log.task_id || 0,
       worker: log.worker,
       start_time: log.start_time || "",
       end_time: log.end_time || "",
@@ -506,17 +505,37 @@ export default function WorkResults() {
 
                   <FormField
                     control={form.control}
-                    name="task_name"
+                    name="task_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>作業名 *</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="作業名を入力"
-                            data-testid="input-task-name" 
-                          />
-                        </FormControl>
+                        <FormLabel>作業 *</FormLabel>
+                        <Select
+                          onValueChange={(value) => field.onChange(parseInt(value, 10))}
+                          value={field.value ? field.value.toString() : ""}
+                          disabled={!selectedOrderId}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-task">
+                              <SelectValue placeholder={selectedOrderId ? "作業を選択" : "先に受注を選択"} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {tasksData?.data?.map((task) => (
+                              <SelectItem 
+                                key={task.id} 
+                                value={task.id.toString()}
+                                data-testid={`option-task-${task.id}`}
+                              >
+                                {task.task_name}
+                              </SelectItem>
+                            ))}
+                            {(!tasksData?.data || tasksData.data.length === 0) && selectedOrderId && (
+                              <SelectItem value="no-tasks" disabled>
+                                この受注にはタスクがありません
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

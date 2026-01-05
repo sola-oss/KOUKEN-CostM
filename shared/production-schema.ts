@@ -145,6 +145,7 @@ export const work_logs = sqliteTable("work_logs", {
   
   // 紐付け関連
   order_id: text("order_id"),                    // 受注番号 (orders.order_id) - 文字列対応
+  task_id: integer("task_id").references(() => tasks.id, { onDelete: "set null" }), // タスクID（外部キー）
   order_no: text("order_no"),                    // 受注番号 (k001など) - 廃止予定（order_idと統合）
   match_status: text("match_status").default('unlinked'), // linked / temp / unlinked
   
@@ -258,6 +259,7 @@ export const insertWorkLogSchema = createInsertSchema(work_logs).omit({
   
   // 共通フィールド
   order_id: z.string().optional(),
+  task_id: z.number().optional().nullable(),
   order_no: z.string().optional(),
   match_status: z.enum(['linked', 'temp', 'unlinked']).default('unlinked'),
   source: z.enum(['manual', 'harmos']).default('manual'),
@@ -303,7 +305,7 @@ export const ALLOWED_WORK_LOG_UPDATE_COLUMNS = [
   'task_large', 'task_medium', 'task_small', 'work_name',
   'planned_time', 'actual_time', 'total_work_time', 'note',
   // 手動入力フィールド
-  'date', 'worker', 'task_name', 'start_time', 'end_time', 
+  'date', 'worker', 'task_name', 'task_id', 'start_time', 'end_time', 
   'duration_hours', 'quantity', 'memo', 'status',
   // 共通フィールド
   'order_id', 'order_no', 'match_status'

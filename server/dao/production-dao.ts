@@ -959,6 +959,7 @@ export class ProductionDAO {
     addField('date', logData.date);
     addField('worker', logData.worker);
     addField('task_name', logData.task_name);
+    addField('task_id', logData.task_id);
     addField('start_time', logData.start_time);
     addField('end_time', logData.end_time);
     addField('duration_hours', logData.duration_hours);
@@ -995,9 +996,10 @@ export class ProductionDAO {
     pageSize?: number;
   } = {}): Promise<{ logs: (WorkLog & { product_name?: string })[], total: number }> {
     let query = `
-      SELECT wl.*, o.product_name 
+      SELECT wl.*, o.product_name, t.task_name as task_name_from_ref
       FROM work_logs wl
       LEFT JOIN orders o ON wl.order_id = o.order_id
+      LEFT JOIN tasks t ON wl.task_id = t.id
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -1047,7 +1049,13 @@ export class ProductionDAO {
     query += ` LIMIT ? OFFSET ?`;
     params.push(pageSize, offset);
     
-    const logs = this.db.prepare(query).all(...params) as (WorkLog & { product_name?: string })[];
+    const rawLogs = this.db.prepare(query).all(...params) as (WorkLog & { product_name?: string; task_name_from_ref?: string })[];
+    
+    // Use task_name from tasks table if task_id is set, otherwise use stored task_name
+    const logs = rawLogs.map(log => ({
+      ...log,
+      task_name: log.task_name_from_ref || log.task_name,
+    }));
     
     return { logs, total };
   }
@@ -1062,7 +1070,7 @@ export class ProductionDAO {
 
   async updateWorkLog(logId: number, updates: Partial<InsertWorkLog>): Promise<boolean> {
     const allowedColumns = [
-      'date', 'order_id', 'task_name', 'worker', 'start_time', 'end_time',
+      'date', 'order_id', 'task_name', 'task_id', 'worker', 'start_time', 'end_time',
       'duration_hours', 'quantity', 'memo', 'status'
     ];
     
