@@ -49,7 +49,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Technical Implementations
 - **Cost Management Features**: Mode toggle (Production/Cost), Cost Summary (`/cost-summary`), Budget vs. Actual Comparison (`/cost-comparison`), Unit Price Master (`/unit-prices`).
-- **Outsourcing Cost Management**: Vendors Master (`/vendors-master`) for vendor registration with CRUD operations, Outsourcing Costs Input (`/outsourcing-costs`) for per-project/per-vendor cost tracking. Uses React Hook Form with Zod validation. API at `/api/vendors-master/*` and `/api/outsourcing-costs/*`. Cost aggregation includes outsourcing costs in total calculations.
+- **Outsourcing Cost Management (統合済み)**: 外注費入力機能は調達管理(`/procurement`)に統合。Vendors Master (`/vendors-master`) for vendor registration. 調達管理で購買手配時にvendor_id（業者マスタ連携）、total_amount（合計金額）、is_approved（承認フラグ）を入力。承認済み購買手配の合計金額が原価集計に外注費として反映される。
 - **Order Management**: 19-field CRUD form with React Hook Form + Zod, TanStack Query for mutations, API at `/api/production/orders/*`. Order ID is restricted from editing after creation.
 - **Material Management**: `unit` field for procurement tracking, Drizzle ORM schema updates, Zod validation.
 - **Work Results Input**: Comprehensive CRUD screen, automatic duration calculation, time overlap warnings, persistent order/task toggle.

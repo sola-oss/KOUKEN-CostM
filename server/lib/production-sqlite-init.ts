@@ -40,7 +40,8 @@ export class ProductionSqliteInitializer {
         '005_cost_settings.sql',
         '006_workers_master.sql',
         '007_vendors_outsourcing.sql',
-        '008_work_logs_task_id.sql'
+        '008_work_logs_task_id.sql',
+        '009_procurements_outsourcing.sql'
       ];
       
       for (const migrationFile of migrations) {

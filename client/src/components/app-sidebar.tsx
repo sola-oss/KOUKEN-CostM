@@ -3,7 +3,7 @@ import {
   Package, Calendar, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown, Timer,
   ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet,
-  Calculator, TrendingUp, Users, Settings, Building2, Truck
+  Calculator, TrendingUp, Users, Settings, Building2
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -100,6 +100,7 @@ const materialManagementSubItems = [
 ];
 
 // Cost Management menu items (原価管理)
+// 外注費入力は調達管理に統合されたため削除
 const costManagementItems = [
   {
     title: "原価集計",
@@ -110,11 +111,6 @@ const costManagementItems = [
     title: "予実比較",
     url: "/cost-comparison",
     icon: TrendingUp
-  },
-  {
-    title: "外注費入力",
-    url: "/outsourcing-costs",
-    icon: Truck
   }
 ];
 

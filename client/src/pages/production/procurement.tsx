@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ShoppingCart, Plus, Factory, Filter, Edit, Trash2 } from "lucide-react";
 import { listProcurements, createProcurement, updateProcurement, deleteProcurement, listOrders, type Procurement, type ProcurementPayload } from "@/shared/production-api";
 import { queryClient } from "@/lib/queryClient";
@@ -30,7 +31,10 @@ const procurementFormSchema = z.object({
   eta: z.string().min(1, "予定納期は必須です"),
   status: z.string().min(1, "ステータスは必須です"),
   vendor: z.string().optional(),
+  vendor_id: z.coerce.number().optional().nullable(),
   unit_price: z.coerce.number().min(0, "単価は0以上である必要があります").optional(),
+  total_amount: z.coerce.number().min(0, "合計金額は0以上である必要があります").optional().nullable(),
+  is_approved: z.boolean().default(false),
   std_time_per_unit: z.coerce.number().min(0, "標準工数は0以上である必要があります").optional(),
   act_time_per_unit: z.coerce.number().min(0, "実績工数は0以上である必要があります").optional(),
   worker: z.string().optional(),
@@ -61,8 +65,19 @@ export default function ProcurementManagement() {
     queryFn: () => listOrders({ page_size: 100 })
   });
 
+  // Fetch vendors from vendors master
+  const { data: vendorsData } = useQuery({
+    queryKey: ['/api/vendors-master'],
+    queryFn: async () => {
+      const res = await fetch('/api/vendors-master');
+      if (!res.ok) throw new Error('Failed to fetch vendors');
+      return res.json() as Promise<{ id: number; name: string; is_active: boolean }[]>;
+    }
+  });
+
   const procurements = procurementsResponse?.data || [];
   const orders = ordersResponse?.data || [];
+  const vendors = (vendorsData || []).filter(v => v.is_active);
 
   // Create form
   const form = useForm<ProcurementFormData>({
@@ -75,7 +90,10 @@ export default function ProcurementManagement() {
       eta: "",
       status: "planned",
       vendor: "",
+      vendor_id: null,
       unit_price: 0,
+      total_amount: null,
+      is_approved: false,
       std_time_per_unit: 0,
       act_time_per_unit: 0,
       worker: "",
@@ -94,7 +112,10 @@ export default function ProcurementManagement() {
       eta: "",
       status: "planned",
       vendor: "",
+      vendor_id: null,
       unit_price: 0,
+      total_amount: null,
+      is_approved: false,
       std_time_per_unit: 0,
       act_time_per_unit: 0,
       worker: "",
@@ -122,7 +143,10 @@ export default function ProcurementManagement() {
         eta: "",
         status: "planned",
         vendor: "",
+        vendor_id: null,
         unit_price: 0,
+        total_amount: null,
+        is_approved: false,
         std_time_per_unit: 0,
         act_time_per_unit: 0,
         worker: "",
@@ -194,6 +218,9 @@ export default function ProcurementManagement() {
 
     if (data.kind === 'purchase') {
       payload.vendor = data.vendor;
+      payload.vendor_id = data.vendor_id || null;
+      payload.total_amount = data.total_amount || null;
+      payload.is_approved = Boolean(data.is_approved);
     } else {
       payload.std_time_per_unit = data.std_time_per_unit;
       payload.act_time_per_unit = data.act_time_per_unit;
@@ -220,6 +247,9 @@ export default function ProcurementManagement() {
 
       if (data.kind === 'purchase') {
         payload.vendor = data.vendor;
+        payload.vendor_id = data.vendor_id || null;
+        payload.total_amount = data.total_amount || null;
+        payload.is_approved = Boolean(data.is_approved);
       } else {
         payload.std_time_per_unit = data.std_time_per_unit;
         payload.act_time_per_unit = data.act_time_per_unit;
@@ -239,14 +269,17 @@ export default function ProcurementManagement() {
   const handleEditClick = (proc: Procurement) => {
     setEditingProcurement(proc);
     editForm.reset({
-      order_id: proc.order_id || 0,
+      order_id: parseInt(proc.order_id || '') || 0,
       kind: proc.kind,
       item_name: proc.item_name,
       qty: proc.qty,
       eta: proc.eta ? format(new Date(proc.eta), 'yyyy-MM-dd') : '',
       status: proc.status || 'planned',
       vendor: proc.vendor || '',
+      vendor_id: (proc as any).vendor_id || null,
       unit_price: proc.unit_price || 0,
+      total_amount: (proc as any).total_amount || null,
+      is_approved: Boolean((proc as any).is_approved),
       std_time_per_unit: proc.std_time_per_unit || 0,
       act_time_per_unit: proc.act_time_per_unit || 0,
       worker: proc.worker || '',
@@ -279,7 +312,7 @@ export default function ProcurementManagement() {
 
   // Filter procurements
   const filteredProcurements = procurements.filter(proc => {
-    if (filterOrderId !== "all" && proc.order_id !== parseInt(filterOrderId)) {
+    if (filterOrderId !== "all" && proc.order_id !== filterOrderId) {
       return false;
     }
     if (filterKind !== "all" && proc.kind !== filterKind) {
@@ -472,6 +505,77 @@ export default function ProcurementManagement() {
                           <FormControl>
                             <Input {...field} type="number" min="0" step="0.01" data-testid="input-unit-price" />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="vendor_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>業者マスタ</FormLabel>
+                          <FormControl>
+                            <Select 
+                              value={field.value?.toString() || ""} 
+                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                            >
+                              <SelectTrigger data-testid="select-vendor-id">
+                                <SelectValue placeholder="業者を選択（任意）" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">未選択</SelectItem>
+                                {vendors.map(vendor => (
+                                  <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                                    {vendor.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="total_amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>合計金額</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              min="0" 
+                              step="0.01" 
+                              value={field.value ?? ''} 
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                              data-testid="input-total-amount" 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="is_approved"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 py-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-is-approved"
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            承認済み
+                          </FormLabel>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -722,13 +826,15 @@ export default function ProcurementManagement() {
                   <TableHead>ステータス</TableHead>
                   <TableHead>発注先/作業者</TableHead>
                   <TableHead>単価/工数</TableHead>
+                  <TableHead>合計金額</TableHead>
+                  <TableHead>承認</TableHead>
                   <TableHead>操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredProcurements.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                       該当する調達がありません
                     </TableCell>
                   </TableRow>
@@ -756,6 +862,16 @@ export default function ProcurementManagement() {
                         {proc.kind === 'purchase' 
                           ? `¥${proc.unit_price?.toLocaleString() || 0}` 
                           : `${proc.std_time_per_unit || 0}h`}
+                      </TableCell>
+                      <TableCell>
+                        {proc.kind === 'purchase' 
+                          ? ((proc as any).total_amount != null ? `¥${(proc as any).total_amount?.toLocaleString()}` : '-')
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {proc.kind === 'purchase' 
+                          ? ((proc as any).is_approved ? <Badge variant="default">済</Badge> : <Badge variant="secondary">未</Badge>)
+                          : '-'}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -934,6 +1050,35 @@ export default function ProcurementManagement() {
 
                     <FormField
                       control={editForm.control}
+                      name="vendor_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>業者マスタ</FormLabel>
+                          <FormControl>
+                            <Select 
+                              value={field.value?.toString() || ""} 
+                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="業者を選択（任意）" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">未選択</SelectItem>
+                                {vendors.map(vendor => (
+                                  <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                                    {vendor.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={editForm.control}
                       name="unit_price"
                       render={({ field }) => (
                         <FormItem>
@@ -941,6 +1086,46 @@ export default function ProcurementManagement() {
                           <FormControl>
                             <Input {...field} type="number" min="0" step="0.01" />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={editForm.control}
+                      name="total_amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>合計金額</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              min="0" 
+                              step="0.01" 
+                              value={field.value ?? ''} 
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={editForm.control}
+                      name="is_approved"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 py-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            承認済み
+                          </FormLabel>
                           <FormMessage />
                         </FormItem>
                       )}

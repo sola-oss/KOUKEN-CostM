@@ -1644,8 +1644,18 @@ export class ProductionDAO {
       entry.totalCost += cost;
     }
 
-    // 外注費を案件別に集計
-    const outsourcingCostsByOrder = this.db.prepare(`
+    // 外注費を案件別に集計（調達管理の購買手配で承認済みのものを集計）
+    // 旧outsourcing_costsテーブルも併せて集計
+    const outsourcingCostsFromProcurements = this.db.prepare(`
+      SELECT 
+        order_id,
+        SUM(COALESCE(total_amount, 0)) AS outsourcing_cost
+      FROM procurements
+      WHERE kind = 'purchase' AND is_approved = 1 AND total_amount IS NOT NULL
+      GROUP BY order_id
+    `).all() as { order_id: string; outsourcing_cost: number }[];
+
+    const outsourcingCostsFromLegacy = this.db.prepare(`
       SELECT 
         project_id AS order_id,
         SUM(amount) AS outsourcing_cost
@@ -1654,8 +1664,13 @@ export class ProductionDAO {
     `).all() as { order_id: string; outsourcing_cost: number }[];
 
     const outsourcingCostMap = new Map<string, number>();
-    for (const row of outsourcingCostsByOrder) {
-      outsourcingCostMap.set(row.order_id, row.outsourcing_cost || 0);
+    // 調達管理からの外注費
+    for (const row of outsourcingCostsFromProcurements) {
+      outsourcingCostMap.set(row.order_id, (outsourcingCostMap.get(row.order_id) || 0) + (row.outsourcing_cost || 0));
+    }
+    // 旧外注費テーブルからの外注費（互換性のため）
+    for (const row of outsourcingCostsFromLegacy) {
+      outsourcingCostMap.set(row.order_id, (outsourcingCostMap.get(row.order_id) || 0) + (row.outsourcing_cost || 0));
     }
 
     const orderSummaries: OrderCostSummary[] = [];

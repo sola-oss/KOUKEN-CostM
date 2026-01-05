@@ -26,8 +26,7 @@ import CostComparison from "@/pages/cost/cost-comparison";
 import UnitPrices from "@/pages/cost/unit-prices";
 import WorkersMaster from "@/pages/cost/workers-master";
 import VendorsMaster from "@/pages/cost/vendors-master";
-import OutsourcingCosts from "@/pages/cost/outsourcing-costs";
-import Settings from "@/pages/settings";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -51,7 +50,6 @@ function Router() {
       <Route path="/unit-prices" component={UnitPrices} />
       <Route path="/workers-master" component={WorkersMaster} />
       <Route path="/vendors-master" component={VendorsMaster} />
-      <Route path="/outsourcing-costs" component={OutsourcingCosts} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

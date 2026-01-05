@@ -62,6 +62,7 @@ export const orders = sqliteTable("orders", {
 }));
 
 // 手配 (Procurements) - 購買(purchase) と 製造(manufacture) を統合
+// 外注費管理も統合（vendor_id, total_amount, is_approved）
 export const procurements = sqliteTable("procurements", {
   id: integer("id").primaryKey(),
   order_id: text("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
@@ -71,8 +72,11 @@ export const procurements = sqliteTable("procurements", {
   unit: text("unit"),                            // 単位（個、本、kg、m、L など）
   eta: text("eta"),                              // 予定日(UTC)
   status: text("status"),                        // 'planned'|'ordered'|'received'|'done' など
-  vendor: text("vendor"),                        // kind=purchase 用（任意）
+  vendor: text("vendor"),                        // kind=purchase 用（任意テキスト - レガシー）
+  vendor_id: integer("vendor_id"),               // 業者マスタ参照（外注費統合）
   unit_price: real("unit_price"),                // kind=purchase 用（入荷時に金額算出）
+  total_amount: real("total_amount"),            // 合計金額（外注費統合）
+  is_approved: integer("is_approved", { mode: 'boolean' }).default(false), // 承認フラグ（外注費統合）
   received_at: text("received_at"),              // kind=purchase 用（UTC）
   std_time_per_unit: real("std_time_per_unit"),  // kind=manufacture 用 [h/個]
   act_time_per_unit: real("act_time_per_unit"),  // kind=manufacture 用 [h/個]
@@ -81,6 +85,7 @@ export const procurements = sqliteTable("procurements", {
   created_at: text("created_at").notNull(),
 }, (table) => ({
   orderKindStatusIdx: index("idx_proc_orders").on(table.order_id, table.kind, table.status),
+  vendorIdx: index("idx_proc_vendor").on(table.vendor_id),
 }));
 
 // 工数入力 (Workers Log) - スタッフ用の簡易打刻
@@ -209,6 +214,10 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
 export const insertProcurementSchema = createInsertSchema(procurements).omit({
   id: true,
   created_at: true,
+}).extend({
+  vendor_id: z.coerce.number().optional().nullable(),
+  total_amount: z.coerce.number().optional().nullable(),
+  is_approved: z.boolean().default(false),
 });
 
 export const insertWorkerLogSchema = createInsertSchema(workers_log).omit({
