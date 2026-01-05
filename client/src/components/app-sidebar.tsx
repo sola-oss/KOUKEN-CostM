@@ -3,7 +3,7 @@ import {
   Package, Calendar, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown, Timer,
   ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet,
-  Calculator, TrendingUp, Users, Settings, Building2
+  Calculator, Users, Settings, Building2
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -106,11 +106,6 @@ const costManagementItems = [
     title: "原価集計",
     url: "/cost-summary",
     icon: Calculator
-  },
-  {
-    title: "予実比較",
-    url: "/cost-comparison",
-    icon: TrendingUp
   }
 ];
 
