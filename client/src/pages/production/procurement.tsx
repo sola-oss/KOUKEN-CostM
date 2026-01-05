@@ -1,5 +1,5 @@
 // Production Management MVP - Procurement Management (調達管理)
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -136,6 +136,24 @@ export default function ProcurementManagement() {
 
   // Watch kind field to update form
   const watchKind = form.watch("kind");
+
+  // Auto-calculate total_amount for create form
+  const watchCreateUnitPrice = form.watch("unit_price");
+  const watchCreateQty = form.watch("qty");
+  useEffect(() => {
+    const unitPrice = Number(watchCreateUnitPrice) || 0;
+    const qty = Number(watchCreateQty) || 0;
+    form.setValue("total_amount", unitPrice * qty);
+  }, [watchCreateUnitPrice, watchCreateQty, form]);
+
+  // Auto-calculate total_amount for edit form
+  const watchEditUnitPrice = editForm.watch("unit_price");
+  const watchEditQty = editForm.watch("qty");
+  useEffect(() => {
+    const unitPrice = Number(watchEditUnitPrice) || 0;
+    const qty = Number(watchEditQty) || 0;
+    editForm.setValue("total_amount", unitPrice * qty);
+  }, [watchEditUnitPrice, watchEditQty, editForm]);
 
   // Create mutation
   const createMutation = useMutation({
