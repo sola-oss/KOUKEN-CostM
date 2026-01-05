@@ -75,9 +75,20 @@ export default function ProcurementManagement() {
     }
   });
 
+  // Fetch materials from materials master
+  const { data: materialsData } = useQuery({
+    queryKey: ['/api/materials'],
+    queryFn: async () => {
+      const res = await fetch('/api/materials');
+      if (!res.ok) throw new Error('Failed to fetch materials');
+      return res.json() as Promise<{ data: { id: number; material_type: string; name: string; size: string; unit: string; unit_price: number | null }[] }>;
+    }
+  });
+
   const procurements = procurementsResponse?.data || [];
   const orders = ordersResponse?.data || [];
   const vendors = (vendorsData || []).filter(v => v.is_active);
+  const materials = materialsData?.data || [];
 
   // Create form
   const form = useForm<ProcurementFormData>({
@@ -422,9 +433,34 @@ export default function ProcurementManagement() {
                       name="item_name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>品目名 *</FormLabel>
+                          <FormLabel>品目（材料マスタ） *</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="品目名を入力" data-testid="input-item-name" />
+                            <Select 
+                              value={field.value || ""} 
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                const selectedMaterial = materials.find(m => 
+                                  `${m.material_type} - ${m.name} - ${m.size}` === value
+                                );
+                                if (selectedMaterial?.unit_price) {
+                                  form.setValue('unit_price', selectedMaterial.unit_price);
+                                }
+                              }}
+                            >
+                              <SelectTrigger data-testid="select-item-name">
+                                <SelectValue placeholder="材料を選択" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {materials.map(material => {
+                                  const displayName = `${material.material_type} - ${material.name} - ${material.size}`;
+                                  return (
+                                    <SelectItem key={material.id} value={displayName}>
+                                      {displayName} ({material.unit})
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -484,20 +520,6 @@ export default function ProcurementManagement() {
 
                     <FormField
                       control={form.control}
-                      name="vendor"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>発注先</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="発注先を入力" data-testid="input-vendor" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
                       name="unit_price"
                       render={({ field }) => (
                         <FormItem>
@@ -515,14 +537,14 @@ export default function ProcurementManagement() {
                       name="vendor_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>業者マスタ</FormLabel>
+                          <FormLabel>発注先（業者マスタ）</FormLabel>
                           <FormControl>
                             <Select 
                               value={field.value?.toString() || "__none__"} 
                               onValueChange={(value) => field.onChange(value === "__none__" ? null : parseInt(value))}
                             >
                               <SelectTrigger data-testid="select-vendor-id">
-                                <SelectValue placeholder="業者を選択（任意）" />
+                                <SelectValue placeholder="業者を選択" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="__none__">未選択</SelectItem>
@@ -919,8 +941,8 @@ export default function ProcurementManagement() {
                       <FormLabel>受注番号 *</FormLabel>
                       <FormControl>
                         <Select 
-                          value={field.value?.toString() || ""} 
-                          onValueChange={(value) => field.onChange(parseInt(value))}
+                          value={field.value || ""} 
+                          onValueChange={field.onChange}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="受注番号を選択" />
@@ -966,9 +988,38 @@ export default function ProcurementManagement() {
                   name="item_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>品目名 *</FormLabel>
+                      <FormLabel>{editingProcurement?.kind === 'purchase' ? '品目（材料マスタ）' : '品目名'} *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="品目名を入力" />
+                        {editingProcurement?.kind === 'purchase' ? (
+                          <Select 
+                            value={field.value || ""} 
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              const selectedMaterial = materials.find(m => 
+                                `${m.material_type} - ${m.name} - ${m.size}` === value
+                              );
+                              if (selectedMaterial?.unit_price) {
+                                editForm.setValue('unit_price', selectedMaterial.unit_price);
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="材料を選択" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {materials.map(material => {
+                                const displayName = `${material.material_type} - ${material.name} - ${material.size}`;
+                                return (
+                                  <SelectItem key={material.id} value={displayName}>
+                                    {displayName} ({material.unit})
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input {...field} placeholder="品目名を入力" />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1036,31 +1087,17 @@ export default function ProcurementManagement() {
                   <>
                     <FormField
                       control={editForm.control}
-                      name="vendor"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>発注先</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="発注先を入力" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={editForm.control}
                       name="vendor_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>業者マスタ</FormLabel>
+                          <FormLabel>発注先（業者マスタ）</FormLabel>
                           <FormControl>
                             <Select 
                               value={field.value?.toString() || "__none__"} 
                               onValueChange={(value) => field.onChange(value === "__none__" ? null : parseInt(value))}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="業者を選択（任意）" />
+                                <SelectValue placeholder="業者を選択" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="__none__">未選択</SelectItem>
