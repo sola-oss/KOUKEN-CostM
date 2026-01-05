@@ -79,14 +79,14 @@ const workInstructionsSubItems = [
     icon: ListChecks
   },
   {
-    title: "調達管理",
-    url: "/procurement",
-    icon: ShoppingCart
-  },
-  {
     title: "作業実績入力",
     url: "/work-results",
     icon: Timer
+  },
+  {
+    title: "調達管理",
+    url: "/procurement",
+    icon: ShoppingCart
   }
 ];
 
