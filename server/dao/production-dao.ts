@@ -261,8 +261,8 @@ export class ProductionDAO {
       INSERT INTO procurements (
         order_id, kind, item_name, qty, unit, eta, status, vendor, 
         unit_price, received_at, std_time_per_unit, act_time_per_unit, 
-        worker, completed_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        worker, completed_at, vendor_id, total_amount, is_approved, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     const result = stmt.run(
@@ -280,6 +280,9 @@ export class ProductionDAO {
       procData.act_time_per_unit,
       procData.worker,
       procData.completed_at,
+      procData.vendor_id ?? null,
+      procData.total_amount ?? null,
+      procData.is_approved ? 1 : 0,
       now
     );
     
@@ -343,13 +346,18 @@ export class ProductionDAO {
   }
 
   async updateProcurement(procId: number, updates: Partial<InsertProcurement>): Promise<boolean> {
-    const allowedColumns = ['kind', 'item_name', 'qty', 'unit', 'eta', 'status', 'vendor', 'unit_price', 'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at'];
+    const allowedColumns = ['kind', 'item_name', 'qty', 'unit', 'eta', 'status', 'vendor', 'unit_price', 'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at', 'vendor_id', 'total_amount', 'is_approved'];
     
     // Filter to only allowed columns
     const filteredUpdates: Record<string, any> = {};
     for (const key of Object.keys(updates)) {
       if (allowedColumns.includes(key)) {
-        filteredUpdates[key] = updates[key as keyof InsertProcurement];
+        let value = updates[key as keyof InsertProcurement];
+        // Convert is_approved boolean to 0/1 for SQLite
+        if (key === 'is_approved') {
+          value = value ? 1 : 0;
+        }
+        filteredUpdates[key] = value;
       }
     }
     
