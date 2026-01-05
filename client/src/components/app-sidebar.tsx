@@ -1,9 +1,9 @@
-// Production Management System Sidebar
+// Production Management System Sidebar - Lifecycle-oriented Navigation
 import { 
-  Package, Calendar, ClipboardCheck, BarChart3, 
+  Package, Calendar, ClipboardCheck, 
   ChevronRight, ChevronDown, Timer,
   ListChecks, ShoppingCart, GanttChart, Layers, Database, FileSpreadsheet,
-  Calculator, TrendingUp, Users, Settings, Building2, Truck
+  Calculator, TrendingUp, Users, Settings, Building2, Truck, BarChart3, CheckCircle
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -24,355 +24,172 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-type AppMode = "production" | "cost";
+// Section definitions for lifecycle-oriented navigation
+interface MenuItem {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
 
-// Color themes for each mode (HSL format: H S% L%)
-// Separate configs for light and dark modes
-const modeColors = {
-  production: {
-    light: {
-      primary: "215 70% 45%",
-      primaryForeground: "215 10% 95%",
-      ring: "215 70% 45%",
-      sidebarPrimary: "215 70% 45%",
-      sidebarPrimaryForeground: "215 10% 95%",
-      sidebarRing: "215 70% 45%",
-      chart1: "215 70% 45%",
-    },
-    dark: {
-      primary: "215 60% 55%",
-      primaryForeground: "215 10% 95%",
-      ring: "215 60% 55%",
-      sidebarPrimary: "215 60% 55%",
-      sidebarPrimaryForeground: "215 10% 95%",
-      sidebarRing: "215 60% 55%",
-      chart1: "215 60% 65%",
+interface Section {
+  id: string;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items: MenuItem[];
+  color: string;
+}
+
+// 4 main sections based on manufacturing lifecycle
+const sections: Section[] = [
+  {
+    id: "order-planning",
+    title: "受注・計画",
+    icon: Package,
+    color: "text-blue-500 dark:text-blue-400",
+    items: [
+      { title: "受注管理", url: "/projects", icon: Package },
+      { title: "作業計画", url: "/task-planning", icon: ListChecks },
+      { title: "調達管理", url: "/procurement", icon: ShoppingCart },
+      { title: "ガントチャート", url: "/gantt", icon: GanttChart },
+      { title: "進捗カレンダー", url: "/calendar", icon: Calendar },
+    ]
+  },
+  {
+    id: "work-progress",
+    title: "実績・進捗",
+    icon: Timer,
+    color: "text-emerald-500 dark:text-emerald-400",
+    items: [
+      { title: "作業実績入力", url: "/work-results", icon: Timer },
+      { title: "日次承認", url: "/summary-approval", icon: CheckCircle },
+      { title: "工数分析", url: "/cost-analysis", icon: BarChart3 },
+    ]
+  },
+  {
+    id: "materials-outsourcing",
+    title: "資材・外注",
+    icon: Layers,
+    color: "text-amber-500 dark:text-amber-400",
+    items: [
+      { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
+      { title: "外注費入力", url: "/outsourcing-costs", icon: Truck },
+    ]
+  },
+  {
+    id: "cost-analysis",
+    title: "原価分析",
+    icon: Calculator,
+    color: "text-violet-500 dark:text-violet-400",
+    items: [
+      { title: "原価集計", url: "/cost-summary", icon: Calculator },
+      { title: "予実比較", url: "/cost-comparison", icon: TrendingUp },
+    ]
+  }
+];
+
+// Master data section (shown in footer)
+const masterItems: MenuItem[] = [
+  { title: "作業者マスタ", url: "/workers-master", icon: Users },
+  { title: "材料マスタ", url: "/materials-master", icon: Database },
+  { title: "外注先マスタ", url: "/vendors-master", icon: Building2 },
+];
+
+// Find current section and page info for header display
+export function getCurrentPageInfo(pathname: string): { section: string; page: string } | null {
+  for (const section of sections) {
+    const item = section.items.find(i => i.url === pathname);
+    if (item) {
+      return { section: section.title, page: item.title };
     }
-  },
-  cost: {
-    light: {
-      primary: "160 60% 40%",
-      primaryForeground: "160 10% 95%",
-      ring: "160 60% 40%",
-      sidebarPrimary: "160 60% 40%",
-      sidebarPrimaryForeground: "160 10% 95%",
-      sidebarRing: "160 60% 40%",
-      chart1: "160 60% 40%",
-    },
-    dark: {
-      primary: "160 55% 50%",
-      primaryForeground: "160 10% 95%",
-      ring: "160 55% 50%",
-      sidebarPrimary: "160 55% 50%",
-      sidebarPrimaryForeground: "160 10% 95%",
-      sidebarRing: "160 55% 50%",
-      chart1: "160 55% 60%",
-    }
   }
-};
-
-// Work Instructions Sub-menu
-const workInstructionsSubItems = [
-  {
-    title: "作業計画",
-    url: "/task-planning",
-    icon: ListChecks
-  },
-  {
-    title: "調達管理",
-    url: "/procurement",
-    icon: ShoppingCart
+  const masterItem = masterItems.find(i => i.url === pathname);
+  if (masterItem) {
+    return { section: "マスタ", page: masterItem.title };
   }
-];
-
-// Material Management Sub-menu (材料管理)
-const materialManagementSubItems = [
-  {
-    title: "材料使用入力",
-    url: "/material-usages",
-    icon: FileSpreadsheet
-  }
-];
-
-// Cost Management menu items (原価管理)
-const costManagementItems = [
-  {
-    title: "原価集計",
-    url: "/cost-summary",
-    icon: Calculator
-  },
-  {
-    title: "予実比較",
-    url: "/cost-comparison",
-    icon: TrendingUp
-  },
-  {
-    title: "外注費入力",
-    url: "/outsourcing-costs",
-    icon: Truck
-  }
-];
-
-// Master Sub-menu (マスタ) - shown at bottom of sidebar
-const masterSubItems = [
-  {
-    title: "作業者マスタ",
-    url: "/workers-master",
-    icon: Users
-  },
-  {
-    title: "材料マスタ",
-    url: "/materials-master",
-    icon: Database
-  },
-  {
-    title: "外注先マスタ",
-    url: "/vendors-master",
-    icon: Building2
-  }
-];
+  return null;
+}
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const [appMode, setAppMode] = useState<AppMode>("production");
-  const [isWorkInstructionsOpen, setIsWorkInstructionsOpen] = useState(true);
-  const [isMaterialManagementOpen, setIsMaterialManagementOpen] = useState(true);
+  
+  // Track which sections are open (all open by default)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    sections.forEach(s => { initial[s.id] = true; });
+    return initial;
+  });
   const [isMasterOpen, setIsMasterOpen] = useState(true);
 
-  const isWorkInstructionsActive = workInstructionsSubItems.some(item => location === item.url);
-  const isMaterialManagementActive = materialManagementSubItems.some(item => location === item.url);
-  const isMasterActive = masterSubItems.some(item => location === item.url);
+  const toggleSection = (sectionId: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
 
-  useEffect(() => {
-    const applyColors = () => {
-      const isDark = document.documentElement.classList.contains("dark");
-      const theme = isDark ? "dark" : "light";
-      const colors = modeColors[appMode][theme];
-      const root = document.documentElement;
-      root.style.setProperty("--primary", colors.primary);
-      root.style.setProperty("--primary-foreground", colors.primaryForeground);
-      root.style.setProperty("--ring", colors.ring);
-      root.style.setProperty("--sidebar-primary", colors.sidebarPrimary);
-      root.style.setProperty("--sidebar-primary-foreground", colors.sidebarPrimaryForeground);
-      root.style.setProperty("--sidebar-ring", colors.sidebarRing);
-      root.style.setProperty("--chart-1", colors.chart1);
-    };
+  // Check if any item in a section is active
+  const isSectionActive = (section: Section) => {
+    return section.items.some(item => location === item.url);
+  };
 
-    applyColors();
-
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.attributeName === "class") {
-          applyColors();
-        }
-      });
-    });
-
-    observer.observe(document.documentElement, { attributes: true });
-
-    return () => observer.disconnect();
-  }, [appMode]);
+  const isMasterActive = masterItems.some(item => location === item.url);
 
   return (
     <Sidebar>
       <SidebarHeader className="border-b">
-        <div className="flex flex-col gap-3 px-2 py-4">
+        <div className="flex flex-col gap-2 px-2 py-4">
           <div className="flex items-center gap-2">
-            {appMode === "production" ? (
-              <Package className="h-6 w-6 text-primary" />
-            ) : (
-              <Calculator className="h-6 w-6 text-primary" />
-            )}
-            <span className="text-sm font-semibold">
-              {appMode === "production" ? "工数管理" : "原価管理"}
-            </span>
+            <Package className="h-6 w-6 text-primary" />
+            <span className="text-sm font-semibold">生産管理システム</span>
           </div>
-          <div className="flex rounded-md border border-sidebar-border overflow-hidden" data-testid="mode-toggle">
-            <button
-              onClick={() => setAppMode("production")}
-              className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${
-                appMode === "production"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-sidebar hover:bg-sidebar-accent"
-              }`}
-              data-testid="button-mode-production"
-            >工数管理</button>
-            <button
-              onClick={() => setAppMode("cost")}
-              className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${
-                appMode === "cost"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-sidebar hover:bg-sidebar-accent"
-              }`}
-              data-testid="button-mode-cost"
-            >
-              原価管理
-            </button>
-          </div>
+          <p className="text-xs text-muted-foreground">工数・原価統合管理</p>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>
-            {appMode === "production" ? "工数管理メニュー" : "原価管理メニュー"}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {appMode === "production" ? (
-                <>
-                  {/* 1. 案件管理 */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton 
-                      asChild
-                      className={location === '/projects' ? 'bg-sidebar-accent' : ''}
-                    >
-                      <Link href="/projects">
-                        <Package className="h-4 w-4" />
-                        <span className="flex-1">受注管理</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                  {/* 2. 作業指示 (Collapsible) */}
-                  <Collapsible
-                    open={isWorkInstructionsOpen}
-                    onOpenChange={setIsWorkInstructionsOpen}
-                    className="group/collapsible"
-                  >
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
+        {sections.map((section) => (
+          <SidebarGroup key={section.id}>
+            <Collapsible
+              open={openSections[section.id]}
+              onOpenChange={() => toggleSection(section.id)}
+              className="group/collapsible"
+            >
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger 
+                  className="flex w-full items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                  data-testid={`section-${section.id}`}
+                >
+                  <section.icon className={`h-4 w-4 ${section.color}`} />
+                  <span className="flex-1 text-left">{section.title}</span>
+                  {openSections[section.id] ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3" />
+                  )}
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {section.items.map((item) => (
+                      <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton 
-                          className={isWorkInstructionsActive ? 'bg-sidebar-accent' : ''}
+                          asChild
+                          isActive={location === item.url}
+                          data-testid={`menu-item-${item.url.replace('/', '')}`}
                         >
-                          <ClipboardCheck className="h-4 w-4" />
-                          <span className="flex-1">作業指示</span>
-                          {isWorkInstructionsOpen ? (
-                            <ChevronDown className="h-4 w-4 transition-transform" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 transition-transform" />
-                          )}
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
                         </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {workInstructionsSubItems.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton 
-                                asChild
-                                className={location === subItem.url ? 'bg-sidebar-accent' : ''}
-                              >
-                                <Link href={subItem.url}>
-                                  <subItem.icon className="h-4 w-4" />
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-
-                  {/* 3. ガントチャート */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton 
-                      asChild
-                      className={location === '/gantt' ? 'bg-sidebar-accent' : ''}
-                    >
-                      <Link href="/gantt">
-                        <GanttChart className="h-4 w-4" />
-                        <span className="flex-1">ガントチャート</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                  {/* 4. 作業実績入力 */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton 
-                      asChild
-                      className={location === '/work-results' ? 'bg-sidebar-accent' : ''}
-                    >
-                      <Link href="/work-results">
-                        <Timer className="h-4 w-4" />
-                        <span className="flex-1">作業実績入力</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                  {/* 5. 進捗カレンダー */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton 
-                      asChild
-                      className={location === '/calendar' ? 'bg-sidebar-accent' : ''}
-                    >
-                      <Link href="/calendar">
-                        <Calendar className="h-4 w-4" />
-                        <span className="flex-1">進捗カレンダー</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </>
-              ) : (
-                <>
-                  {/* 材料管理 (Collapsible) - 一番上 */}
-                  <Collapsible
-                    open={isMaterialManagementOpen}
-                    onOpenChange={setIsMaterialManagementOpen}
-                    className="group/collapsible"
-                  >
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton 
-                          className={isMaterialManagementActive ? 'bg-sidebar-accent' : ''}
-                        >
-                          <Layers className="h-4 w-4" />
-                          <span className="flex-1">材料管理</span>
-                          {isMaterialManagementOpen ? (
-                            <ChevronDown className="h-4 w-4 transition-transform" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 transition-transform" />
-                          )}
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {materialManagementSubItems.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton 
-                                asChild
-                                className={location === subItem.url ? 'bg-sidebar-accent' : ''}
-                              >
-                                <Link href={subItem.url}>
-                                  <subItem.icon className="h-4 w-4" />
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-
-                  {/* Cost Management Menu Items */}
-                  {costManagementItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
-                        asChild
-                        className={location === item.url ? 'bg-sidebar-accent' : ''}
-                      >
-                        <Link href={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          <span className="flex-1">{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </>
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       {/* Master Menu at Bottom */}
@@ -387,9 +204,10 @@ export function AppSidebar() {
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton 
                   className={isMasterActive ? 'bg-sidebar-accent' : ''}
+                  data-testid="section-master"
                 >
                   <Settings className="h-4 w-4" />
-                  <span className="flex-1">マスタ</span>
+                  <span className="flex-1">共通マスタ</span>
                   {isMasterOpen ? (
                     <ChevronDown className="h-4 w-4 transition-transform" />
                   ) : (
@@ -399,15 +217,16 @@ export function AppSidebar() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <SidebarMenuSub>
-                  {masterSubItems.map((subItem) => (
-                    <SidebarMenuSubItem key={subItem.title}>
+                  {masterItems.map((item) => (
+                    <SidebarMenuSubItem key={item.url}>
                       <SidebarMenuSubButton 
                         asChild
-                        className={location === subItem.url ? 'bg-sidebar-accent' : ''}
+                        isActive={location === item.url}
+                        data-testid={`menu-item-${item.url.replace('/', '')}`}
                       >
-                        <Link href={subItem.url}>
-                          <subItem.icon className="h-4 w-4" />
-                          <span>{subItem.title}</span>
+                        <Link href={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
