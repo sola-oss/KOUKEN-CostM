@@ -82,6 +82,11 @@ const workInstructionsSubItems = [
     title: "調達管理",
     url: "/procurement",
     icon: ShoppingCart
+  },
+  {
+    title: "作業実績入力",
+    url: "/work-results",
+    icon: Timer
   }
 ];
 
@@ -282,19 +287,6 @@ export function AppSidebar() {
                       <Link href="/gantt">
                         <GanttChart className="h-4 w-4" />
                         <span className="flex-1">ガントチャート</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                  {/* 4. 作業実績入力 */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton 
-                      asChild
-                      className={location === '/work-results' ? 'bg-sidebar-accent' : ''}
-                    >
-                      <Link href="/work-results">
-                        <Timer className="h-4 w-4" />
-                        <span className="flex-1">作業実績入力</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
