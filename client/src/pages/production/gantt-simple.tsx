@@ -8,14 +8,35 @@ import "../../styles/gantt-custom.css";
 const ROW_HEIGHT = 36;
 const COLUMN_WIDTH = 32;
 
-const getDefaultDates = () => {
-  const today = new Date();
-  const threeMonthsLater = new Date(today);
-  threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+const formatDateLocal = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateLocal = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const getMonthDates = (year: number, month: number) => {
+  // Handle month overflow/underflow
+  const normalizedDate = new Date(year, month, 1);
+  const normalizedYear = normalizedDate.getFullYear();
+  const normalizedMonth = normalizedDate.getMonth();
+  
+  const start = new Date(normalizedYear, normalizedMonth, 1);
+  const end = new Date(normalizedYear, normalizedMonth + 1, 0); // Last day of month
   return {
-    start: today.toISOString().split("T")[0],
-    end: threeMonthsLater.toISOString().split("T")[0],
+    start: formatDateLocal(start),
+    end: formatDateLocal(end),
   };
+};
+
+const getCurrentMonthDates = () => {
+  const today = new Date();
+  return getMonthDates(today.getFullYear(), today.getMonth());
 };
 
 interface ApiProject {
@@ -34,13 +55,21 @@ interface ApiProject {
 const GanttSimple = () => {
   const [rawProjects, setRawProjects] = useState<ApiProject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("");
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   
+  // Track current display month explicitly
+  const today = new Date();
+  const [displayYear, setDisplayYear] = useState(today.getFullYear());
+  const [displayMonth, setDisplayMonth] = useState(today.getMonth());
+  
   const gridRef = useRef<HTMLDivElement>(null);
   const taskListRef = useRef<HTMLDivElement>(null);
+  
+  // Compute date range from year/month state
+  const { start: startDate, end: endDate } = useMemo(() => {
+    return getMonthDates(displayYear, displayMonth);
+  }, [displayYear, displayMonth]);
 
   useEffect(() => {
     fetch("/api/production/gantt/hierarchy")
@@ -49,35 +78,11 @@ const GanttSimple = () => {
         setRawProjects(data);
         const allOrderIds = new Set(data.map((p) => p.orderId));
         setExpandedProjects(allOrderIds);
-        
-        const allDates: Date[] = [];
-        for (const project of data) {
-          for (const task of project.tasks) {
-            if (task.startDate) allDates.push(new Date(task.startDate.split("T")[0]));
-            if (task.endDate) allDates.push(new Date(task.endDate.split("T")[0]));
-          }
-        }
-        
-        if (allDates.length > 0) {
-          const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
-          const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
-          minDate.setDate(minDate.getDate() - 7);
-          maxDate.setDate(maxDate.getDate() + 14);
-          setStartDate(minDate.toISOString().split("T")[0]);
-          setEndDate(maxDate.toISOString().split("T")[0]);
-        } else {
-          const defaultDates = getDefaultDates();
-          setStartDate(defaultDates.start);
-          setEndDate(defaultDates.end);
-        }
-        
         setLoading(false);
         
         // Auto-scroll to today after data loads
         setTimeout(() => {
           if (gridRef.current) {
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
             const todayColumn = gridRef.current.querySelector(`.gantt-grid-day.today`);
             if (todayColumn) {
               const columnRect = todayColumn.getBoundingClientRect();
@@ -110,18 +115,18 @@ const GanttSimple = () => {
         const filteredTasks = project.tasks.filter((task) => {
           if (!task.startDate || !task.endDate) return false;
           
-          const taskStart = new Date(task.startDate.split("T")[0]);
-          const taskEnd = new Date(task.endDate.split("T")[0]);
+          const taskStart = parseDateLocal(task.startDate.split("T")[0]);
+          const taskEnd = parseDateLocal(task.endDate.split("T")[0]);
           
           if (taskEnd.getFullYear() < minYear) return false;
           
           if (startDate) {
-            const filterStart = new Date(startDate);
+            const filterStart = parseDateLocal(startDate);
             if (taskEnd < filterStart) return false;
           }
           
           if (endDate) {
-            const filterEnd = new Date(endDate);
+            const filterEnd = parseDateLocal(endDate);
             if (taskStart > filterEnd) return false;
           }
           
@@ -158,83 +163,40 @@ const GanttSimple = () => {
   }, []);
 
   const handleReset = useCallback(() => {
-    const allDates: Date[] = [];
-    for (const project of rawProjects) {
-      for (const task of project.tasks) {
-        if (task.startDate) allDates.push(new Date(task.startDate.split("T")[0]));
-        if (task.endDate) allDates.push(new Date(task.endDate.split("T")[0]));
-      }
-    }
-    
-    if (allDates.length > 0) {
-      const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
-      const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
-      minDate.setDate(minDate.getDate() - 7);
-      maxDate.setDate(maxDate.getDate() + 14);
-      setStartDate(minDate.toISOString().split("T")[0]);
-      setEndDate(maxDate.toISOString().split("T")[0]);
-    } else {
-      const dates = getDefaultDates();
-      setStartDate(dates.start);
-      setEndDate(dates.end);
-    }
+    // Reset to current month
+    const now = new Date();
+    setDisplayYear(now.getFullYear());
+    setDisplayMonth(now.getMonth());
     setProjectFilter("");
-  }, [rawProjects]);
+  }, []);
 
   const shiftPeriod = useCallback((direction: number) => {
-    if (!startDate || !endDate) return;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const shiftDays = Math.max(7, Math.floor(daysInPeriod / 2));
+    // Calculate new month, handling year rollover
+    let newMonth = displayMonth + direction;
+    let newYear = displayYear;
     
-    start.setDate(start.getDate() + direction * shiftDays);
-    end.setDate(end.getDate() + direction * shiftDays);
+    if (newMonth < 0) {
+      newMonth = 11;
+      newYear -= 1;
+    } else if (newMonth > 11) {
+      newMonth = 0;
+      newYear += 1;
+    }
     
-    setStartDate(start.toISOString().split("T")[0]);
-    setEndDate(end.toISOString().split("T")[0]);
-  }, [startDate, endDate]);
+    setDisplayYear(newYear);
+    setDisplayMonth(newMonth);
+  }, [displayYear, displayMonth]);
 
   const handleTaskClick = useCallback((taskId: string, orderId: string) => {
     console.log("Task clicked:", taskId, orderId);
   }, []);
 
-  const displayDates = useMemo(() => {
-    if (startDate && endDate) {
-      return { start: startDate, end: endDate };
-    }
-    
-    const allDates: Date[] = [];
-    for (const project of filteredProjects) {
-      for (const task of project.tasks) {
-        if (task.startDate) allDates.push(new Date(task.startDate));
-        if (task.endDate) allDates.push(new Date(task.endDate));
-      }
-    }
-    
-    if (allDates.length === 0) {
-      const today = new Date();
-      const threeMonthsLater = new Date(today);
-      threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
-      return {
-        start: today.toISOString().split("T")[0],
-        end: threeMonthsLater.toISOString().split("T")[0],
-      };
-    }
-    
-    const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
-    const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 14);
-    
-    return {
-      start: startDate || minDate.toISOString().split("T")[0],
-      end: endDate || maxDate.toISOString().split("T")[0],
-    };
-  }, [startDate, endDate, filteredProjects]);
+  const displayStartDate = startDate || getCurrentMonthDates().start;
+  const displayEndDate = endDate || getCurrentMonthDates().end;
 
-  const displayStartDate = displayDates.start;
-  const displayEndDate = displayDates.end;
+  const currentMonthLabel = useMemo(() => {
+    return `${displayYear}年${displayMonth + 1}月`;
+  }, [displayYear, displayMonth]);
 
   return (
     <div className="gantt-page-container" data-testid="page-gantt">
@@ -247,6 +209,7 @@ const GanttSimple = () => {
         <GanttFilters
           onReset={handleReset}
           onShiftPeriod={shiftPeriod}
+          currentMonth={currentMonthLabel}
         />
       </header>
 
