@@ -33,8 +33,8 @@ const orderPlanningItems = [
 
 // Section 2: 現場実績
 const fieldWorkItems = [
-  { title: "作業実績入力", url: "/work-results", icon: Timer },
   { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
+  { title: "作業実績入力", url: "/work-results", icon: Timer },
   { title: "調達管理", url: "/procurement", icon: ShoppingCart }
 ];
 
