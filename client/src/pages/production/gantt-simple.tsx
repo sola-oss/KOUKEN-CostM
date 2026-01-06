@@ -72,6 +72,21 @@ const GanttSimple = () => {
         }
         
         setLoading(false);
+        
+        // Auto-scroll to today after data loads
+        setTimeout(() => {
+          if (gridRef.current) {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const todayColumn = gridRef.current.querySelector(`.gantt-grid-day.today`);
+            if (todayColumn) {
+              const columnRect = todayColumn.getBoundingClientRect();
+              const gridRect = gridRef.current.getBoundingClientRect();
+              const scrollLeft = gridRef.current.scrollLeft + (columnRect.left - gridRect.left) - (gridRect.width / 2);
+              gridRef.current.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+            }
+          }
+        }, 100);
       })
       .catch(() => setLoading(false));
   }, []);
