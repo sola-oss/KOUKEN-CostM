@@ -58,21 +58,17 @@ const GanttSimple = () => {
           }
         }
         
-        // Fixed start date: 2025-11-01
-        const fixedStartDate = "2025-11-01";
-        const fixedStartDateObj = new Date(fixedStartDate);
-        const minEndDate = new Date(fixedStartDateObj);
-        minEndDate.setMonth(minEndDate.getMonth() + 3);
-        
         if (allDates.length > 0) {
-          const computedMaxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
-          computedMaxDate.setDate(computedMaxDate.getDate() + 14);
-          const finalEndDate = computedMaxDate > minEndDate ? computedMaxDate : minEndDate;
-          setStartDate(fixedStartDate);
-          setEndDate(finalEndDate.toISOString().split("T")[0]);
+          const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
+          const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
+          minDate.setDate(minDate.getDate() - 7);
+          maxDate.setDate(maxDate.getDate() + 14);
+          setStartDate(minDate.toISOString().split("T")[0]);
+          setEndDate(maxDate.toISOString().split("T")[0]);
         } else {
-          setStartDate(fixedStartDate);
-          setEndDate(minEndDate.toISOString().split("T")[0]);
+          const defaultDates = getDefaultDates();
+          setStartDate(defaultDates.start);
+          setEndDate(defaultDates.end);
         }
         
         setLoading(false);
@@ -162,27 +158,25 @@ const GanttSimple = () => {
   }, []);
 
   const handleReset = useCallback(() => {
-    const fixedStartDate = "2025-11-01";
-    const fixedStartDateObj = new Date(fixedStartDate);
-    const minEndDate = new Date(fixedStartDateObj);
-    minEndDate.setMonth(minEndDate.getMonth() + 3);
-    
     const allDates: Date[] = [];
     for (const project of rawProjects) {
       for (const task of project.tasks) {
+        if (task.startDate) allDates.push(new Date(task.startDate.split("T")[0]));
         if (task.endDate) allDates.push(new Date(task.endDate.split("T")[0]));
       }
     }
     
     if (allDates.length > 0) {
-      const computedMaxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
-      computedMaxDate.setDate(computedMaxDate.getDate() + 14);
-      const finalEndDate = computedMaxDate > minEndDate ? computedMaxDate : minEndDate;
-      setStartDate(fixedStartDate);
-      setEndDate(finalEndDate.toISOString().split("T")[0]);
+      const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
+      const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
+      minDate.setDate(minDate.getDate() - 7);
+      maxDate.setDate(maxDate.getDate() + 14);
+      setStartDate(minDate.toISOString().split("T")[0]);
+      setEndDate(maxDate.toISOString().split("T")[0]);
     } else {
-      setStartDate(fixedStartDate);
-      setEndDate(minEndDate.toISOString().split("T")[0]);
+      const dates = getDefaultDates();
+      setStartDate(dates.start);
+      setEndDate(dates.end);
     }
     setProjectFilter("");
   }, [rawProjects]);
