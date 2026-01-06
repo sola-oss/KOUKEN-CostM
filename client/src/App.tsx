@@ -11,22 +11,16 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 // Production Management MVP - Main Pages
 import Projects from "@/pages/production/projects";
 import ProjectDetail from "@/pages/production/project-detail";
-import WorkInstructions from "@/pages/production/work-instructions";
 import TaskPlanning from "@/pages/production/task-planning";
 import Procurement from "@/pages/production/procurement";
 import WorkResults from "@/pages/production/work-results";
-import SummaryApproval from "@/pages/production/summary-approval";
-import CostAnalysis from "@/pages/production/cost-analysis";
 import GanttSimple from "@/pages/production/gantt-simple";
 import MaterialUsages from "@/pages/production/material-usages";
 import MaterialSummary from "@/pages/production/material-summary";
 import MaterialsMaster from "@/pages/production/materials-master";
 import CostSummary from "@/pages/cost/cost-summary";
-import CostComparison from "@/pages/cost/cost-comparison";
-import UnitPrices from "@/pages/cost/unit-prices";
 import WorkersMaster from "@/pages/cost/workers-master";
 import VendorsMaster from "@/pages/cost/vendors-master";
-import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -35,22 +29,16 @@ function Router() {
       <Route path="/" component={Projects} />
       <Route path="/projects" component={Projects} />
       <Route path="/project/:id" component={ProjectDetail} />
-      <Route path="/work-instructions" component={WorkInstructions} />
       <Route path="/task-planning" component={TaskPlanning} />
       <Route path="/procurement" component={Procurement} />
       <Route path="/work-results" component={WorkResults} />
-      <Route path="/summary-approval" component={SummaryApproval} />
-      <Route path="/cost-analysis" component={CostAnalysis} />
       <Route path="/gantt" component={GanttSimple} />
       <Route path="/material-usages" component={MaterialUsages} />
       <Route path="/material-summary" component={MaterialSummary} />
       <Route path="/materials-master" component={MaterialsMaster} />
       <Route path="/cost-summary" component={CostSummary} />
-      <Route path="/cost-comparison" component={CostComparison} />
-      <Route path="/unit-prices" component={UnitPrices} />
       <Route path="/workers-master" component={WorkersMaster} />
       <Route path="/vendors-master" component={VendorsMaster} />
-      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -73,7 +61,7 @@ function App() {
                 <header className="flex items-center justify-between px-4 py-3 border-b bg-background">
                   <div className="flex items-center gap-3">
                     <SidebarTrigger data-testid="button-sidebar-toggle" />
-                    <h1 className="text-lg font-semibold">工数管理</h1>
+                    <h1 className="text-lg font-semibold">生産管理システム</h1>
                   </div>
                   <ThemeToggle />
                 </header>
