@@ -12,11 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShoppingCart, Plus, Factory, Filter, Edit, Trash2 } from "lucide-react";
+import { ShoppingCart, Plus, Filter, Edit, Trash2 } from "lucide-react";
 import { listProcurements, createProcurement, updateProcurement, deleteProcurement, listOrders, type Procurement, type ProcurementPayload } from "@/shared/production-api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -25,7 +24,7 @@ import { format } from "date-fns";
 // Form validation schema
 const procurementFormSchema = z.object({
   order_id: z.string().min(1, "受注番号は必須です"),
-  kind: z.enum(['purchase', 'manufacture']),
+  kind: z.literal('purchase').default('purchase'),
   item_name: z.string().min(1, "品目名は必須です"),
   qty: z.coerce.number().min(1, "数量は1以上である必要があります"),
   eta: z.string().min(1, "予定納期は必須です"),
@@ -45,9 +44,7 @@ type ProcurementFormData = z.infer<typeof procurementFormSchema>;
 
 export default function ProcurementManagement() {
   const { toast } = useToast();
-  const [selectedKind, setSelectedKind] = useState<'purchase' | 'manufacture'>('purchase');
   const [filterOrderId, setFilterOrderId] = useState<string>("all");
-  const [filterKind, setFilterKind] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [editingProcurement, setEditingProcurement] = useState<Procurement | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -166,7 +163,7 @@ export default function ProcurementManagement() {
       });
       form.reset({
         order_id: "",
-        kind: selectedKind,
+        kind: 'purchase',
         item_name: "",
         qty: 1,
         eta: "",
@@ -299,7 +296,7 @@ export default function ProcurementManagement() {
     setEditingProcurement(proc);
     editForm.reset({
       order_id: proc.order_id || '',
-      kind: proc.kind,
+      kind: 'purchase',
       item_name: proc.item_name,
       qty: proc.qty,
       eta: proc.eta ? format(new Date(proc.eta), 'yyyy-MM-dd') : '',
@@ -328,23 +325,22 @@ export default function ProcurementManagement() {
     }
   };
 
-  const getStatusBadge = (kind: string, status: string) => {
+  const getStatusBadge = (status: string) => {
     const variants: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-      planned: { label: kind === 'purchase' ? '未発注' : '未着手', variant: "secondary" },
-      ordered: { label: kind === 'purchase' ? '発注済' : '進行中', variant: "default" },
-      received: { label: kind === 'purchase' ? '入荷済' : '完成', variant: "outline" },
-      completed: { label: '完了', variant: "outline" }
+      planned: { label: '未発注', variant: "secondary" },
+      ordered: { label: '発注済', variant: "default" },
+      partial: { label: '一部入荷', variant: "default" },
+      received: { label: '入荷済', variant: "outline" },
+      cancelled: { label: 'キャンセル', variant: "destructive" }
     };
     const config = variants[status] || { label: status, variant: "secondary" };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  // Filter procurements
+  // Filter procurements (purchase only)
   const filteredProcurements = procurements.filter(proc => {
+    if (proc.kind !== 'purchase') return false;
     if (filterOrderId !== "all" && proc.order_id !== filterOrderId) {
-      return false;
-    }
-    if (filterKind !== "all" && proc.kind !== filterKind) {
       return false;
     }
     if (filterStatus !== "all" && proc.status !== filterStatus) {
@@ -358,13 +354,6 @@ export default function ProcurementManagement() {
     { value: 'ordered', label: '発注済' },
     { value: 'partial', label: '一部入荷' },
     { value: 'received', label: '入荷済' },
-    { value: 'cancelled', label: 'キャンセル' }
-  ];
-
-  const manufactureStatusOptions = [
-    { value: 'planned', label: '未着手' },
-    { value: 'in_progress', label: '進行中' },
-    { value: 'completed', label: '完成' },
     { value: 'cancelled', label: 'キャンセル' }
   ];
 
@@ -386,7 +375,7 @@ export default function ProcurementManagement() {
           調達管理
         </h1>
         <p className="text-muted-foreground">
-          購買手配と製造手配の管理
+          購買手配の管理
         </p>
       </div>
 
@@ -399,25 +388,9 @@ export default function ProcurementManagement() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs value={selectedKind} onValueChange={(v) => {
-            setSelectedKind(v as 'purchase' | 'manufacture');
-            form.setValue('kind', v as 'purchase' | 'manufacture');
-          }}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="purchase" data-testid="tab-purchase">
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                購買手配
-              </TabsTrigger>
-              <TabsTrigger value="manufacture" data-testid="tab-manufacture">
-                <Factory className="h-4 w-4 mr-2" />
-                製造手配
-              </TabsTrigger>
-            </TabsList>
-
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <TabsContent value="purchase" className="mt-0">
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <FormField
                       control={form.control}
                       name="order_id"
@@ -620,173 +593,18 @@ export default function ProcurementManagement() {
                         </FormItem>
                       )}
                     />
-                  </div>
-                </TabsContent>
+              </div>
 
-                <TabsContent value="manufacture" className="mt-0">
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    <FormField
-                      control={form.control}
-                      name="order_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>受注番号 *</FormLabel>
-                          <FormControl>
-                            <Select 
-                              value={field.value || ""} 
-                              onValueChange={field.onChange}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="受注番号を選択" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {orders.map(order => (
-                                  <SelectItem key={order.order_id} value={order.order_id.toString()}>
-                                    {order.order_id} - {order.product_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="item_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>品目名 *</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="品目名を入力" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="qty"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>数量 *</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" min="1" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="eta"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>予定納期 *</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="date" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>ステータス *</FormLabel>
-                          <FormControl>
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {manufactureStatusOptions.map(opt => (
-                                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="std_time_per_unit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>標準工数 (h/個)</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" min="0" step="0.1" data-testid="input-std-time" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="act_time_per_unit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>実績工数 (h/個)</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" min="0" step="0.1" data-testid="input-act-time" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="worker"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>作業者</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="作業者名を入力" data-testid="input-worker" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="completed_at"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>完成日</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="date" data-testid="input-completed-at" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </TabsContent>
-
-                <Button 
-                  type="submit" 
-                  disabled={createMutation.isPending}
-                  data-testid="button-submit-procurement"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  {createMutation.isPending ? "登録中..." : "調達を登録"}
-                </Button>
-              </form>
-            </Form>
-          </Tabs>
+              <Button 
+                type="submit" 
+                disabled={createMutation.isPending}
+                data-testid="button-submit-procurement"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {createMutation.isPending ? "登録中..." : "購買を登録"}
+              </Button>
+            </form>
+          </Form>
         </CardContent>
       </Card>
 
@@ -798,7 +616,7 @@ export default function ProcurementManagement() {
             フィルター
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="text-sm font-medium mb-2 block">受注番号</label>
             <Select value={filterOrderId} onValueChange={setFilterOrderId}>
@@ -817,20 +635,6 @@ export default function ProcurementManagement() {
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-2 block">手配区分</label>
-            <Select value={filterKind} onValueChange={setFilterKind}>
-              <SelectTrigger data-testid="filter-kind">
-                <SelectValue placeholder="すべて" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべて</SelectItem>
-                <SelectItem value="purchase">購買</SelectItem>
-                <SelectItem value="manufacture">製造</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
             <label className="text-sm font-medium mb-2 block">ステータス</label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger data-testid="filter-status">
@@ -838,10 +642,9 @@ export default function ProcurementManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">すべて</SelectItem>
-                <SelectItem value="planned">未発注/未着手</SelectItem>
-                <SelectItem value="ordered">発注済/進行中</SelectItem>
-                <SelectItem value="received">入荷済/完成</SelectItem>
-                <SelectItem value="completed">完了</SelectItem>
+                {purchaseStatusOptions.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -859,13 +662,12 @@ export default function ProcurementManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>受注番号</TableHead>
-                  <TableHead>区分</TableHead>
                   <TableHead>品目名</TableHead>
                   <TableHead>数量</TableHead>
                   <TableHead>予定納期</TableHead>
                   <TableHead>ステータス</TableHead>
-                  <TableHead>発注先/作業者</TableHead>
-                  <TableHead>単価/工数</TableHead>
+                  <TableHead>発注先</TableHead>
+                  <TableHead>単価</TableHead>
                   <TableHead>合計金額</TableHead>
                   <TableHead>承認</TableHead>
                   <TableHead>操作</TableHead>
@@ -874,8 +676,8 @@ export default function ProcurementManagement() {
               <TableBody>
                 {filteredProcurements.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
-                      該当する調達がありません
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                      該当する購買手配がありません
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -886,32 +688,17 @@ export default function ProcurementManagement() {
                       data-testid={`row-procurement-${proc.id}`}
                     >
                       <TableCell>{proc.order_id}</TableCell>
-                      <TableCell>
-                        <Badge variant={proc.kind === 'purchase' ? 'default' : 'secondary'}>
-                          {proc.kind === 'purchase' ? '購買' : '製造'}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="font-medium">{proc.item_name}</TableCell>
                       <TableCell>{proc.qty}</TableCell>
                       <TableCell>{proc.eta ? format(new Date(proc.eta), 'yyyy/MM/dd') : '-'}</TableCell>
-                      <TableCell>{getStatusBadge(proc.kind, proc.status || 'planned')}</TableCell>
+                      <TableCell>{getStatusBadge(proc.status || 'planned')}</TableCell>
+                      <TableCell>{proc.vendor || '-'}</TableCell>
+                      <TableCell>¥{proc.unit_price?.toLocaleString() || 0}</TableCell>
                       <TableCell>
-                        {proc.kind === 'purchase' ? (proc.vendor || '-') : (proc.worker || '-')}
+                        {(proc as any).total_amount != null ? `¥${(proc as any).total_amount?.toLocaleString()}` : '-'}
                       </TableCell>
                       <TableCell>
-                        {proc.kind === 'purchase' 
-                          ? `¥${proc.unit_price?.toLocaleString() || 0}` 
-                          : `${proc.std_time_per_unit || 0}h`}
-                      </TableCell>
-                      <TableCell>
-                        {proc.kind === 'purchase' 
-                          ? ((proc as any).total_amount != null ? `¥${(proc as any).total_amount?.toLocaleString()}` : '-')
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {proc.kind === 'purchase' 
-                          ? ((proc as any).is_approved ? <Badge variant="default">済</Badge> : <Badge variant="secondary">未</Badge>)
-                          : '-'}
+                        {(proc as any).is_approved ? <Badge variant="default">済</Badge> : <Badge variant="secondary">未</Badge>}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -981,63 +768,37 @@ export default function ProcurementManagement() {
 
                 <FormField
                   control={editForm.control}
-                  name="kind"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>区分 *</FormLabel>
-                      <FormControl>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="purchase">購買</SelectItem>
-                            <SelectItem value="manufacture">製造</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={editForm.control}
                   name="item_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{editingProcurement?.kind === 'purchase' ? '品目（材料マスタ）' : '品目名'} *</FormLabel>
+                      <FormLabel>品目（材料マスタ） *</FormLabel>
                       <FormControl>
-                        {editingProcurement?.kind === 'purchase' ? (
-                          <Select 
-                            value={field.value || ""} 
-                            onValueChange={(value) => {
-                              field.onChange(value);
-                              const selectedMaterial = materials.find(m => 
-                                `${m.material_type} - ${m.name} - ${m.size}` === value
+                        <Select 
+                          value={field.value || ""} 
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            const selectedMaterial = materials.find(m => 
+                              `${m.material_type} - ${m.name} - ${m.size}` === value
+                            );
+                            if (selectedMaterial?.unit_price) {
+                              editForm.setValue('unit_price', selectedMaterial.unit_price);
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="材料を選択" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {materials.map(material => {
+                              const displayName = `${material.material_type} - ${material.name} - ${material.size}`;
+                              return (
+                                <SelectItem key={material.id} value={displayName}>
+                                  {displayName} ({material.unit})
+                                </SelectItem>
                               );
-                              if (selectedMaterial?.unit_price) {
-                                editForm.setValue('unit_price', selectedMaterial.unit_price);
-                              }
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="材料を選択" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {materials.map(material => {
-                                const displayName = `${material.material_type} - ${material.name} - ${material.size}`;
-                                return (
-                                  <SelectItem key={material.id} value={displayName}>
-                                    {displayName} ({material.unit})
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Input {...field} placeholder="品目名を入力" />
-                        )}
+                            })}
+                          </SelectContent>
+                        </Select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1084,15 +845,9 @@ export default function ProcurementManagement() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {editingProcurement?.kind === 'purchase' ? (
-                              purchaseStatusOptions.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                              ))
-                            ) : (
-                              manufactureStatusOptions.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                              ))
-                            )}
+                            {purchaseStatusOptions.map(opt => (
+                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </FormControl>
@@ -1101,150 +856,88 @@ export default function ProcurementManagement() {
                   )}
                 />
 
-                {editingProcurement?.kind === 'purchase' ? (
-                  <>
-                    <FormField
-                      control={editForm.control}
-                      name="vendor_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>発注先（業者マスタ）</FormLabel>
-                          <FormControl>
-                            <Select 
-                              value={field.value?.toString() || "__none__"} 
-                              onValueChange={(value) => field.onChange(value === "__none__" ? null : parseInt(value))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="業者を選択" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">未選択</SelectItem>
-                                {vendors.map(vendor => (
-                                  <SelectItem key={vendor.id} value={vendor.id.toString()}>
-                                    {vendor.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                <FormField
+                  control={editForm.control}
+                  name="vendor_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>発注先（業者マスタ）</FormLabel>
+                      <FormControl>
+                        <Select 
+                          value={field.value?.toString() || "__none__"} 
+                          onValueChange={(value) => field.onChange(value === "__none__" ? null : parseInt(value))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="業者を選択" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">未選択</SelectItem>
+                            {vendors.map(vendor => (
+                              <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                                {vendor.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                    <FormField
-                      control={editForm.control}
-                      name="unit_price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>単価</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" min="0" step="0.01" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                <FormField
+                  control={editForm.control}
+                  name="unit_price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>単価</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" min="0" step="0.01" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                    <FormField
-                      control={editForm.control}
-                      name="total_amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>合計金額</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              type="number" 
-                              min="0" 
-                              step="0.01" 
-                              value={field.value ?? ''} 
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                <FormField
+                  control={editForm.control}
+                  name="total_amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>合計金額</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type="number" 
+                          min="0" 
+                          step="0.01" 
+                          value={field.value ?? ''} 
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                    <FormField
-                      control={editForm.control}
-                      name="is_approved"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 py-4">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            承認済み
-                          </FormLabel>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <FormField
-                      control={editForm.control}
-                      name="std_time_per_unit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>標準工数 (h/個)</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" min="0" step="0.1" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={editForm.control}
-                      name="act_time_per_unit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>実績工数 (h/個)</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" min="0" step="0.1" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={editForm.control}
-                      name="worker"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>作業者</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="作業者名を入力" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={editForm.control}
-                      name="completed_at"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>完成日</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="date" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                )}
+                <FormField
+                  control={editForm.control}
+                  name="is_approved"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 py-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal">
+                        承認済み
+                      </FormLabel>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <div className="flex justify-end gap-2">
