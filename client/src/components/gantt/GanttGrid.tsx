@@ -13,6 +13,13 @@ interface GanttGridProps {
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+const getProgressColorClass = (progress: number): string => {
+  if (progress >= 100) return 'progress-complete';
+  if (progress >= 70) return 'progress-high';
+  if (progress >= 30) return 'progress-medium';
+  return 'progress-low';
+};
+
 export const GanttGrid = ({
   projects,
   startDate,
@@ -166,6 +173,7 @@ export const GanttGrid = ({
                   const pos = getBarPosition(task.startDate, task.endDate);
                   if (!pos) return null;
 
+                  const progressClass = getProgressColorClass(task.progress);
                   return (
                     <div
                       key={task.id}
@@ -176,7 +184,7 @@ export const GanttGrid = ({
                       }}
                     >
                       <div
-                        className="gantt-bar-wrapper"
+                        className={`gantt-bar-wrapper ${progressClass}`}
                         style={{
                           left: `${pos.left}px`,
                           width: `${pos.width}px`,

@@ -326,15 +326,18 @@ export default function ProcurementManagement() {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-      planned: { label: '未発注', variant: "secondary" },
-      ordered: { label: '発注済', variant: "default" },
-      partial: { label: '一部入荷', variant: "default" },
-      received: { label: '入荷済', variant: "outline" },
-      cancelled: { label: 'キャンセル', variant: "destructive" }
+    const statusConfig: Record<string, { label: string; className: string }> = {
+      planned: { label: '未発注', className: '' },
+      ordered: { label: '発注済', className: 'bg-info text-info-foreground' },
+      partial: { label: '一部入荷', className: 'bg-warning text-warning-foreground' },
+      received: { label: '入荷済', className: 'bg-success text-success-foreground' },
+      cancelled: { label: 'キャンセル', className: 'bg-destructive text-destructive-foreground' }
     };
-    const config = variants[status] || { label: status, variant: "secondary" };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    const config = statusConfig[status] || { label: status, className: '' };
+    if (config.className) {
+      return <Badge className={config.className}>{config.label}</Badge>;
+    }
+    return <Badge variant="secondary">{config.label}</Badge>;
   };
 
   // Filter procurements (purchase only)
@@ -698,7 +701,11 @@ export default function ProcurementManagement() {
                         {(proc as any).total_amount != null ? `¥${(proc as any).total_amount?.toLocaleString()}` : '-'}
                       </TableCell>
                       <TableCell>
-                        {(proc as any).is_approved ? <Badge variant="default">済</Badge> : <Badge variant="secondary">未</Badge>}
+                        {(proc as any).is_approved ? (
+                          <Badge className="bg-success text-success-foreground">承認済</Badge>
+                        ) : (
+                          <Badge variant="secondary">未承認</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

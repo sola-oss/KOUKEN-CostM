@@ -65,9 +65,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b">
+      <SidebarHeader className="border-b bg-primary text-primary-foreground">
         <div className="flex items-center gap-2 px-2 py-4">
-          <Package className="h-6 w-6 text-primary" />
+          <Package className="h-6 w-6" />
           <span className="text-sm font-semibold">生産管理システム</span>
         </div>
       </SidebarHeader>
@@ -99,7 +99,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton 
                         asChild
-                        className={location === item.url ? 'bg-sidebar-accent' : ''}
+                        className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
                       >
                         <Link href={item.url}>
                           <item.icon className="h-4 w-4" />
@@ -141,7 +141,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton 
                         asChild
-                        className={location === item.url ? 'bg-sidebar-accent' : ''}
+                        className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
                       >
                         <Link href={item.url}>
                           <item.icon className="h-4 w-4" />
@@ -183,7 +183,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton 
                         asChild
-                        className={location === item.url ? 'bg-sidebar-accent' : ''}
+                        className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
                       >
                         <Link href={item.url}>
                           <item.icon className="h-4 w-4" />
@@ -210,7 +210,7 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton 
-                  className={isMasterActive ? 'bg-sidebar-accent' : ''}
+                  className={isMasterActive ? 'bg-primary/10 text-primary font-medium' : ''}
                 >
                   <Settings className="h-4 w-4" />
                   <span className="flex-1">マスタ</span>
@@ -227,7 +227,7 @@ export function AppSidebar() {
                     <SidebarMenuSubItem key={subItem.title}>
                       <SidebarMenuSubButton 
                         asChild
-                        className={location === subItem.url ? 'bg-sidebar-accent' : ''}
+                        className={location === subItem.url ? 'bg-primary/10 text-primary font-medium' : ''}
                       >
                         <Link href={subItem.url}>
                           <subItem.icon className="h-4 w-4" />

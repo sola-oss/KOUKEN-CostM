@@ -335,6 +335,22 @@
   transition: width 0.3s ease;
 }
 
+.gantt-bar-wrapper.progress-low .gantt-bar-progress {
+  background: hsl(var(--destructive));
+}
+
+.gantt-bar-wrapper.progress-medium .gantt-bar-progress {
+  background: hsl(var(--warning));
+}
+
+.gantt-bar-wrapper.progress-high .gantt-bar-progress {
+  background: hsl(var(--info));
+}
+
+.gantt-bar-wrapper.progress-complete .gantt-bar-progress {
+  background: hsl(var(--success));
+}
+
 .gantt-bar-label {
   position: absolute;
   top: 50%;

@@ -199,6 +199,15 @@ html, body {
 
   --destructive-foreground: 0 10% 95%;
 
+  --success: 142 70% 40%;
+  --success-foreground: 142 10% 98%;
+
+  --warning: 38 92% 50%;
+  --warning-foreground: 38 10% 15%;
+
+  --info: 215 70% 45%;
+  --info-foreground: 215 10% 95%;
+
   --input: 220 10% 75%;
   --ring: 215 70% 45%;
   --chart-1: 215 70% 45%;
@@ -316,6 +325,15 @@ html, body {
   --destructive: 0 70% 50%;
 
   --destructive-foreground: 0 10% 95%;
+
+  --success: 142 60% 50%;
+  --success-foreground: 142 10% 98%;
+
+  --warning: 38 85% 55%;
+  --warning-foreground: 38 10% 10%;
+
+  --info: 215 70% 55%;
+  --info-foreground: 215 10% 95%;
 
   /* Used as the border around inputs. Dark mode: Should be a border that is light enough to have high contrast when rendered on a --card background. More contrast than standard --border */
   --input: 220 10% 35%;

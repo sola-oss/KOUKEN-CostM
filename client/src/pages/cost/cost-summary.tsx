@@ -106,7 +106,7 @@ function OrderRow({
         </TableCell>
         <TableCell className="text-right">
           {order.profit_rate !== null ? (
-            <Badge variant={order.profit_rate >= 0 ? "default" : "destructive"}>
+            <Badge className={order.profit_rate >= 0 ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}>
               {formatPercent(order.profit_rate)}
             </Badge>
           ) : "-"}
