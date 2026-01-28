@@ -3,7 +3,7 @@
 -- Includes comprehensive order management metadata (2025-01)
 
 -- ========== Orders Table (受注管理) ==========
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
   order_id TEXT PRIMARY KEY,
   
   -- 新受注管理項目（2025-01拡張）
@@ -52,7 +52,7 @@ CREATE TABLE orders (
 );
 
 -- ========== Procurements Table (手配) ==========
-CREATE TABLE procurements (
+CREATE TABLE IF NOT EXISTS procurements (
   id INTEGER PRIMARY KEY,
   order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
   kind TEXT CHECK(kind IN ('purchase','manufacture')) NOT NULL,
@@ -72,7 +72,7 @@ CREATE TABLE procurements (
 );
 
 -- ========== Workers Log Table (工数入力) ==========
-CREATE TABLE workers_log (
+CREATE TABLE IF NOT EXISTS workers_log (
   id INTEGER PRIMARY KEY,
   order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
   qty REAL NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE workers_log (
 );
 
 -- ========== Tasks Table (作業計画) ==========
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
   id INTEGER PRIMARY KEY,
   order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
   task_name TEXT NOT NULL,         -- 作業名（例：組立/塗装/検査）
@@ -97,7 +97,7 @@ CREATE TABLE tasks (
 );
 
 -- ========== Work Logs Table (作業実績ログ) ==========
-CREATE TABLE work_logs (
+CREATE TABLE IF NOT EXISTS work_logs (
   id INTEGER PRIMARY KEY,
   
   -- ハーモスCSVフィールド
@@ -137,24 +137,24 @@ CREATE TABLE work_logs (
 
 -- ========== Indexes for Performance ==========
 -- Orders indexes
-CREATE INDEX idx_orders_due ON orders(due_date);
-CREATE INDEX idx_orders_status ON orders(status);
-CREATE INDEX idx_orders_start ON orders(start_date);
-CREATE INDEX idx_orders_order_date ON orders(order_date);
-CREATE INDEX idx_orders_invoice_month ON orders(invoice_month);
+CREATE INDEX IF NOT EXISTS idx_orders_due ON orders(due_date);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_start ON orders(start_date);
+CREATE INDEX IF NOT EXISTS idx_orders_order_date ON orders(order_date);
+CREATE INDEX IF NOT EXISTS idx_orders_invoice_month ON orders(invoice_month);
 
 -- Procurements indexes
-CREATE INDEX idx_proc_orders ON procurements(order_id, kind, status);
+CREATE INDEX IF NOT EXISTS idx_proc_orders ON procurements(order_id, kind, status);
 
 -- Workers log indexes
-CREATE INDEX idx_wlog_order ON workers_log(order_id, date);
+CREATE INDEX IF NOT EXISTS idx_wlog_order ON workers_log(order_id, date);
 
 -- Tasks indexes
-CREATE INDEX idx_tasks_order ON tasks(order_id);
-CREATE INDEX idx_tasks_status ON tasks(status);
-CREATE INDEX idx_tasks_planned_start ON tasks(planned_start);
+CREATE INDEX IF NOT EXISTS idx_tasks_order ON tasks(order_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_planned_start ON tasks(planned_start);
 
 -- Work logs indexes
-CREATE INDEX idx_work_logs_date ON work_logs(work_date);
-CREATE INDEX idx_work_logs_order ON work_logs(order_id);
-CREATE INDEX idx_work_logs_order_no ON work_logs(order_no);
+CREATE INDEX IF NOT EXISTS idx_work_logs_date ON work_logs(work_date);
+CREATE INDEX IF NOT EXISTS idx_work_logs_order ON work_logs(order_id);
+CREATE INDEX IF NOT EXISTS idx_work_logs_order_no ON work_logs(order_no);

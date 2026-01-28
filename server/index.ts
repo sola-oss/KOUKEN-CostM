@@ -43,6 +43,15 @@ app.use('/api', apiRateLimitConfig);
     process.exit(1);
   }
 
+  // Initialize Sales Orders SQLite database
+  try {
+    const { sqliteInitializer } = await import('./lib/sqlite-init.js');
+    await sqliteInitializer.initialize();
+  } catch (error) {
+    console.error('✗ Failed to initialize Sales Orders SQLite database:', error);
+    process.exit(1);
+  }
+
   const server = await registerRoutes(app);
 
   // importantly only setup vite in development and after
