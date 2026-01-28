@@ -84,7 +84,7 @@ export default function SalesOrderDetail() {
       <div className="p-6">
         <Card className="border-destructive">
           <CardContent className="pt-6">
-            <p>無効な受注IDです</p>
+            <p>無効な受注番号です</p>
           </CardContent>
         </Card>
       </div>
@@ -124,7 +124,7 @@ export default function SalesOrderDetail() {
             受注詳細
           </h1>
           <p className="text-muted-foreground">
-            受注ID: {orderId}
+            受注番号: {orderId}
           </p>
         </div>
         

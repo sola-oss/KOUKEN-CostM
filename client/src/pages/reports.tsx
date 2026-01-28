@@ -238,7 +238,7 @@ export default function Reports() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>受注ID</TableHead>
+                  <TableHead>ID</TableHead>
                   <TableHead>受注番号</TableHead>
                   <TableHead>顧客名</TableHead>
                   <TableHead className="text-right">工数記録数</TableHead>
@@ -287,7 +287,7 @@ export default function Reports() {
             出力されるCSVファイルには以下の列が含まれます：
           </p>
           <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-            <li><strong>sales_order_id</strong>: 受注ID</li>
+            <li><strong>sales_order_id</strong>: ID</li>
             <li><strong>so_no</strong>: 受注番号</li>
             <li><strong>customer_name</strong>: 顧客名</li>
             <li><strong>total_minutes</strong>: 総工数（分）</li>

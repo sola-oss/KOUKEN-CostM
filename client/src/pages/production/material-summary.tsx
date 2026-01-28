@@ -52,7 +52,7 @@ export default function MaterialSummary() {
             <CardTitle>重量集計</CardTitle>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
-                <Label htmlFor="filter-project">受注ID:</Label>
+                <Label htmlFor="filter-project">受注番号:</Label>
                 <Input
                   id="filter-project"
                   placeholder="絞込..."
@@ -112,7 +112,7 @@ export default function MaterialSummary() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>受注ID</TableHead>
+                      <TableHead>受注番号</TableHead>
                       <TableHead>工区</TableHead>
                       {groupByMaterialType && <TableHead>材料種別</TableHead>}
                       <TableHead className="text-right">数量</TableHead>

@@ -55,7 +55,7 @@ interface MaterialUsageWithMaterial {
 }
 
 const materialUsageFormSchema = z.object({
-  project_id: z.string().min(1, "受注IDは必須です"),
+  project_id: z.string().min(1, "受注番号は必須です"),
   area: z.string().optional(),
   zone: z.string().optional(),
   drawing_no: z.string().optional(),
@@ -307,7 +307,7 @@ export default function MaterialUsages() {
                   name="project_id"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>受注ID *</FormLabel>
+                      <FormLabel>受注番号 *</FormLabel>
                       <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -333,7 +333,7 @@ export default function MaterialUsages() {
                         </PopoverTrigger>
                         <PopoverContent className="w-[400px] p-0" align="start">
                           <Command>
-                            <CommandInput placeholder="受注ID・顧客名・プロジェクト名で検索..." />
+                            <CommandInput placeholder="受注番号・顧客名・プロジェクト名で検索..." />
                             <CommandList>
                               <CommandEmpty>該当する受注がありません</CommandEmpty>
                               <CommandGroup>
@@ -559,7 +559,7 @@ export default function MaterialUsages() {
               <CardTitle>材料使用一覧</CardTitle>
               <div className="flex items-center gap-2">
                 <Input
-                  placeholder="受注IDで絞込"
+                  placeholder="受注番号で絞込"
                   value={filterProjectId}
                   onChange={(e) => setFilterProjectId(e.target.value)}
                   className="w-40"
@@ -584,7 +584,7 @@ export default function MaterialUsages() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>受注ID</TableHead>
+                      <TableHead>受注番号</TableHead>
                       <TableHead>エリア</TableHead>
                       <TableHead>工区</TableHead>
                       <TableHead>図面番号</TableHead>
@@ -645,7 +645,7 @@ export default function MaterialUsages() {
                   name="project_id"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>受注ID *</FormLabel>
+                      <FormLabel>受注番号 *</FormLabel>
                       <Popover open={editOrderComboOpen} onOpenChange={setEditOrderComboOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -671,7 +671,7 @@ export default function MaterialUsages() {
                         </PopoverTrigger>
                         <PopoverContent className="w-[350px] p-0" align="start">
                           <Command>
-                            <CommandInput placeholder="受注ID・顧客名で検索..." />
+                            <CommandInput placeholder="受注番号・顧客名で検索..." />
                             <CommandList>
                               <CommandEmpty>該当する受注がありません</CommandEmpty>
                               <CommandGroup>

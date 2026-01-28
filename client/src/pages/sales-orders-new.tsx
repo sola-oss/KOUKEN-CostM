@@ -31,7 +31,7 @@ export default function NewSalesOrder() {
     onSuccess: (data) => {
       toast({
         title: "受注を作成しました",
-        description: `受注ID: ${data.id}`,
+        description: `受注番号: ${data.id}`,
       });
       // Invalidate sales orders list
       queryClient.invalidateQueries({ queryKey: ['sales-orders'] });
