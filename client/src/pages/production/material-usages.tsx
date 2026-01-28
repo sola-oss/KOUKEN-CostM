@@ -20,7 +20,6 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface Order {
-  id: number;
   order_id: string;
   client_name: string | null;
   project_title: string | null;
@@ -340,7 +339,7 @@ export default function MaterialUsages() {
                               <CommandGroup>
                                 {orders.map((order) => (
                                   <CommandItem
-                                    key={order.id}
+                                    key={order.order_id}
                                     value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
                                     onSelect={() => {
                                       field.onChange(order.order_id);
@@ -678,7 +677,7 @@ export default function MaterialUsages() {
                               <CommandGroup>
                                 {orders.map((order) => (
                                   <CommandItem
-                                    key={order.id}
+                                    key={order.order_id}
                                     value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
                                     onSelect={() => {
                                       field.onChange(order.order_id);

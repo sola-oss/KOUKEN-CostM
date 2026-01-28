@@ -488,13 +488,12 @@ export class ProductionDAO {
 
   // ========== Utility Methods ==========
   
-  async getOrdersForDropdown(): Promise<{ order_id: string; product_name: string }[]> {
+  async getOrdersForDropdown(): Promise<{ order_id: string; client_name: string | null; project_title: string | null }[]> {
     return this.db.prepare(`
-      SELECT order_id, product_name 
+      SELECT order_id, client_name, project_title 
       FROM orders 
-      ORDER BY created_at DESC
-      LIMIT 100
-    `).all() as { order_id: string; product_name: string }[];
+      ORDER BY order_id ASC
+    `).all() as { order_id: string; client_name: string | null; project_title: string | null }[];
   }
 
   async getWorkers(): Promise<{ worker: string }[]> {
