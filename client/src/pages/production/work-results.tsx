@@ -11,7 +11,6 @@ import {
   createWorkLog, 
   updateWorkLog, 
   deleteWorkLog,
-  listOrders,
   listTasks,
   type WorkLog,
   type WorkLogPayload 
@@ -29,6 +28,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface Order {
+  order_id: string;
+  client_name: string | null;
+  project_title: string | null;
+}
 import {
   Form,
   FormControl,
@@ -114,6 +123,7 @@ export default function WorkResults() {
   const [currentWorker, setCurrentWorker] = useState(""); // Selected from workers master
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [orderComboOpen, setOrderComboOpen] = useState(false);
   
   const timeOptions = generateTimeOptions();
   const todayDate = dayjs().format('YYYY-MM-DD');
@@ -133,11 +143,15 @@ export default function WorkResults() {
     },
   });
 
-  // Fetch orders for dropdown
-  const { data: ordersData } = useQuery({
-    queryKey: ['/api/orders'],
-    queryFn: () => listOrders({ page_size: 1000 }),
+  // Fetch orders for dropdown (all orders without pagination)
+  const { data: ordersResponse } = useQuery({
+    queryKey: ['/api/orders-dropdown'],
+    queryFn: async () => {
+      const res = await fetch('/api/orders-dropdown');
+      return res.json();
+    }
   });
+  const orders: Order[] = ordersResponse?.data || [];
 
   // Fetch workers from workers master
   const { data: workersData } = useQuery({
@@ -475,29 +489,64 @@ export default function WorkResults() {
                     control={form.control}
                     name="order_id"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-col">
                         <FormLabel>受注番号 *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger data-testid="select-order">
-                              <SelectValue placeholder="受注を選択" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {ordersData?.data.map((order) => (
-                              <SelectItem 
-                                key={order.order_id} 
-                                value={order.order_id}
-                                data-testid={`option-order-${order.order_id}`}
+                        <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={orderComboOpen}
+                                className={cn(
+                                  "w-full justify-between",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                                data-testid="select-order"
                               >
-                                #{order.order_id} - {order.product_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                                {field.value
+                                  ? (() => {
+                                      const order = orders.find(o => o.order_id === field.value);
+                                      return order ? `#${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
+                                    })()
+                                  : "受注を検索..."}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[400px] p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="受注番号・顧客名で検索..." />
+                              <CommandList>
+                                <CommandEmpty>該当する受注がありません</CommandEmpty>
+                                <CommandGroup>
+                                  {orders.map((order) => (
+                                    <CommandItem
+                                      key={order.order_id}
+                                      value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
+                                      onSelect={() => {
+                                        field.onChange(order.order_id);
+                                        setOrderComboOpen(false);
+                                      }}
+                                      data-testid={`option-order-${order.order_id}`}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          field.value === order.order_id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <span className="font-medium">#{order.order_id}</span>
+                                      <span className="ml-2 text-muted-foreground truncate">
+                                        {order.client_name || order.project_title || ""}
+                                      </span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                         <FormMessage />
                       </FormItem>
                     )}

@@ -14,12 +14,21 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShoppingCart, Plus, Filter, Edit, Trash2 } from "lucide-react";
-import { listProcurements, createProcurement, updateProcurement, deleteProcurement, listOrders, type Procurement, type ProcurementPayload } from "@/shared/production-api";
+import { ShoppingCart, Plus, Filter, Edit, Trash2, ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { listProcurements, createProcurement, updateProcurement, deleteProcurement, type Procurement, type ProcurementPayload } from "@/shared/production-api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+
+interface Order {
+  order_id: string;
+  client_name: string | null;
+  project_title: string | null;
+}
 
 // Form validation schema
 const procurementFormSchema = z.object({
@@ -49,6 +58,9 @@ export default function ProcurementManagement() {
   const [editingProcurement, setEditingProcurement] = useState<Procurement | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deletingProcurementId, setDeletingProcurementId] = useState<number | null>(null);
+  const [orderComboOpen, setOrderComboOpen] = useState(false);
+  const [editOrderComboOpen, setEditOrderComboOpen] = useState(false);
+  const [filterOrderComboOpen, setFilterOrderComboOpen] = useState(false);
 
   // Fetch procurements
   const { data: procurementsResponse, isLoading } = useQuery({
@@ -56,10 +68,13 @@ export default function ProcurementManagement() {
     queryFn: () => listProcurements({ page_size: 100 })
   });
 
-  // Fetch orders for dropdown
+  // Fetch orders for dropdown (all orders without pagination)
   const { data: ordersResponse } = useQuery({
-    queryKey: ['orders-dropdown'],
-    queryFn: () => listOrders({ page_size: 100 })
+    queryKey: ['/api/orders-dropdown'],
+    queryFn: async () => {
+      const res = await fetch('/api/orders-dropdown');
+      return res.json();
+    }
   });
 
   // Fetch vendors from vendors master
@@ -83,7 +98,7 @@ export default function ProcurementManagement() {
   });
 
   const procurements = procurementsResponse?.data || [];
-  const orders = ordersResponse?.data || [];
+  const orders: Order[] = ordersResponse?.data || [];
   const vendors = (vendorsData || []).filter(v => v.is_active);
   const materials = materialsData?.data || [];
 
@@ -398,25 +413,63 @@ export default function ProcurementManagement() {
                       control={form.control}
                       name="order_id"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="flex flex-col">
                           <FormLabel>受注番号 *</FormLabel>
-                          <FormControl>
-                            <Select 
-                              value={field.value || ""} 
-                              onValueChange={field.onChange}
-                            >
-                              <SelectTrigger data-testid="select-order-id">
-                                <SelectValue placeholder="受注番号を選択" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {orders.map(order => (
-                                  <SelectItem key={order.order_id} value={order.order_id.toString()}>
-                                    {order.order_id} - {order.product_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
+                          <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={orderComboOpen}
+                                  className={cn(
+                                    "w-full justify-between",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                  data-testid="select-order-id"
+                                >
+                                  {field.value
+                                    ? (() => {
+                                        const order = orders.find(o => o.order_id === field.value);
+                                        return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
+                                      })()
+                                    : "受注番号を検索..."}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="受注番号・顧客名で検索..." />
+                                <CommandList>
+                                  <CommandEmpty>該当する受注がありません</CommandEmpty>
+                                  <CommandGroup>
+                                    {orders.map((order) => (
+                                      <CommandItem
+                                        key={order.order_id}
+                                        value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
+                                        onSelect={() => {
+                                          field.onChange(order.order_id);
+                                          setOrderComboOpen(false);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            field.value === order.order_id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <span className="font-medium">{order.order_id}</span>
+                                        <span className="ml-2 text-muted-foreground truncate">
+                                          {order.client_name || order.project_title || ""}
+                                        </span>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -622,19 +675,69 @@ export default function ProcurementManagement() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="text-sm font-medium mb-2 block">受注番号</label>
-            <Select value={filterOrderId} onValueChange={setFilterOrderId}>
-              <SelectTrigger data-testid="filter-order">
-                <SelectValue placeholder="すべて" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべて</SelectItem>
-                {orders.map(order => (
-                  <SelectItem key={order.order_id} value={order.order_id.toString()}>
-                    {order.order_id} - {order.product_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={filterOrderComboOpen} onOpenChange={setFilterOrderComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={filterOrderComboOpen}
+                  className={cn(
+                    "w-full justify-between",
+                    filterOrderId === "all" && "text-muted-foreground"
+                  )}
+                  data-testid="filter-order"
+                >
+                  {filterOrderId === "all"
+                    ? "すべて"
+                    : (() => {
+                        const order = orders.find(o => o.order_id === filterOrderId);
+                        return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : filterOrderId;
+                      })()}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="受注番号・顧客名で検索..." />
+                  <CommandList>
+                    <CommandEmpty>該当する受注がありません</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="すべて"
+                        onSelect={() => {
+                          setFilterOrderId("all");
+                          setFilterOrderComboOpen(false);
+                        }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", filterOrderId === "all" ? "opacity-100" : "opacity-0")} />
+                        すべて
+                      </CommandItem>
+                      {orders.map((order) => (
+                        <CommandItem
+                          key={order.order_id}
+                          value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
+                          onSelect={() => {
+                            setFilterOrderId(order.order_id);
+                            setFilterOrderComboOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              filterOrderId === order.order_id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <span className="font-medium">{order.order_id}</span>
+                          <span className="ml-2 text-muted-foreground truncate">
+                            {order.client_name || order.project_title || ""}
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div>
@@ -749,25 +852,62 @@ export default function ProcurementManagement() {
                   control={editForm.control}
                   name="order_id"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col">
                       <FormLabel>受注番号 *</FormLabel>
-                      <FormControl>
-                        <Select 
-                          value={field.value || ""} 
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="受注番号を選択" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {orders.map(order => (
-                              <SelectItem key={order.order_id} value={order.order_id.toString()}>
-                                {order.order_id} - {order.product_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
+                      <Popover open={editOrderComboOpen} onOpenChange={setEditOrderComboOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={editOrderComboOpen}
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value
+                                ? (() => {
+                                    const order = orders.find(o => o.order_id === field.value);
+                                    return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
+                                  })()
+                                : "受注番号を検索..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[350px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="受注番号・顧客名で検索..." />
+                            <CommandList>
+                              <CommandEmpty>該当する受注がありません</CommandEmpty>
+                              <CommandGroup>
+                                {orders.map((order) => (
+                                  <CommandItem
+                                    key={order.order_id}
+                                    value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
+                                    onSelect={() => {
+                                      field.onChange(order.order_id);
+                                      setEditOrderComboOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === order.order_id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <span className="font-medium">{order.order_id}</span>
+                                    <span className="ml-2 text-muted-foreground truncate">
+                                      {order.client_name || order.project_title || ""}
+                                    </span>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
