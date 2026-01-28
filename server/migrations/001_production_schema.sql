@@ -68,7 +68,10 @@ CREATE TABLE IF NOT EXISTS procurements (
   act_time_per_unit REAL,          -- kind=manufacture 用 [h/個]
   worker TEXT,                     -- kind=manufacture 用（任意）
   completed_at TEXT,               -- kind=manufacture 用（UTC）
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  vendor_id INTEGER,               -- 業者マスタID
+  total_amount REAL,               -- 合計金額
+  is_approved INTEGER DEFAULT 0    -- 承認フラグ
 );
 
 -- ========== Workers Log Table (工数入力) ==========
@@ -128,6 +131,7 @@ CREATE TABLE IF NOT EXISTS work_logs (
   -- 紐付け関連
   order_id TEXT,                   -- 受注ID (orders.order_id)
   order_no TEXT,                   -- 受注番号 (k001など) - 廃止予定
+  task_id INTEGER,                 -- タスクID (tasks.id)
   match_status TEXT DEFAULT 'unlinked',  -- linked / temp / unlinked
   
   -- 取込管理

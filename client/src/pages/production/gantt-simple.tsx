@@ -3,6 +3,9 @@ import { GanttFilters } from "../../components/gantt/GanttFilters";
 import { GanttTaskList } from "../../components/gantt/GanttTaskList";
 import { GanttGrid } from "../../components/gantt/GanttGrid";
 import type { GanttProject } from "../../types/gantt";
+import { useSidebar } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { PanelLeftClose, PanelLeft } from "lucide-react";
 import "../../styles/gantt-custom.css";
 
 const ROW_HEIGHT = 36;
@@ -57,6 +60,9 @@ const GanttSimple = () => {
   const [loading, setLoading] = useState(true);
   const [projectFilter, setProjectFilter] = useState<string>("");
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  
+  // Sidebar toggle for full-screen Gantt view
+  const { open: sidebarOpen, setOpen: setSidebarOpen } = useSidebar();
   
   // Track current display month explicitly
   const today = new Date();
@@ -201,9 +207,19 @@ const GanttSimple = () => {
   return (
     <div className="gantt-page-container" data-testid="page-gantt">
       <header className="gantt-page-header">
-        <div className="gantt-page-title">
-          <h1>案件別ガントチャート</h1>
-          <p>プロジェクト・工程のタイムライン表示</p>
+        <div className="gantt-page-title flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            title={sidebarOpen ? "サイドバーを隠す" : "サイドバーを表示"}
+          >
+            {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+          </Button>
+          <div>
+            <h1>案件別ガントチャート</h1>
+            <p>プロジェクト・工程のタイムライン表示</p>
+          </div>
         </div>
 
         <GanttFilters

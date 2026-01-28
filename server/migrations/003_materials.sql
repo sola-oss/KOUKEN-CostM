@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS materials (
   size TEXT NOT NULL,                     -- サイズ（C100×50×5×7.5）
   unit TEXT NOT NULL,                     -- 単位（m、本、kg）
   unit_weight REAL,                       -- 単位重量（kg/m など）
+  unit_price REAL,                        -- 単価（円）
   remark TEXT,                            -- 備考
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
