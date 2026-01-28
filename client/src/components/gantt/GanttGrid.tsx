@@ -31,16 +31,34 @@ export const GanttGrid = ({
 }: GanttGridProps) => {
   const todayStr = useMemo(() => {
     const today = new Date();
-    return today.toISOString().split('T')[0];
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }, []);
 
   const dateColumns = useMemo((): DateColumn[] => {
     const columns: DateColumn[] = [];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    
+    // Parse YYYY-MM-DD strings as local time (not UTC)
+    const parseDateLocal = (dateStr: string): Date => {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    };
+    
+    // Format Date to YYYY-MM-DD in local time (not UTC)
+    const formatDateLocal = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    const start = parseDateLocal(startDate);
+    const end = parseDateLocal(endDate);
     
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatDateLocal(d);
       const dayOfWeek = d.getDay();
       columns.push({
         date: new Date(d),
