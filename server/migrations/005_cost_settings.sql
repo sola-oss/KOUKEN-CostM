@@ -12,7 +12,4 @@ INSERT OR IGNORE INTO cost_settings (id, labor_rate_per_hour, updated_at)
 SELECT 1, 3000, datetime('now', 'localtime')
 WHERE NOT EXISTS (SELECT 1 FROM cost_settings WHERE id = 1);
 
--- Add unit_price column to materials table if it doesn't exist
--- Note: SQLite doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN
--- This will fail silently if column already exists
-ALTER TABLE materials ADD COLUMN unit_price REAL;
+-- Note: unit_price column is defined in 003_materials.sql base schema

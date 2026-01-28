@@ -520,8 +520,7 @@ export default function Projects() {
               filteredAndSortedOrders.map((order) => (
                 <TableRow 
                   key={order.order_id}
-                  onClick={() => handleRowClick(order.order_id)}
-                  className={`cursor-pointer hover-elevate ${order.order_id === newlyCreatedOrderId ? 'bg-green-50 dark:bg-green-950/20' : ''}`}
+                  className={`${order.order_id === newlyCreatedOrderId ? 'bg-green-50 dark:bg-green-950/20' : ''}`}
                   data-testid={`row-order-${order.order_id}`}
                 >
                   {/* Order ID */}
