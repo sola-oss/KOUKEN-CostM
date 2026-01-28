@@ -55,7 +55,7 @@ interface MaterialUsageWithMaterial {
 }
 
 const materialUsageFormSchema = z.object({
-  project_id: z.string().min(1, "案件IDは必須です"),
+  project_id: z.string().min(1, "受注IDは必須です"),
   area: z.string().optional(),
   zone: z.string().optional(),
   drawing_no: z.string().optional(),
@@ -307,7 +307,7 @@ export default function MaterialUsages() {
                   name="project_id"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>案件ID *</FormLabel>
+                      <FormLabel>受注ID *</FormLabel>
                       <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -326,16 +326,16 @@ export default function MaterialUsages() {
                                     const order = orders.find(o => o.order_id === field.value);
                                     return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
                                   })()
-                                : "案件を検索..."}
+                                : "受注を検索..."}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
                         <PopoverContent className="w-[400px] p-0" align="start">
                           <Command>
-                            <CommandInput placeholder="案件ID・顧客名・プロジェクト名で検索..." />
+                            <CommandInput placeholder="受注ID・顧客名・プロジェクト名で検索..." />
                             <CommandList>
-                              <CommandEmpty>該当する案件がありません</CommandEmpty>
+                              <CommandEmpty>該当する受注がありません</CommandEmpty>
                               <CommandGroup>
                                 {orders.map((order) => (
                                   <CommandItem
@@ -559,7 +559,7 @@ export default function MaterialUsages() {
               <CardTitle>材料使用一覧</CardTitle>
               <div className="flex items-center gap-2">
                 <Input
-                  placeholder="案件IDで絞込"
+                  placeholder="受注IDで絞込"
                   value={filterProjectId}
                   onChange={(e) => setFilterProjectId(e.target.value)}
                   className="w-40"
@@ -584,7 +584,7 @@ export default function MaterialUsages() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>案件ID</TableHead>
+                      <TableHead>受注ID</TableHead>
                       <TableHead>エリア</TableHead>
                       <TableHead>工区</TableHead>
                       <TableHead>図面番号</TableHead>
@@ -645,7 +645,7 @@ export default function MaterialUsages() {
                   name="project_id"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>案件ID *</FormLabel>
+                      <FormLabel>受注ID *</FormLabel>
                       <Popover open={editOrderComboOpen} onOpenChange={setEditOrderComboOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -664,16 +664,16 @@ export default function MaterialUsages() {
                                     const order = orders.find(o => o.order_id === field.value);
                                     return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
                                   })()
-                                : "案件を検索..."}
+                                : "受注を検索..."}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
                         <PopoverContent className="w-[350px] p-0" align="start">
                           <Command>
-                            <CommandInput placeholder="案件ID・顧客名で検索..." />
+                            <CommandInput placeholder="受注ID・顧客名で検索..." />
                             <CommandList>
-                              <CommandEmpty>該当する案件がありません</CommandEmpty>
+                              <CommandEmpty>該当する受注がありません</CommandEmpty>
                               <CommandGroup>
                                 {orders.map((order) => (
                                   <CommandItem

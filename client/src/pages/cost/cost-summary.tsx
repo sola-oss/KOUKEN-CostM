@@ -235,7 +235,7 @@ export default function CostSummaryPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Calculator className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">案件・工区別集計</h1>
+          <h1 className="text-2xl font-bold">受注・工区別集計</h1>
         </div>
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
           <DialogTrigger asChild>
@@ -330,7 +330,7 @@ export default function CostSummaryPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">案件数</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">受注数</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-order-count">
@@ -343,7 +343,7 @@ export default function CostSummaryPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            案件・工区別原価集計
+            受注・工区別原価集計
             <span className="text-sm font-normal text-muted-foreground">
               （クリックで工区別詳細を表示）
             </span>
@@ -355,7 +355,7 @@ export default function CostSummaryPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>受注番号</TableHead>
-                  <TableHead>案件名</TableHead>
+                  <TableHead>受注名</TableHead>
                   <TableHead>顧客</TableHead>
                   <TableHead className="text-right">材料費</TableHead>
                   <TableHead className="text-right">労務費</TableHead>

@@ -62,13 +62,13 @@ export default function ProjectDetail() {
             <CardTitle className="text-destructive">エラーが発生しました</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>案件データの読み込みに失敗しました</p>
+            <p>受注データの読み込みに失敗しました</p>
             <Button
               onClick={() => setLocation('/')}
               variant="outline"
               className="mt-4"
             >
-              案件一覧に戻る
+              受注一覧に戻る
             </Button>
           </CardContent>
         </Card>
@@ -88,7 +88,7 @@ export default function ProjectDetail() {
           data-testid="button-back"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          案件一覧に戻る
+          受注一覧に戻る
         </Button>
       </div>
 

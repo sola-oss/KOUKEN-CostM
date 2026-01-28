@@ -15,7 +15,7 @@ export const GanttTaskList = ({
   return (
     <div className="gantt-task-list" data-testid="gantt-task-list">
       <div className="gantt-task-list-header" style={{ height: `${rowHeight * 2}px` }}>
-        <div className="gantt-task-list-header-cell">案件 / 工程</div>
+        <div className="gantt-task-list-header-cell">受注 / 工程</div>
         <div className="gantt-task-list-header-cell">開始日</div>
         <div className="gantt-task-list-header-cell">終了日</div>
         <div className="gantt-task-list-header-cell">進捗</div>

@@ -768,7 +768,7 @@ export default function WorkResults() {
                     data-testid="switch-keep-order-task"
                   />
                   <Label htmlFor="keep-order-task" className="cursor-pointer text-sm">
-                    同じ案件・作業を保持（連続入力）
+                    同じ受注・作業を保持（連続入力）
                   </Label>
                 </div>
 
@@ -826,7 +826,7 @@ export default function WorkResults() {
               <TableHeader>
                 <TableRow>
                   <TableHead>時刻</TableHead>
-                  <TableHead>案件</TableHead>
+                  <TableHead>受注</TableHead>
                   <TableHead>作業</TableHead>
                   <TableHead>実績時間</TableHead>
                   <TableHead>数量</TableHead>

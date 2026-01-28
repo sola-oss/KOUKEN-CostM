@@ -441,7 +441,7 @@ export default function Projects() {
             受注管理
           </h1>
           <p className="text-muted-foreground">
-            受注登録と案件の管理
+            受注登録と受注の管理
           </p>
         </div>
         <Button 
@@ -782,7 +782,7 @@ export default function Projects() {
                           <FormControl>
                             <Input 
                               {...field} 
-                              placeholder="案件の件名を入力" 
+                              placeholder="受注の件名を入力" 
                               data-testid="input-project-title"
                             />
                           </FormControl>

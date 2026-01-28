@@ -18,7 +18,7 @@ export default function CostComparisonPage() {
             <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>予実比較機能は準備中です</p>
             <p className="text-sm mt-2">
-              案件ごとの予算と実績を比較し、差異分析を行います
+              受注ごとの予算と実績を比較し、差異分析を行います
             </p>
           </div>
         </CardContent>

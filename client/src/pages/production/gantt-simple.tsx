@@ -202,7 +202,7 @@ const GanttSimple = () => {
     <div className="gantt-page-container" data-testid="page-gantt">
       <header className="gantt-page-header">
         <div className="gantt-page-title">
-          <h1>案件別ガントチャート</h1>
+          <h1>受注別ガントチャート</h1>
           <p>プロジェクト・工程のタイムライン表示</p>
         </div>
 
@@ -217,7 +217,7 @@ const GanttSimple = () => {
         <div className="gantt-loading">読み込み中...</div>
       ) : filteredProjects.length === 0 ? (
         <div className="gantt-empty-message">
-          該当する案件はありません
+          該当する受注はありません
         </div>
       ) : (
         <div className="gantt-content">

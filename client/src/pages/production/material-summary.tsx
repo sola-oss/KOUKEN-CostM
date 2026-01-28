@@ -1,4 +1,4 @@
-// Production Management MVP - Material Summary (案件・工区別 集計)
+// Production Management MVP - Material Summary (受注・工区別 集計)
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +43,7 @@ export default function MaterialSummary() {
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
         <BarChart3 className="h-6 w-6 text-primary" />
-        <h2 className="text-2xl font-bold">案件・工区別 集計</h2>
+        <h2 className="text-2xl font-bold">受注・工区別 集計</h2>
       </div>
 
       <Card>
@@ -52,7 +52,7 @@ export default function MaterialSummary() {
             <CardTitle>重量集計</CardTitle>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
-                <Label htmlFor="filter-project">案件ID:</Label>
+                <Label htmlFor="filter-project">受注ID:</Label>
                 <Input
                   id="filter-project"
                   placeholder="絞込..."
@@ -112,7 +112,7 @@ export default function MaterialSummary() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>案件ID</TableHead>
+                      <TableHead>受注ID</TableHead>
                       <TableHead>工区</TableHead>
                       {groupByMaterialType && <TableHead>材料種別</TableHead>}
                       <TableHead className="text-right">数量</TableHead>
