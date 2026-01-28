@@ -88,7 +88,7 @@ export default function Settings() {
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="font-medium">予算超過アラート</h4>
-                <p className="text-sm text-muted-foreground">プロジェクト予算を超過した際の通知</p>
+                <p className="text-sm text-muted-foreground">受注予算を超過した際の通知</p>
               </div>
               <Badge variant="default">有効</Badge>
             </div>

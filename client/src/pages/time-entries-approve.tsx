@@ -221,7 +221,7 @@ export default function TimeEntriesApprove() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="従業員名、受注番号、顧客名で検索..."
+                  placeholder="作業者名、受注番号、顧客名で検索..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -232,10 +232,10 @@ export default function TimeEntriesApprove() {
             <div className="flex gap-2">
               <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
                 <SelectTrigger className="w-40" data-testid="select-employee-filter">
-                  <SelectValue placeholder="従業員" />
+                  <SelectValue placeholder="作業者" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">全従業員</SelectItem>
+                  <SelectItem value="all">全作業者</SelectItem>
                   {uniqueEmployees.map((employee) => (
                     <SelectItem key={employee} value={employee}>
                       {employee}
@@ -291,7 +291,7 @@ export default function TimeEntriesApprove() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">従業員数</CardTitle>
+            <CardTitle className="text-sm font-medium">作業者数</CardTitle>
             <User className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -385,7 +385,7 @@ export default function TimeEntriesApprove() {
                       data-testid="checkbox-select-all"
                     />
                   </TableHead>
-                  <TableHead>従業員名</TableHead>
+                  <TableHead>作業者名</TableHead>
                   <TableHead>受注番号</TableHead>
                   <TableHead>顧客名</TableHead>
                   <TableHead>開始時刻</TableHead>

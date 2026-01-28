@@ -31,7 +31,7 @@ const menuItems = [
     icon: Home,
   },
   {
-    title: "プロジェクト管理",
+    title: "受注管理",
     url: "/projects",
     icon: FolderOpen,
   },

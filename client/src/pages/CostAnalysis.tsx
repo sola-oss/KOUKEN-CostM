@@ -19,7 +19,7 @@ export default function CostAnalysis() {
       {
         category: "材料費",
         issue: "原材料コストが予算を12%上回っています",
-        action: "サプライヤーとの価格交渉を検討",
+        action: "業者との価格交渉を検討",
         priority: "high",
         impact: "¥120,000/月の削減可能性"
       },

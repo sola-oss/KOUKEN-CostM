@@ -15,7 +15,7 @@ import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
 const expenseFormSchema = z.object({
-  projectId: z.string().min(1, "プロジェクトを選択してください"),
+  projectId: z.string().min(1, "受注を選択してください"),
   category: z.string().min(1, "カテゴリを選択してください"),
   description: z.string().min(1, "説明を入力してください"),
   amount: z.string().min(1, "金額を入力してください"),
@@ -74,7 +74,7 @@ export function ExpenseForm({
     <Card className="w-full max-w-2xl">
       <CardHeader>
         <CardTitle>経費登録</CardTitle>
-        <CardDescription>新しい経費を登録してプロジェクトの原価を管理</CardDescription>
+        <CardDescription>新しい経費を登録して受注の原価を管理</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -85,11 +85,11 @@ export function ExpenseForm({
                 name="projectId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>プロジェクト</FormLabel>
+                    <FormLabel>受注</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-project">
-                          <SelectValue placeholder="プロジェクトを選択" />
+                          <SelectValue placeholder="受注を選択" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>

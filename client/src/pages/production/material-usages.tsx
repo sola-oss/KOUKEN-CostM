@@ -333,7 +333,7 @@ export default function MaterialUsages() {
                         </PopoverTrigger>
                         <PopoverContent className="w-[400px] p-0" align="start">
                           <Command>
-                            <CommandInput placeholder="受注番号・顧客名・プロジェクト名で検索..." />
+                            <CommandInput placeholder="受注番号・顧客名・受注件名で検索..." />
                             <CommandList>
                               <CommandEmpty>該当する受注がありません</CommandEmpty>
                               <CommandGroup>

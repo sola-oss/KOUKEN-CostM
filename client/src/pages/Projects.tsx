@@ -32,14 +32,14 @@ export default function Projects() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({
-        title: "プロジェクトを削除しました",
-        description: "プロジェクトの削除が完了しました",
+        title: "受注を削除しました",
+        description: "受注の削除が完了しました",
       });
     },
     onError: () => {
       toast({
         title: "エラー",
-        description: "プロジェクトの削除に失敗しました",
+        description: "受注の削除に失敗しました",
         variant: "destructive",
       });
     },
@@ -56,7 +56,7 @@ export default function Projects() {
   };
 
   const handleDeleteProject = (id: string) => {
-    if (confirm("このプロジェクトを削除してもよろしいですか？")) {
+    if (confirm("この受注を削除してもよろしいですか？")) {
       deleteMutation.mutate(id);
     }
   };
@@ -98,12 +98,12 @@ export default function Projects() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-foreground">プロジェクト管理</h1>
-          <p className="text-muted-foreground mt-1">製造プロジェクトの予算と進捗を管理</p>
+          <h1 className="text-3xl font-semibold text-foreground">受注管理</h1>
+          <p className="text-muted-foreground mt-1">製造受注の予算と進捗を管理</p>
         </div>
         <Button onClick={handleNewProject} data-testid="button-new-project">
           <Plus className="h-4 w-4 mr-2" />
-          新規プロジェクト
+          新規受注
         </Button>
       </div>
 
@@ -111,13 +111,13 @@ export default function Projects() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">プロジェクトが登録されていません</h3>
+            <h3 className="text-lg font-medium mb-2">受注が登録されていません</h3>
             <p className="text-muted-foreground text-center mb-4">
-              最初のプロジェクトを作成して原価管理を開始しましょう
+              最初の受注を作成して原価管理を開始しましょう
             </p>
             <Button onClick={handleNewProject}>
               <Plus className="h-4 w-4 mr-2" />
-              プロジェクトを作成
+              受注を作成
             </Button>
           </CardContent>
         </Card>
@@ -203,7 +203,7 @@ export default function Projects() {
 
           <Card>
             <CardHeader>
-              <CardTitle>プロジェクト概要</CardTitle>
+              <CardTitle>受注概要</CardTitle>
               <CardDescription>全体の統計情報</CardDescription>
             </CardHeader>
             <CardContent>

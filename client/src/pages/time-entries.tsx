@@ -57,7 +57,7 @@ interface SalesOrder {
 
 // Form schema
 const timeEntrySchema = z.object({
-  employee_name: z.string().min(1, "従業員名は必須です"),
+  employee_name: z.string().min(1, "作業者名は必須です"),
   sales_order_id: z.number().min(1, "受注を選択してください"),
   entry_type: z.enum(["minutes", "time_range"]),
   minutes: z.number().min(1).optional(),
@@ -311,9 +311,9 @@ export default function TimeEntries() {
                   name="employee_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>従業員名</FormLabel>
+                      <FormLabel>作業者名</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="従業員名を入力" data-testid="input-employee-name" />
+                        <Input {...field} placeholder="作業者名を入力" data-testid="input-employee-name" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -482,7 +482,7 @@ export default function TimeEntries() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="従業員名、受注番号、顧客名で検索..."
+                  placeholder="作業者名、受注番号、顧客名で検索..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -602,7 +602,7 @@ export default function TimeEntries() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>従業員名</TableHead>
+                  <TableHead>作業者名</TableHead>
                   <TableHead>受注番号</TableHead>
                   <TableHead>顧客名</TableHead>
                   <TableHead>開始時刻</TableHead>

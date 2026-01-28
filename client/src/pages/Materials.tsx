@@ -97,7 +97,7 @@ export default function Materials() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold text-foreground">材料管理</h1>
-          <p className="text-muted-foreground mt-1">プロジェクト別の材料費管理</p>
+          <p className="text-muted-foreground mt-1">受注別の材料費管理</p>
         </div>
         <Button onClick={handleNewMaterial} data-testid="button-new-material">
           <Plus className="h-4 w-4 mr-2" />
@@ -108,7 +108,7 @@ export default function Materials() {
       <Card>
         <CardHeader>
           <CardTitle>材料費概要</CardTitle>
-          <CardDescription>全プロジェクトの材料費統計</CardDescription>
+          <CardDescription>全受注の材料費統計</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -141,7 +141,7 @@ export default function Materials() {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">材料一覧</h2>
           <div className="flex items-center gap-2">
-            <label className="text-sm text-muted-foreground">プロジェクト:</label>
+            <label className="text-sm text-muted-foreground">受注:</label>
             <select 
               value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
