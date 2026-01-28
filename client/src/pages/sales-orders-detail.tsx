@@ -44,7 +44,7 @@ export default function SalesOrderDetail() {
     onSuccess: (updatedOrder) => {
       toast({
         title: "受注を確定しました",
-        description: `受注番号: ${updatedOrder.order_no}`,
+        description: `受注番号: ${updatedOrder.so_no || updatedOrder.id}`,
       });
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['sales-order', orderId] });
@@ -175,7 +175,7 @@ export default function SalesOrderDetail() {
                   <Label>受注番号</Label>
                   <div className="p-3 bg-muted/50 rounded-md">
                     <p className="text-sm font-mono" data-testid="text-order-no">
-                      {order.order_no || <span className="text-muted-foreground">未採番</span>}
+                      {order.so_no || <span className="text-muted-foreground">未採番</span>}
                     </p>
                   </div>
                 </div>
@@ -222,8 +222,8 @@ export default function SalesOrderDetail() {
                   </Label>
                   <div className="p-3 bg-muted/50 rounded-md">
                     <p className="text-sm" data-testid="text-delivery-date">
-                      {order.delivery_date 
-                        ? format(new Date(order.delivery_date), 'yyyy年MM月dd日')
+                      {order.due_date 
+                        ? format(new Date(order.due_date), 'yyyy年MM月dd日')
                         : <span className="text-muted-foreground">未設定</span>
                       }
                     </p>
@@ -245,11 +245,11 @@ export default function SalesOrderDetail() {
               </div>
 
               {/* Notes */}
-              {order.notes && (
+              {order.note && (
                 <div className="space-y-2">
                   <Label>メモ</Label>
                   <div className="p-3 bg-muted/50 rounded-md">
-                    <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.notes}</p>
+                    <p className="text-sm whitespace-pre-wrap" data-testid="text-notes">{order.note}</p>
                   </div>
                 </div>
               )}
