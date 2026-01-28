@@ -12,7 +12,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Layers, Plus, Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Layers, Plus, Trash2, ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -90,12 +93,15 @@ export default function MaterialUsages() {
   });
 
   const { data: ordersResponse } = useQuery({
-    queryKey: ['/api/production/orders'],
+    queryKey: ['/api/orders-dropdown'],
     queryFn: async () => {
-      const res = await fetch('/api/production/orders');
+      const res = await fetch('/api/orders-dropdown');
       return res.json();
     }
   });
+  
+  const [orderComboOpen, setOrderComboOpen] = useState(false);
+  const [editOrderComboOpen, setEditOrderComboOpen] = useState(false);
 
   const usages: MaterialUsageWithMaterial[] = usagesResponse?.data || [];
   const materials: Material[] = materialsResponse?.data || [];
@@ -301,25 +307,63 @@ export default function MaterialUsages() {
                   control={form.control}
                   name="project_id"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col">
                       <FormLabel>案件ID *</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value || ""}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-project-id">
-                            <SelectValue placeholder="案件を選択" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {orders.map((order) => (
-                            <SelectItem key={order.id} value={order.order_id}>
-                              {order.order_id} - {order.client_name || order.project_title || ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={orderComboOpen}
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                              data-testid="select-project-id"
+                            >
+                              {field.value
+                                ? (() => {
+                                    const order = orders.find(o => o.order_id === field.value);
+                                    return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
+                                  })()
+                                : "案件を検索..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="案件ID・顧客名・プロジェクト名で検索..." />
+                            <CommandList>
+                              <CommandEmpty>該当する案件がありません</CommandEmpty>
+                              <CommandGroup>
+                                {orders.map((order) => (
+                                  <CommandItem
+                                    key={order.id}
+                                    value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
+                                    onSelect={() => {
+                                      field.onChange(order.order_id);
+                                      setOrderComboOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === order.order_id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <span className="font-medium">{order.order_id}</span>
+                                    <span className="ml-2 text-muted-foreground truncate">
+                                      {order.client_name || order.project_title || ""}
+                                    </span>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -601,25 +645,63 @@ export default function MaterialUsages() {
                   control={editForm.control}
                   name="project_id"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col">
                       <FormLabel>案件ID *</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value || ""}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="edit-select-project-id">
-                            <SelectValue placeholder="案件を選択" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {orders.map((order) => (
-                            <SelectItem key={order.id} value={order.order_id}>
-                              {order.order_id} - {order.client_name || order.project_title || ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={editOrderComboOpen} onOpenChange={setEditOrderComboOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={editOrderComboOpen}
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                              data-testid="edit-select-project-id"
+                            >
+                              {field.value
+                                ? (() => {
+                                    const order = orders.find(o => o.order_id === field.value);
+                                    return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
+                                  })()
+                                : "案件を検索..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[350px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="案件ID・顧客名で検索..." />
+                            <CommandList>
+                              <CommandEmpty>該当する案件がありません</CommandEmpty>
+                              <CommandGroup>
+                                {orders.map((order) => (
+                                  <CommandItem
+                                    key={order.id}
+                                    value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
+                                    onSelect={() => {
+                                      field.onChange(order.order_id);
+                                      setEditOrderComboOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === order.order_id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <span className="font-medium">{order.order_id}</span>
+                                    <span className="ml-2 text-muted-foreground truncate">
+                                      {order.client_name || order.project_title || ""}
+                                    </span>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
