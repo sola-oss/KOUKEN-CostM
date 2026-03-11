@@ -32,6 +32,9 @@ const orderFormSchema = z.object({
   order_date: z.string().optional(),
   client_name: z.string().min(1, "得意先は必須です"),
   customer_code: z.string().optional(),
+  customer_zip: z.string().optional(),
+  customer_address1: z.string().optional(),
+  customer_address2: z.string().optional(),
   manager: z.string().optional(),
   project_title: z.string().min(1, "品名は必須です"),
   due_date: z.string().min(1, "納期は必須です"),
@@ -126,6 +129,9 @@ export default function Projects() {
       order_date: "",
       client_name: "",
       customer_code: "",
+      customer_zip: "",
+      customer_address1: "",
+      customer_address2: "",
       manager: "",
       project_title: "",
       due_date: "",
@@ -303,6 +309,9 @@ export default function Projects() {
       order_date: new Date().toISOString().split('T')[0],
       client_name: "",
       customer_code: "",
+      customer_zip: "",
+      customer_address1: "",
+      customer_address2: "",
       manager: "",
       project_title: "",
       due_date: "",
@@ -329,6 +338,9 @@ export default function Projects() {
       order_date: order.order_date || "",
       client_name: order.client_name || "",
       customer_code: order.customer_code || "",
+      customer_zip: order.customer_zip || "",
+      customer_address1: order.customer_address1 || "",
+      customer_address2: order.customer_address2 || "",
       manager: order.manager || "",
       project_title: order.project_title || "",
       due_date: order.due_date || "",
@@ -353,6 +365,9 @@ export default function Projects() {
       order_date: values.order_date || "",
       client_name: values.client_name,
       customer_code: values.customer_code || "",
+      customer_zip: values.customer_zip || "",
+      customer_address1: values.customer_address1 || "",
+      customer_address2: values.customer_address2 || "",
       manager: values.manager || "",
       project_title: values.project_title,
       due_date: values.due_date,
@@ -736,6 +751,60 @@ export default function Projects() {
                               {...field} 
                               placeholder="得意先コードを入力" 
                               data-testid="input-customer-code"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="customer_zip"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>得意先郵便番号</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="例: 123-4567" 
+                              data-testid="input-customer-zip"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="customer_address1"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>得意先住所1</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="都道府県・市区町村" 
+                              data-testid="input-customer-address1"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="customer_address2"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>得意先住所2</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="番地・建物名など" 
+                              data-testid="input-customer-address2"
                             />
                           </FormControl>
                           <FormMessage />

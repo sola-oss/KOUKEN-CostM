@@ -63,6 +63,9 @@ export interface Order {
   status: 'pending' | 'in_progress' | 'completed' | null;
   customer_name: string | null;
   customer_code: string | null;
+  customer_zip: string | null;
+  customer_address1: string | null;
+  customer_address2: string | null;
   // システム管理フィールド
   created_at: string;
   updated_at: string;
@@ -116,6 +119,9 @@ export interface OrderPayload {
   status?: 'pending' | 'in_progress' | 'completed';
   customer_name?: string;
   customer_code?: string;
+  customer_zip?: string;
+  customer_address1?: string;
+  customer_address2?: string;
 }
 
 // Procurement Types  

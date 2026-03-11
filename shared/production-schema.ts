@@ -50,6 +50,9 @@ export const orders = sqliteTable("orders", {
   status: text("status", { enum: ['pending', 'in_progress', 'completed'] }).default('pending'), // ワークフローステータス
   customer_name: text("customer_name"),          // → client_name に移行
   customer_code: text("customer_code"),          // 得意先コード
+  customer_zip: text("customer_zip"),            // 得意先郵便番号
+  customer_address1: text("customer_address1"),  // 得意先住所1
+  customer_address2: text("customer_address2"),  // 得意先住所2
   
   // システム管理
   created_at: text("created_at").notNull(),

@@ -50,8 +50,9 @@ export class ProductionDAO {
         subcontractor, processing_hours, note,
         product_name, qty, start_date, sales, estimated_material_cost,
         std_time_per_unit, status, customer_name, customer_code,
+        customer_zip, customer_address1, customer_address2,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     // Helper to convert boolean to SQLite (true→1, false→0, null/undefined→null)
@@ -95,6 +96,9 @@ export class ProductionDAO {
       orderData.status ?? 'pending',
       orderData.customer_name ?? null,
       orderData.customer_code ?? null,
+      orderData.customer_zip ?? null,
+      orderData.customer_address1 ?? null,
+      orderData.customer_address2 ?? null,
       // システム管理
       now,
       now
@@ -207,7 +211,8 @@ export class ProductionDAO {
       'subcontractor', 'processing_hours', 'note',
       // レガシー項目
       'product_name', 'qty', 'start_date', 'sales', 'estimated_material_cost',
-      'std_time_per_unit', 'status', 'customer_name', 'customer_code'
+      'std_time_per_unit', 'status', 'customer_name', 'customer_code',
+      'customer_zip', 'customer_address1', 'customer_address2'
     ];
     
     // Helper to convert boolean to SQLite (true→1, false→0, null/undefined→null)
