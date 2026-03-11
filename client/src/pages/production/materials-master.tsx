@@ -41,7 +41,7 @@ const materialFormSchema = z.object({
 
 type MaterialFormData = z.infer<typeof materialFormSchema>;
 
-const MATERIAL_TYPES = ["鋼材", "ボルト", "ナット", "配管", "電材", "その他"];
+const MATERIAL_TYPES = ["SS400", "SPCC", "SPHC-P", "SUS304", "SUS316"];
 const UNITS = ["m", "本", "個", "kg", "セット", "箱"];
 
 export default function MaterialsMaster() {
