@@ -49,9 +49,9 @@ export class ProductionDAO {
         estimated_amount, invoiced_amount, invoice_month,
         subcontractor, processing_hours, note,
         product_name, qty, start_date, sales, estimated_material_cost,
-        std_time_per_unit, status, customer_name,
+        std_time_per_unit, status, customer_name, customer_code,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     // Helper to convert boolean to SQLite (true→1, false→0, null/undefined→null)
@@ -94,6 +94,7 @@ export class ProductionDAO {
       orderData.std_time_per_unit ?? null,
       orderData.status ?? 'pending',
       orderData.customer_name ?? null,
+      orderData.customer_code ?? null,
       // システム管理
       now,
       now
@@ -206,7 +207,7 @@ export class ProductionDAO {
       'subcontractor', 'processing_hours', 'note',
       // レガシー項目
       'product_name', 'qty', 'start_date', 'sales', 'estimated_material_cost',
-      'std_time_per_unit', 'status', 'customer_name'
+      'std_time_per_unit', 'status', 'customer_name', 'customer_code'
     ];
     
     // Helper to convert boolean to SQLite (true→1, false→0, null/undefined→null)

@@ -49,6 +49,7 @@ export const orders = sqliteTable("orders", {
   std_time_per_unit: real("std_time_per_unit"),  // 標準工数（KPI計算で使用中）
   status: text("status", { enum: ['pending', 'in_progress', 'completed'] }).default('pending'), // ワークフローステータス
   customer_name: text("customer_name"),          // → client_name に移行
+  customer_code: text("customer_code"),          // 得意先コード
   
   // システム管理
   created_at: text("created_at").notNull(),

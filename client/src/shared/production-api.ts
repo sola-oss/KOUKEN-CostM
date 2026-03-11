@@ -62,6 +62,7 @@ export interface Order {
   std_time_per_unit: number | null;
   status: 'pending' | 'in_progress' | 'completed' | null;
   customer_name: string | null;
+  customer_code: string | null;
   // システム管理フィールド
   created_at: string;
   updated_at: string;
@@ -114,6 +115,7 @@ export interface OrderPayload {
   std_time_per_unit?: number;
   status?: 'pending' | 'in_progress' | 'completed';
   customer_name?: string;
+  customer_code?: string;
 }
 
 // Procurement Types  

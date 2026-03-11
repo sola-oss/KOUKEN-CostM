@@ -30,10 +30,10 @@ import { useLocation } from "wouter";
 const orderFormSchema = z.object({
   order_id: z.string().optional(),
   order_date: z.string().optional(),
-  client_name: z.string().min(1, "客先名は必須です"),
+  client_name: z.string().min(1, "得意先は必須です"),
+  customer_code: z.string().optional(),
   manager: z.string().optional(),
-  client_order_no: z.string().optional(),
-  project_title: z.string().min(1, "件名は必須です"),
+  project_title: z.string().min(1, "品名は必須です"),
   due_date: z.string().min(1, "納期は必須です"),
   delivery_date: z.string().optional(),
   confirmed_date: z.string().optional(),
@@ -97,7 +97,7 @@ function StatusIconCluster({ is_delivered, has_shipping_fee, is_amount_confirmed
 
 // ========== MAIN COMPONENT ==========
 
-type SortField = 'due_date' | 'invoiced_amount';
+type SortField = 'due_date' | 'estimated_amount';
 type SortOrder = 'asc' | 'desc';
 
 interface SortConfig {
@@ -125,14 +125,13 @@ export default function Projects() {
       order_id: "",
       order_date: "",
       client_name: "",
+      customer_code: "",
       manager: "",
-      client_order_no: "",
       project_title: "",
       due_date: "",
       delivery_date: "",
       confirmed_date: "",
       estimated_amount: "",
-      invoiced_amount: "",
       invoice_month: "",
       note: "",
       subcontractor: "",
@@ -221,9 +220,9 @@ export default function Projects() {
         const aDate = a.due_date ? new Date(a.due_date).getTime() : nullSentinel;
         const bDate = b.due_date ? new Date(b.due_date).getTime() : nullSentinel;
         compareValue = aDate - bDate;
-      } else if (sortConfig.field === 'invoiced_amount') {
-        const aAmount = a.invoiced_amount ?? nullSentinel;
-        const bAmount = b.invoiced_amount ?? nullSentinel;
+      } else if (sortConfig.field === 'estimated_amount') {
+        const aAmount = a.estimated_amount ?? nullSentinel;
+        const bAmount = b.estimated_amount ?? nullSentinel;
         compareValue = aAmount - bAmount;
       }
 
@@ -303,14 +302,13 @@ export default function Projects() {
       order_id: "",
       order_date: new Date().toISOString().split('T')[0],
       client_name: "",
+      customer_code: "",
       manager: "",
-      client_order_no: "",
       project_title: "",
       due_date: "",
       delivery_date: "",
       confirmed_date: "",
       estimated_amount: "",
-      invoiced_amount: "",
       invoice_month: "",
       note: "",
       subcontractor: "",
@@ -330,14 +328,13 @@ export default function Projects() {
       order_id: order.order_id,
       order_date: order.order_date || "",
       client_name: order.client_name || "",
+      customer_code: order.customer_code || "",
       manager: order.manager || "",
-      client_order_no: order.client_order_no || "",
       project_title: order.project_title || "",
       due_date: order.due_date || "",
       delivery_date: order.delivery_date || "",
       confirmed_date: order.confirmed_date || "",
       estimated_amount: order.estimated_amount?.toString() || "",
-      invoiced_amount: order.invoiced_amount?.toString() || "",
       invoice_month: order.invoice_month || "",
       note: order.note || "",
       subcontractor: order.subcontractor || "",
@@ -351,20 +348,17 @@ export default function Projects() {
   };
 
   const handleFormSubmit = (values: OrderFormValues) => {
-    // Convert form values to API format
-    // Note: Empty strings are sent as empty strings (not null) to satisfy backend validation
     const orderData: Partial<Order> = {
       order_id: values.order_id || undefined,
       order_date: values.order_date || "",
       client_name: values.client_name,
+      customer_code: values.customer_code || "",
       manager: values.manager || "",
-      client_order_no: values.client_order_no || "",
       project_title: values.project_title,
       due_date: values.due_date,
       delivery_date: values.delivery_date || "",
       confirmed_date: values.confirmed_date || "",
       estimated_amount: values.estimated_amount ? parseFloat(values.estimated_amount) : null,
-      invoiced_amount: values.invoiced_amount ? parseFloat(values.invoiced_amount) : null,
       invoice_month: values.invoice_month || "",
       note: values.note || "",
       subcontractor: values.subcontractor || "",
@@ -474,9 +468,9 @@ export default function Projects() {
             <TableRow>
               <TableHead className="w-[100px]">受注番号</TableHead>
               <TableHead>受注日</TableHead>
-              <TableHead>客先名</TableHead>
+              <TableHead>得意先</TableHead>
               <TableHead>担当者</TableHead>
-              <TableHead>件名</TableHead>
+              <TableHead>品名</TableHead>
               <TableHead>
                 <Button
                   variant="ghost"
@@ -493,15 +487,14 @@ export default function Projects() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleSort('invoiced_amount')}
+                  onClick={() => handleSort('estimated_amount')}
                   className="hover-elevate -ml-3 h-8"
-                  data-testid="button-sort-invoiced-amount"
+                  data-testid="button-sort-estimated-amount"
                 >
-                  請求金額
+                  受注金額
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
-              <TableHead>請求月</TableHead>
               <TableHead className="text-center">ステータス</TableHead>
               <TableHead className="text-right w-[100px]">操作</TableHead>
             </TableRow>
@@ -509,7 +502,7 @@ export default function Projects() {
           <TableBody>
             {filteredAndSortedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-32 text-center">
+                <TableCell colSpan={9} className="h-32 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <Package className="h-8 w-8 mb-2" />
                     <p>該当する受注がありません</p>
@@ -553,14 +546,9 @@ export default function Projects() {
                     {formatDate(order.due_date)}
                   </TableCell>
 
-                  {/* Invoiced Amount */}
-                  <TableCell className="text-right font-medium" data-testid={`cell-invoiced-amount-${order.order_id}`}>
-                    {formatCurrency(order.invoiced_amount)}
-                  </TableCell>
-
-                  {/* Invoice Month */}
-                  <TableCell data-testid={`cell-invoice-month-${order.order_id}`}>
-                    {order.invoice_month || '-'}
+                  {/* Estimated Amount */}
+                  <TableCell className="text-right font-medium" data-testid={`cell-estimated-amount-${order.order_id}`}>
+                    {formatCurrency(order.estimated_amount)}
                   </TableCell>
 
                   {/* Status Icon Cluster */}
@@ -724,12 +712,30 @@ export default function Projects() {
                       name="client_name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>客先名 <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>得意先 <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <Input 
                               {...field} 
-                              placeholder="客先名を入力" 
+                              placeholder="得意先を入力" 
                               data-testid="input-client-name"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="customer_code"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>得意先コード</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="得意先コードを入力" 
+                              data-testid="input-customer-code"
                             />
                           </FormControl>
                           <FormMessage />
@@ -757,32 +763,14 @@ export default function Projects() {
 
                     <FormField
                       control={form.control}
-                      name="client_order_no"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>客先注番</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="客先注文番号を入力" 
-                              data-testid="input-client-order-no"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
                       name="project_title"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>件名 <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>品名 <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <Input 
                               {...field} 
-                              placeholder="受注の件名を入力" 
+                              placeholder="品名を入力" 
                               data-testid="input-project-title"
                             />
                           </FormControl>
@@ -862,32 +850,13 @@ export default function Projects() {
                       name="estimated_amount"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>見積金額</FormLabel>
+                          <FormLabel>受注金額</FormLabel>
                           <FormControl>
                             <Input 
                               {...field} 
                               type="number" 
                               placeholder="0" 
                               data-testid="input-estimated-amount"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="invoiced_amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>請求金額</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              type="number" 
-                              placeholder="0" 
-                              data-testid="input-invoiced-amount"
                             />
                           </FormControl>
                           <FormMessage />
