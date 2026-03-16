@@ -198,7 +198,6 @@ export function AppSidebar() {
           </Collapsible>
         </SidebarGroup>
       </SidebarContent>
-
       {/* Section 4: マスタ (Footer) */}
       <SidebarFooter className="border-t">
         <SidebarMenu>
@@ -213,7 +212,7 @@ export function AppSidebar() {
                   className={isMasterActive ? 'bg-primary/10 text-primary font-medium' : ''}
                 >
                   <Settings className="h-4 w-4" />
-                  <span className="flex-1">マスタ</span>
+                  <span className="flex-1">マスター</span>
                   {isMasterOpen ? (
                     <ChevronDown className="h-4 w-4 transition-transform" />
                   ) : (
