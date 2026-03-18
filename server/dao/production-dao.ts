@@ -1116,8 +1116,12 @@ export class ProductionDAO {
     return usages.map(u => {
       const m = matMap.get(u.material_id as number);
       let totalWeight: number | null = null;
-      if (m?.unit_weight != null && u.length != null) {
-        totalWeight = m.unit_weight * (u.length as number) * ((u.quantity as number) || 1);
+      if (m?.unit_weight != null) {
+        if (u.length != null) {
+          totalWeight = m.unit_weight * (u.length as number) * ((u.quantity as number) || 1);
+        } else {
+          totalWeight = m.unit_weight * ((u.quantity as number) || 1);
+        }
       }
       return {
         ...u,
@@ -1174,13 +1178,19 @@ export class ProductionDAO {
     total_quantity: number; total_weight: number | null; record_count: number;
   }>> {
     const grouped = options?.group_by_material_type ?? true;
-    const usages = await this.getMaterialUsages(options?.project_id ? { project_id: options.project_id } : undefined);
+    let usages = await this.getMaterialUsages();
+    if (options?.project_id) {
+      const filterLower = options.project_id.toLowerCase();
+      usages = usages.filter(u => u.project_id?.toLowerCase().includes(filterLower));
+    }
 
     // JS集計
     const summaryMap = new Map<string, any>();
     for (const u of usages) {
       const matType = grouped ? (u.material_type || null) : null;
-      const key = `${u.project_id}|${u.zone ?? 'null'}|${matType ?? 'null'}`;
+      const key = grouped
+        ? `${u.project_id}|${u.zone ?? 'null'}|${matType ?? 'null'}`
+        : `${u.project_id}`;
       if (!summaryMap.has(key)) {
         summaryMap.set(key, {
           project_id: u.project_id,
