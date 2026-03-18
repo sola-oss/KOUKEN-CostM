@@ -1,6 +1,5 @@
-// Production Management MVP - Data Access Object
-import Database from 'better-sqlite3';
-import { MetricsService } from '../services/metrics.js';
+// Production Management MVP - Data Access Object (Supabase版)
+import { supabase } from '../lib/supabase-client.js';
 import type { 
   Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
@@ -8,102 +7,147 @@ import type {
   WorkerMaster, InsertWorkerMaster, VendorMaster, InsertVendorMaster, OutsourcingCost, InsertOutsourcingCost, OutsourcingCostWithVendor
 } from '../../shared/production-schema.js';
 
-export class ProductionDAO {
-  private db: Database.Database;
-  private metricsService: MetricsService;
+// ============================================================
+// ユーティリティ
+// ============================================================
 
-  constructor(dbPath: string = process.env.DB_PATH || './server/db/production.sqlite') {
-    this.db = new Database(dbPath);
-    this.metricsService = new MetricsService(this.db);
-    
-    // Enable foreign keys
-    this.db.pragma('foreign_keys = ON');
-  }
+function throwIfError<T>(data: T | null, error: any, context: string): T {
+  if (error) throw new Error(`[DAO:${context}] ${error.message}`);
+  if (data === null) throw new Error(`[DAO:${context}] No data returned`);
+  return data;
+}
+
+// PostgreSQL booleanを正規化（念のため）
+function normBool(val: any): boolean {
+  if (val === null || val === undefined) return false;
+  if (typeof val === 'boolean') return val;
+  return val === 1 || val === '1' || val === 'true';
+}
+
+// ============================================================
+// KPI計算（バッチ対応・Supabase用）
+// ============================================================
+
+function calcOrderKPIFromData(
+  order: Order,
+  procurements: Procurement[],
+  workerLogs: WorkerLog[],
+  defaultWageRate: number = 2000
+): OrderKPI {
+  const qty = (order.qty as number) ?? 0;
+  const estimatedMaterialCost = (order.estimated_material_cost as number) ?? 0;
+  const sales = (order.sales as number) ?? 0;
+  const stdTimePerUnit = (order.std_time_per_unit as number) ?? 0;
+
+  // 材料費
+  const baseMaterialCost = qty * estimatedMaterialCost;
+  const purchaseMaterialCost = procurements
+    .filter(p => p.kind === 'purchase' && p.status === 'received')
+    .reduce((sum, p) => sum + ((p.qty as number) ?? 0) * ((p.unit_price as number) ?? 0), 0);
+  const materialCost = baseMaterialCost + purchaseMaterialCost;
+
+  // 実労働時間
+  const manufactureHours = procurements
+    .filter(p => p.kind === 'manufacture')
+    .reduce((sum, p) => sum + ((p.qty as number) ?? 0) * ((p.act_time_per_unit as number) ?? 0), 0);
+  const workerLogHours = workerLogs
+    .reduce((sum, w) => sum + ((w.qty as number) ?? 0) * ((w.act_time_per_unit as number) ?? 0), 0);
+  const totalActualHours = manufactureHours + workerLogHours;
+  const actualTimePerUnit = qty > 0 ? totalActualHours / qty : 0;
+
+  // 労務費
+  const laborCost = defaultWageRate * totalActualHours;
+
+  // 粗利
+  const grossProfit = sales - (materialCost + laborCost);
+
+  // 工数差異
+  const variancePct = stdTimePerUnit > 0
+    ? ((actualTimePerUnit - stdTimePerUnit) / stdTimePerUnit) * 100
+    : 0;
+
+  return {
+    order_id: order.order_id,
+    product_name: order.product_name ?? '',
+    qty,
+    due_date: order.due_date ?? '',
+    sales,
+    estimated_material_cost: estimatedMaterialCost,
+    std_time_per_unit: stdTimePerUnit,
+    status: order.status ?? 'pending',
+    customer_name: order.customer_name ?? undefined,
+    material_cost: materialCost,
+    labor_cost: laborCost,
+    gross_profit: grossProfit,
+    actual_time_per_unit: actualTimePerUnit,
+    variance_pct: variancePct
+  };
+}
+
+// ============================================================
+// ProductionDAO
+// ============================================================
+
+export class ProductionDAO {
+  constructor() {}
 
   // ========== Orders CRUD ==========
-  
+
   async createOrder(orderData: InsertOrder): Promise<string> {
     const now = new Date().toISOString();
-    
-    // If order_id is specified, use it; otherwise, generate next numeric string ID
+
     let orderId = orderData.order_id;
-    
     if (!orderId) {
-      // Generate next ID by finding max numeric order_id and incrementing
-      const maxIdRow = this.db.prepare(`
-        SELECT order_id FROM orders 
-        WHERE order_id GLOB '[0-9]*'
-        ORDER BY CAST(order_id AS INTEGER) DESC 
-        LIMIT 1
-      `).get() as { order_id: string } | undefined;
-      
-      const nextNumericId = maxIdRow ? parseInt(maxIdRow.order_id, 10) + 1 : 1;
-      orderId = String(nextNumericId);
+      // 数値型order_idを持つ最大値を取得してインクリメント
+      const { data: rows } = await supabase
+        .from('orders')
+        .select('order_id')
+        .order('order_id', { ascending: false });
+      const numericIds = (rows || [])
+        .map(r => parseInt(r.order_id, 10))
+        .filter(n => !isNaN(n));
+      const max = numericIds.length > 0 ? Math.max(...numericIds) : 0;
+      orderId = String(max + 1);
     }
-    
-    const stmt = this.db.prepare(`
-      INSERT INTO orders (
-        order_id, order_date, client_name, manager, client_order_no, project_title,
-        is_delivered, has_shipping_fee, is_amount_confirmed, is_invoiced,
-        due_date, delivery_date, confirmed_date,
-        estimated_amount, invoiced_amount, invoice_month,
-        subcontractor, processing_hours, note,
-        product_name, qty, start_date, sales, estimated_material_cost,
-        std_time_per_unit, status, customer_name, customer_code,
-        customer_zip, customer_address1, customer_address2,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    // Helper to convert boolean to SQLite (true→1, false→0, null/undefined→null)
-    const toBoolInt = (val: boolean | null | undefined): number | null => {
-      if (val === null || val === undefined) return null;
-      return val ? 1 : 0;
+
+    const row = {
+      order_id: orderId,
+      order_date: orderData.order_date ?? null,
+      client_name: orderData.client_name ?? null,
+      manager: orderData.manager ?? null,
+      client_order_no: orderData.client_order_no ?? null,
+      project_title: orderData.project_title ?? null,
+      is_delivered: orderData.is_delivered ?? false,
+      has_shipping_fee: orderData.has_shipping_fee ?? false,
+      is_amount_confirmed: orderData.is_amount_confirmed ?? false,
+      is_invoiced: orderData.is_invoiced ?? false,
+      due_date: orderData.due_date ?? null,
+      delivery_date: orderData.delivery_date ?? null,
+      confirmed_date: orderData.confirmed_date ?? null,
+      estimated_amount: orderData.estimated_amount ?? null,
+      invoiced_amount: orderData.invoiced_amount ?? null,
+      invoice_month: orderData.invoice_month ?? null,
+      subcontractor: orderData.subcontractor ?? null,
+      processing_hours: orderData.processing_hours ?? null,
+      note: orderData.note ?? null,
+      product_name: orderData.product_name ?? null,
+      qty: orderData.qty ?? null,
+      start_date: orderData.start_date ?? null,
+      sales: orderData.sales ?? null,
+      estimated_material_cost: orderData.estimated_material_cost ?? null,
+      std_time_per_unit: orderData.std_time_per_unit ?? null,
+      status: orderData.status ?? 'pending',
+      customer_name: orderData.customer_name ?? null,
+      customer_code: orderData.customer_code ?? null,
+      customer_zip: orderData.customer_zip ?? null,
+      customer_address1: orderData.customer_address1 ?? null,
+      customer_address2: orderData.customer_address2 ?? null,
+      created_at: now,
+      updated_at: now
     };
 
-    stmt.run(
-      orderId,
-      // 新受注管理項目
-      orderData.order_date ?? null,
-      orderData.client_name ?? null,
-      orderData.manager ?? null,
-      orderData.client_order_no ?? null,
-      orderData.project_title ?? null,
-      // ステータスフラグ - preserve null
-      toBoolInt(orderData.is_delivered),
-      toBoolInt(orderData.has_shipping_fee),
-      toBoolInt(orderData.is_amount_confirmed),
-      toBoolInt(orderData.is_invoiced),
-      // 日付情報
-      orderData.due_date ?? null,
-      orderData.delivery_date ?? null,
-      orderData.confirmed_date ?? null,
-      // 金額情報
-      orderData.estimated_amount ?? null,
-      orderData.invoiced_amount ?? null,
-      orderData.invoice_month ?? null,
-      // 作業情報
-      orderData.subcontractor ?? null,
-      orderData.processing_hours ?? null,
-      orderData.note ?? null,
-      // レガシー項目
-      orderData.product_name ?? null,
-      orderData.qty ?? null,
-      orderData.start_date ?? null,
-      orderData.sales ?? null,
-      orderData.estimated_material_cost ?? null,
-      orderData.std_time_per_unit ?? null,
-      orderData.status ?? 'pending',
-      orderData.customer_name ?? null,
-      orderData.customer_code ?? null,
-      orderData.customer_zip ?? null,
-      orderData.customer_address1 ?? null,
-      orderData.customer_address2 ?? null,
-      // システム管理
-      now,
-      now
-    );
-    
+    const { error } = await supabase.from('orders').insert(row);
+    if (error) throw new Error(`[createOrder] ${error.message}`);
     return orderId;
   }
 
@@ -115,53 +159,49 @@ export class ProductionDAO {
     pageSize?: number;
   } = {}): Promise<{ orders: Array<Order & { kpi: OrderKPI | null }>, total: number }> {
     const { from, to, search, page = 1, pageSize = 20 } = options;
-    
-    // Build WHERE clause
-    let whereConditions: string[] = [];
-    let params: any[] = [];
-    
-    if (from) {
-      whereConditions.push('order_date >= ?');
-      params.push(from);
-    }
-    
-    if (to) {
-      whereConditions.push('order_date <= ?');
-      params.push(to);
-    }
-    
-    if (search) {
-      whereConditions.push('(order_id LIKE ? OR client_name LIKE ? OR project_title LIKE ? OR client_order_no LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
-    }
-
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-    
-    // Get total count
-    const totalQuery = `SELECT COUNT(*) as count FROM orders ${whereClause}`;
-    const totalResult = this.db.prepare(totalQuery).get(params) as { count: number };
-    
-    // Get paginated orders
     const offset = (page - 1) * pageSize;
-    const ordersQuery = `
-      SELECT * FROM orders 
-      ${whereClause}
-      ORDER BY order_date DESC, order_id DESC
-      LIMIT ? OFFSET ?
-    `;
-    
-    const orders = this.db.prepare(ordersQuery).all([...params, pageSize, offset]) as Order[];
-    
-    // Attach KPI to each order
-    const ordersWithKPI = orders.map(order => ({
-      ...order,
-      kpi: this.metricsService.calculateOrderKPI(order.order_id)
-    }));
 
-    return {
-      orders: ordersWithKPI,
-      total: totalResult.count
-    };
+    let query = supabase.from('orders').select('*', { count: 'exact' });
+
+    if (from) query = query.gte('order_date', from);
+    if (to) query = query.lte('order_date', to);
+    if (search) {
+      query = query.or(
+        `order_id.ilike.%${search}%,client_name.ilike.%${search}%,project_title.ilike.%${search}%,client_order_no.ilike.%${search}%`
+      );
+    }
+
+    query = query.order('order_date', { ascending: false }).order('order_id', { ascending: false });
+    query = query.range(offset, offset + pageSize - 1);
+
+    const { data: orders, count, error } = await query;
+    if (error) throw new Error(`[getOrders] ${error.message}`);
+
+    const orderList = (orders || []) as Order[];
+    const orderIds = orderList.map(o => o.order_id);
+
+    // KPI計算用バッチ取得
+    let procurements: Procurement[] = [];
+    let workerLogs: WorkerLog[] = [];
+    if (orderIds.length > 0) {
+      const [procRes, wlRes] = await Promise.all([
+        supabase.from('procurements').select('*').in('order_id', orderIds),
+        supabase.from('workers_log').select('*').in('order_id', orderIds)
+      ]);
+      procurements = (procRes.data || []) as Procurement[];
+      workerLogs = (wlRes.data || []) as WorkerLog[];
+    }
+
+    const ordersWithKPI = orderList.map(order => {
+      const orderProcs = procurements.filter(p => p.order_id === order.order_id);
+      const orderWLogs = workerLogs.filter(w => w.order_id === order.order_id);
+      return {
+        ...order,
+        kpi: calcOrderKPIFromData(order, orderProcs, orderWLogs)
+      };
+    });
+
+    return { orders: ordersWithKPI, total: count ?? 0 };
   }
 
   async getOrderById(orderId: string): Promise<{
@@ -170,129 +210,83 @@ export class ProductionDAO {
     procurements: Procurement[];
     workerLogs: WorkerLog[];
   }> {
-    const order = this.db.prepare(`
-      SELECT * FROM orders WHERE order_id = ?
-    `).get(orderId) as Order | undefined;
+    const [orderRes, procRes, wlRes] = await Promise.all([
+      supabase.from('orders').select('*').eq('order_id', orderId).maybeSingle(),
+      supabase.from('procurements').select('*').eq('order_id', orderId).order('created_at', { ascending: true }),
+      supabase.from('workers_log').select('*').eq('order_id', orderId).order('date', { ascending: false })
+    ]);
 
-    if (!order) {
-      return {
-        order: null,
-        kpi: null,
-        procurements: [],
-        workerLogs: []
-      };
-    }
+    if (orderRes.error) throw new Error(`[getOrderById] ${orderRes.error.message}`);
+    const order = orderRes.data as Order | null;
+    if (!order) return { order: null, kpi: null, procurements: [], workerLogs: [] };
 
-    const kpi = this.metricsService.calculateOrderKPI(orderId);
-    
-    const procurements = this.db.prepare(`
-      SELECT * FROM procurements WHERE order_id = ? ORDER BY created_at ASC
-    `).all(orderId) as Procurement[];
+    const procurements = (procRes.data || []) as Procurement[];
+    const workerLogs = (wlRes.data || []) as WorkerLog[];
+    const kpi = calcOrderKPIFromData(order, procurements, workerLogs);
 
-    const workerLogs = this.db.prepare(`
-      SELECT * FROM workers_log WHERE order_id = ? ORDER BY date DESC
-    `).all(orderId) as WorkerLog[];
-
-    return {
-      order,
-      kpi,
-      procurements,
-      workerLogs
-    };
+    return { order, kpi, procurements, workerLogs };
   }
 
   async updateOrder(orderId: string, updates: Partial<InsertOrder>): Promise<boolean> {
     const allowedColumns = [
-      // 新受注管理項目
       'order_date', 'client_name', 'manager', 'client_order_no', 'project_title',
       'is_delivered', 'has_shipping_fee', 'is_amount_confirmed', 'is_invoiced',
       'due_date', 'delivery_date', 'confirmed_date',
       'estimated_amount', 'invoiced_amount', 'invoice_month',
       'subcontractor', 'processing_hours', 'note',
-      // レガシー項目
       'product_name', 'qty', 'start_date', 'sales', 'estimated_material_cost',
       'std_time_per_unit', 'status', 'customer_name', 'customer_code',
       'customer_zip', 'customer_address1', 'customer_address2'
     ];
-    
-    // Helper to convert boolean to SQLite (true→1, false→0, null/undefined→null)
-    const toBoolInt = (val: boolean | null | undefined): number | null => {
-      if (val === null || val === undefined) return null;
-      return val ? 1 : 0;
-    };
 
-    // Filter to only allowed columns and convert boolean values
-    const filteredUpdates: Record<string, any> = {};
+    const filtered: Record<string, any> = {};
     for (const key of Object.keys(updates)) {
       if (allowedColumns.includes(key)) {
-        const value = updates[key as keyof InsertOrder];
-        // Convert boolean fields to integer (0/1/null) for SQLite, preserving null
-        if (key === 'is_delivered' || key === 'has_shipping_fee' || 
-            key === 'is_amount_confirmed' || key === 'is_invoiced') {
-          filteredUpdates[key] = toBoolInt(value as boolean | null | undefined);
-        } else {
-          filteredUpdates[key] = value;
-        }
+        filtered[key] = (updates as any)[key];
       }
     }
-    
-    if (Object.keys(filteredUpdates).length === 0) {
-      return false; // No valid updates
-    }
-    
-    const setClause = Object.keys(filteredUpdates).map(key => `${key} = ?`).join(', ');
-    const values = Object.values(filteredUpdates);
-    
-    const stmt = this.db.prepare(`
-      UPDATE orders 
-      SET ${setClause}, updated_at = ?
-      WHERE order_id = ?
-    `);
-    
-    const result = stmt.run(...values, new Date().toISOString(), orderId);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+
+    filtered.updated_at = new Date().toISOString();
+    const { error } = await supabase.from('orders').update(filtered).eq('order_id', orderId);
+    if (error) throw new Error(`[updateOrder] ${error.message}`);
+    return true;
   }
 
   async deleteOrder(orderId: string): Promise<boolean> {
-    const stmt = this.db.prepare(`DELETE FROM orders WHERE order_id = ?`);
-    const result = stmt.run(orderId);
-    return result.changes > 0;
+    const { error } = await supabase.from('orders').delete().eq('order_id', orderId);
+    if (error) throw new Error(`[deleteOrder] ${error.message}`);
+    return true;
   }
 
   // ========== Procurements CRUD ==========
-  
+
   async createProcurement(procData: InsertProcurement): Promise<number> {
     const now = new Date().toISOString();
-    const stmt = this.db.prepare(`
-      INSERT INTO procurements (
-        order_id, kind, item_name, qty, unit, eta, status, vendor, 
-        unit_price, received_at, std_time_per_unit, act_time_per_unit, 
-        worker, completed_at, vendor_id, total_amount, is_approved, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(
-      procData.order_id,
-      procData.kind,
-      procData.item_name,
-      procData.qty,
-      procData.unit,
-      procData.eta,
-      procData.status,
-      procData.vendor,
-      procData.unit_price,
-      procData.received_at,
-      procData.std_time_per_unit,
-      procData.act_time_per_unit,
-      procData.worker,
-      procData.completed_at,
-      procData.vendor_id ?? null,
-      procData.total_amount ?? null,
-      procData.is_approved ? 1 : 0,
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    const row = {
+      order_id: procData.order_id,
+      kind: procData.kind,
+      item_name: procData.item_name,
+      qty: procData.qty,
+      unit: procData.unit,
+      eta: procData.eta,
+      status: procData.status,
+      vendor: procData.vendor,
+      unit_price: procData.unit_price,
+      received_at: procData.received_at,
+      std_time_per_unit: procData.std_time_per_unit,
+      act_time_per_unit: procData.act_time_per_unit,
+      worker: procData.worker,
+      completed_at: procData.completed_at,
+      vendor_id: procData.vendor_id ?? null,
+      total_amount: procData.total_amount ?? null,
+      is_approved: procData.is_approved ?? false,
+      created_at: now
+    };
+
+    const { data, error } = await supabase.from('procurements').insert(row).select('id').single();
+    if (error) throw new Error(`[createProcurement] ${error.message}`);
+    return (data as any).id as number;
   }
 
   async getProcurements(options: {
@@ -303,113 +297,92 @@ export class ProductionDAO {
     pageSize?: number;
   } = {}): Promise<{ procurements: Procurement[], total: number }> {
     const { orderId, kind, status, page = 1, pageSize = 50 } = options;
-    
-    let whereConditions: string[] = [];
-    let whereConditionsWithPrefix: string[] = [];
-    let params: any[] = [];
-    
-    if (orderId) {
-      whereConditions.push('order_id = ?');
-      whereConditionsWithPrefix.push('p.order_id = ?');
-      params.push(orderId);
-    }
-    
-    if (kind) {
-      whereConditions.push('kind = ?');
-      whereConditionsWithPrefix.push('p.kind = ?');
-      params.push(kind);
-    }
-    
-    if (status) {
-      whereConditions.push('status = ?');
-      whereConditionsWithPrefix.push('p.status = ?');
-      params.push(status);
-    }
-
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-    const whereClauseWithPrefix = whereConditionsWithPrefix.length > 0 ? `WHERE ${whereConditionsWithPrefix.join(' AND ')}` : '';
-    
-    // Get total count
-    const totalResult = this.db.prepare(`
-      SELECT COUNT(*) as count FROM procurements ${whereClause}
-    `).get(params) as { count: number };
-    
-    // Get paginated results
     const offset = (page - 1) * pageSize;
-    const procurements = this.db.prepare(`
-      SELECT p.*, o.product_name 
-      FROM procurements p
-      JOIN orders o ON p.order_id = o.order_id
-      ${whereClauseWithPrefix}
-      ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
-    `).all([...params, pageSize, offset]) as (Procurement & { product_name: string })[];
 
-    return {
-      procurements,
-      total: totalResult.count
-    };
+    let countQuery = supabase.from('procurements').select('*', { count: 'exact', head: true });
+    let dataQuery = supabase.from('procurements').select('*');
+
+    if (orderId) {
+      countQuery = countQuery.eq('order_id', orderId);
+      dataQuery = dataQuery.eq('order_id', orderId);
+    }
+    if (kind) {
+      countQuery = countQuery.eq('kind', kind);
+      dataQuery = dataQuery.eq('kind', kind);
+    }
+    if (status) {
+      countQuery = countQuery.eq('status', status);
+      dataQuery = dataQuery.eq('status', status);
+    }
+
+    dataQuery = dataQuery.order('created_at', { ascending: false }).range(offset, offset + pageSize - 1);
+
+    const [{ count, error: ce }, { data, error: de }] = await Promise.all([countQuery, dataQuery]);
+    if (ce) throw new Error(`[getProcurements count] ${ce.message}`);
+    if (de) throw new Error(`[getProcurements data] ${de.message}`);
+
+    const procs = (data || []) as Procurement[];
+
+    // product_name取得（JOINの代わり）
+    const orderIds = [...new Set(procs.map(p => p.order_id).filter(Boolean) as string[])];
+    let orderNameMap = new Map<string, string>();
+    if (orderIds.length > 0) {
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('order_id,product_name,project_title')
+        .in('order_id', orderIds);
+      for (const o of orders || []) {
+        orderNameMap.set(o.order_id, o.product_name || o.project_title || '');
+      }
+    }
+
+    const procurements = procs.map(p => ({
+      ...p,
+      product_name: p.order_id ? orderNameMap.get(p.order_id) || '' : ''
+    }));
+
+    return { procurements, total: count ?? 0 };
   }
 
   async updateProcurement(procId: number, updates: Partial<InsertProcurement>): Promise<boolean> {
-    const allowedColumns = ['kind', 'item_name', 'qty', 'unit', 'eta', 'status', 'vendor', 'unit_price', 'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at', 'vendor_id', 'total_amount', 'is_approved'];
-    
-    // Filter to only allowed columns
-    const filteredUpdates: Record<string, any> = {};
+    const allowedColumns = ['kind', 'item_name', 'qty', 'unit', 'eta', 'status', 'vendor', 'unit_price',
+      'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at',
+      'vendor_id', 'total_amount', 'is_approved'];
+
+    const filtered: Record<string, any> = {};
     for (const key of Object.keys(updates)) {
       if (allowedColumns.includes(key)) {
-        let value = updates[key as keyof InsertProcurement];
-        // Convert is_approved boolean to 0/1 for SQLite
-        if (key === 'is_approved') {
-          value = value ? 1 : 0;
-        }
-        filteredUpdates[key] = value;
+        filtered[key] = (updates as any)[key];
       }
     }
-    
-    if (Object.keys(filteredUpdates).length === 0) {
-      return false; // No valid updates
-    }
-    
-    const setClause = Object.keys(filteredUpdates).map(key => `${key} = ?`).join(', ');
-    const values = Object.values(filteredUpdates);
-    
-    const stmt = this.db.prepare(`
-      UPDATE procurements 
-      SET ${setClause}
-      WHERE id = ?
-    `);
-    
-    const result = stmt.run(...values, procId);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+
+    const { error } = await supabase.from('procurements').update(filtered).eq('id', procId);
+    if (error) throw new Error(`[updateProcurement] ${error.message}`);
+    return true;
   }
 
   async deleteProcurement(procId: number): Promise<boolean> {
-    const stmt = this.db.prepare(`DELETE FROM procurements WHERE id = ?`);
-    const result = stmt.run(procId);
-    return result.changes > 0;
+    const { error } = await supabase.from('procurements').delete().eq('id', procId);
+    if (error) throw new Error(`[deleteProcurement] ${error.message}`);
+    return true;
   }
 
   // ========== Worker Logs CRUD ==========
-  
+
   async createWorkerLog(logData: InsertWorkerLog): Promise<number> {
     const now = new Date().toISOString();
-    const stmt = this.db.prepare(`
-      INSERT INTO workers_log (
-        order_id, qty, act_time_per_unit, worker, date, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(
-      logData.order_id,
-      logData.qty,
-      logData.act_time_per_unit,
-      logData.worker,
-      logData.date,
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    const row = {
+      order_id: logData.order_id,
+      qty: logData.qty,
+      act_time_per_unit: logData.act_time_per_unit,
+      worker: logData.worker,
+      date: logData.date,
+      created_at: now
+    };
+    const { data, error } = await supabase.from('workers_log').insert(row).select('id').single();
+    if (error) throw new Error(`[createWorkerLog] ${error.message}`);
+    return (data as any).id as number;
   }
 
   async getWorkerLogs(options: {
@@ -421,145 +394,268 @@ export class ProductionDAO {
     pageSize?: number;
   } = {}): Promise<{ logs: WorkerLog[], total: number }> {
     const { orderId, worker, from, to, page = 1, pageSize = 50 } = options;
-    
-    let whereConditions: string[] = [];
-    let params: any[] = [];
-    
-    if (orderId) {
-      whereConditions.push('order_id = ?');
-      params.push(orderId);
-    }
-    
-    if (worker) {
-      whereConditions.push('worker = ?');
-      params.push(worker);
-    }
-    
-    if (from) {
-      whereConditions.push('date >= ?');
-      params.push(from);
-    }
-    
-    if (to) {
-      whereConditions.push('date <= ?');
-      params.push(to);
-    }
-
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-    
-    // Get total count
-    const totalResult = this.db.prepare(`
-      SELECT COUNT(*) as count FROM workers_log ${whereClause}
-    `).get(params) as { count: number };
-    
-    // Get paginated results
     const offset = (page - 1) * pageSize;
-    const logs = this.db.prepare(`
-      SELECT w.*, o.product_name 
-      FROM workers_log w
-      JOIN orders o ON w.order_id = o.order_id
-      ${whereClause}
-      ORDER BY w.date DESC
-      LIMIT ? OFFSET ?
-    `).all([...params, pageSize, offset]) as (WorkerLog & { product_name: string })[];
 
-    return {
-      logs,
-      total: totalResult.count
-    };
+    let countQuery = supabase.from('workers_log').select('*', { count: 'exact', head: true });
+    let dataQuery = supabase.from('workers_log').select('*');
+
+    if (orderId) { countQuery = countQuery.eq('order_id', orderId); dataQuery = dataQuery.eq('order_id', orderId); }
+    if (worker) { countQuery = countQuery.eq('worker', worker); dataQuery = dataQuery.eq('worker', worker); }
+    if (from) { countQuery = countQuery.gte('date', from); dataQuery = dataQuery.gte('date', from); }
+    if (to) { countQuery = countQuery.lte('date', to); dataQuery = dataQuery.lte('date', to); }
+
+    dataQuery = dataQuery.order('date', { ascending: false }).range(offset, offset + pageSize - 1);
+
+    const [{ count, error: ce }, { data, error: de }] = await Promise.all([countQuery, dataQuery]);
+    if (ce) throw new Error(`[getWorkerLogs count] ${ce.message}`);
+    if (de) throw new Error(`[getWorkerLogs data] ${de.message}`);
+
+    const logs = (data || []) as WorkerLog[];
+
+    // product_name取得
+    const orderIds = [...new Set(logs.map(l => l.order_id).filter(Boolean) as string[])];
+    let orderNameMap = new Map<string, string>();
+    if (orderIds.length > 0) {
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('order_id,product_name')
+        .in('order_id', orderIds);
+      for (const o of orders || []) {
+        orderNameMap.set(o.order_id, o.product_name || '');
+      }
+    }
+
+    const logsWithName = logs.map(l => ({
+      ...l,
+      product_name: l.order_id ? orderNameMap.get(l.order_id) || '' : ''
+    }));
+
+    return { logs: logsWithName, total: count ?? 0 };
   }
 
-  // Worker logs don't have an update method in the original, only create and delete
-  // This is appropriate since work logs should be immutable once created
-  
   async deleteWorkerLog(logId: number): Promise<boolean> {
-    const stmt = this.db.prepare(`DELETE FROM workers_log WHERE id = ?`);
-    const result = stmt.run(logId);
-    return result.changes > 0;
+    const { error } = await supabase.from('workers_log').delete().eq('id', logId);
+    if (error) throw new Error(`[deleteWorkerLog] ${error.message}`);
+    return true;
   }
 
   // ========== KPI & Analytics ==========
-  
+
   async getDashboardKPI(options: { from?: string; to?: string } = {}): Promise<DashboardKPI> {
-    return this.metricsService.calculateDashboardKPI(options);
+    const { from, to } = options;
+
+    let orderQuery = supabase.from('orders').select('*');
+    if (from) orderQuery = orderQuery.gte('due_date', from);
+    if (to) orderQuery = orderQuery.lte('due_date', to);
+
+    const { data: orders, error: oe } = await orderQuery;
+    if (oe) throw new Error(`[getDashboardKPI] ${oe.message}`);
+
+    const orderList = (orders || []) as Order[];
+    const orderIds = orderList.map(o => o.order_id);
+
+    if (orderIds.length === 0) {
+      return {
+        total_sales: 0, total_gross_profit: 0, total_std_hours: 0,
+        total_actual_hours: 0, avg_variance_pct: 0,
+        purchase_completion_rate: 0, manufacture_completion_rate: 0
+      };
+    }
+
+    const [procRes, wlRes] = await Promise.all([
+      supabase.from('procurements').select('*').in('order_id', orderIds),
+      supabase.from('workers_log').select('*').in('order_id', orderIds)
+    ]);
+
+    const procurements = (procRes.data || []) as Procurement[];
+    const workerLogs = (wlRes.data || []) as WorkerLog[];
+
+    let totalSales = 0, totalGrossProfit = 0, totalStdHours = 0;
+    let totalActualHours = 0, varianceSum = 0, validVarianceCount = 0;
+
+    for (const order of orderList) {
+      const orderProcs = procurements.filter(p => p.order_id === order.order_id);
+      const orderWLogs = workerLogs.filter(w => w.order_id === order.order_id);
+      const kpi = calcOrderKPIFromData(order, orderProcs, orderWLogs);
+      totalSales += kpi.sales;
+      totalGrossProfit += kpi.gross_profit;
+      totalStdHours += kpi.qty * kpi.std_time_per_unit;
+      totalActualHours += kpi.qty * kpi.actual_time_per_unit;
+      if (kpi.variance_pct !== 0) { varianceSum += kpi.variance_pct; validVarianceCount++; }
+    }
+
+    const avgVariancePct = validVarianceCount > 0 ? varianceSum / validVarianceCount : 0;
+
+    const purchases = procurements.filter(p => p.kind === 'purchase');
+    const manufactures = procurements.filter(p => p.kind === 'manufacture');
+    const purchaseCompletionRate = purchases.length > 0
+      ? (purchases.filter(p => p.status === 'received').length / purchases.length) * 100 : 0;
+    const manufactureCompletionRate = manufactures.length > 0
+      ? (manufactures.filter(p => p.status === 'done').length / manufactures.length) * 100 : 0;
+
+    return {
+      total_sales: totalSales, total_gross_profit: totalGrossProfit,
+      total_std_hours: totalStdHours, total_actual_hours: totalActualHours,
+      avg_variance_pct: avgVariancePct,
+      purchase_completion_rate: purchaseCompletionRate,
+      manufacture_completion_rate: manufactureCompletionRate
+    };
   }
 
   async getCalendarEvents(options: { from?: string; to?: string } = {}): Promise<CalendarEvent[]> {
-    return this.metricsService.getCalendarEvents(options);
+    const { from, to } = options;
+    const events: CalendarEvent[] = [];
+
+    let orderQuery = supabase.from('orders').select('order_id,product_name,due_date');
+    if (from) orderQuery = orderQuery.gte('due_date', from);
+    if (to) orderQuery = orderQuery.lte('due_date', to);
+
+    const { data: orders } = await orderQuery;
+    const orderIds = ((orders || []) as any[]).map((o: any) => o.order_id);
+
+    for (const order of (orders || []) as any[]) {
+      if (!order.due_date) continue;
+      const isOverdue = new Date(order.due_date) < new Date();
+      events.push({
+        id: `order-${order.order_id}`,
+        title: `納期: ${order.product_name ?? ''}`,
+        date: order.due_date,
+        type: 'due_date',
+        status: isOverdue ? 'overdue' : 'pending',
+        order_id: order.order_id
+      });
+    }
+
+    if (orderIds.length > 0) {
+      const { data: procs } = await supabase
+        .from('procurements')
+        .select('id,order_id,kind,item_name,eta,status,received_at,completed_at')
+        .in('order_id', orderIds);
+
+      for (const proc of (procs || []) as any[]) {
+        if (proc.eta) {
+          events.push({
+            id: `proc-eta-${proc.id}`,
+            title: `${proc.kind === 'purchase' ? '入荷予定' : '製造予定'}: ${proc.item_name || ''}`,
+            date: proc.eta,
+            type: 'eta',
+            status: proc.status === 'received' || proc.status === 'done' ? 'completed' : 'pending',
+            order_id: proc.order_id,
+            procurement_id: proc.id
+          });
+        }
+        if (proc.received_at) {
+          events.push({
+            id: `proc-received-${proc.id}`,
+            title: `入荷完了: ${proc.item_name || ''}`,
+            date: proc.received_at,
+            type: 'received',
+            status: 'completed',
+            order_id: proc.order_id,
+            procurement_id: proc.id
+          });
+        }
+        if (proc.completed_at) {
+          events.push({
+            id: `proc-completed-${proc.id}`,
+            title: `製造完了: ${proc.item_name || ''}`,
+            date: proc.completed_at,
+            type: 'completed',
+            status: 'completed',
+            order_id: proc.order_id,
+            procurement_id: proc.id
+          });
+        }
+      }
+    }
+
+    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }
 
   async getCSVData(options: { from?: string; to?: string } = {}): Promise<OrderKPI[]> {
-    return this.metricsService.getCSVData(options);
+    const { from, to } = options;
+
+    let orderQuery = supabase.from('orders').select('*');
+    if (from) orderQuery = orderQuery.gte('due_date', from);
+    if (to) orderQuery = orderQuery.lte('due_date', to);
+    orderQuery = orderQuery.order('due_date', { ascending: true });
+
+    const { data: orders } = await orderQuery;
+    const orderList = (orders || []) as Order[];
+    const orderIds = orderList.map(o => o.order_id);
+    if (orderIds.length === 0) return [];
+
+    const [procRes, wlRes] = await Promise.all([
+      supabase.from('procurements').select('*').in('order_id', orderIds),
+      supabase.from('workers_log').select('*').in('order_id', orderIds)
+    ]);
+
+    const procurements = (procRes.data || []) as Procurement[];
+    const workerLogs = (wlRes.data || []) as WorkerLog[];
+
+    return orderList.map(order => {
+      const orderProcs = procurements.filter(p => p.order_id === order.order_id);
+      const orderWLogs = workerLogs.filter(w => w.order_id === order.order_id);
+      return calcOrderKPIFromData(order, orderProcs, orderWLogs);
+    });
   }
 
   // ========== Utility Methods ==========
-  
+
   async getOrdersForDropdown(): Promise<{ order_id: string; client_name: string | null; project_title: string | null }[]> {
-    return this.db.prepare(`
-      SELECT order_id, client_name, project_title 
-      FROM orders 
-      ORDER BY order_id ASC
-    `).all() as { order_id: string; client_name: string | null; project_title: string | null }[];
+    const { data, error } = await supabase
+      .from('orders')
+      .select('order_id,client_name,project_title')
+      .order('order_id', { ascending: true });
+    if (error) throw new Error(`[getOrdersForDropdown] ${error.message}`);
+    return (data || []) as any[];
   }
 
   async getWorkers(): Promise<{ worker: string }[]> {
-    return this.db.prepare(`
-      SELECT DISTINCT worker 
-      FROM workers_log 
-      ORDER BY worker ASC
-    `).all() as { worker: string }[];
+    const { data, error } = await supabase
+      .from('workers_log')
+      .select('worker')
+      .not('worker', 'is', null);
+    if (error) throw new Error(`[getWorkers] ${error.message}`);
+    const unique = [...new Set((data || []).map((r: any) => r.worker).filter(Boolean))];
+    return unique.sort().map(w => ({ worker: w }));
   }
 
   async getOrdersForGantt(): Promise<{
-    id: string;
-    name: string;
-    start: string | null;
-    end: string | null;
-    progress: number;
-    type: 'task' | 'procurement' | 'order';
+    id: string; name: string; start: string | null; end: string | null;
+    progress: number; type: 'task' | 'procurement' | 'order';
   }[]> {
-    const results: {
-      id: string;
-      name: string;
-      start: string | null;
-      end: string | null;
-      progress: number;
-      type: 'task' | 'procurement' | 'order';
-    }[] = [];
+    const results: any[] = [];
 
-    const tasks = this.db.prepare(`
-      SELECT 
-        t.id,
-        t.task_name,
-        t.planned_start,
-        t.planned_end,
-        t.status,
-        t.order_id,
-        COALESCE(o.project_title, o.product_name, '') as order_name
-      FROM tasks t
-      LEFT JOIN orders o ON t.order_id = o.order_id
-      WHERE t.planned_start IS NOT NULL AND t.planned_end IS NOT NULL
-      ORDER BY t.planned_start ASC
-    `).all() as {
-      id: number;
-      task_name: string;
-      planned_start: string;
-      planned_end: string;
-      status: string;
-      order_id: string;
-      order_name: string;
-    }[];
+    const [tasksRes, procsRes] = await Promise.all([
+      supabase.from('tasks').select('id,task_name,planned_start,planned_end,status,order_id')
+        .not('planned_start', 'is', null).not('planned_end', 'is', null)
+        .order('planned_start', { ascending: true }),
+      supabase.from('procurements').select('id,item_name,order_id,kind,eta,received_at,completed_at')
+        .or('eta.not.is.null,completed_at.not.is.null')
+        .order('eta', { ascending: true, nullsFirst: false })
+    ]);
+
+    const tasks = (tasksRes.data || []) as any[];
+    const orderIds = [...new Set([
+      ...tasks.map((t: any) => t.order_id),
+      ...(procsRes.data || []).map((p: any) => p.order_id)
+    ].filter(Boolean) as string[])];
+
+    let orderNameMap = new Map<string, string>();
+    if (orderIds.length > 0) {
+      const { data: orders } = await supabase
+        .from('orders').select('order_id,project_title,product_name').in('order_id', orderIds);
+      for (const o of orders || []) {
+        orderNameMap.set(o.order_id, o.project_title || o.product_name || '');
+      }
+    }
 
     for (const task of tasks) {
-      const progress = task.status === 'completed' ? 100 : 
-                       task.status === 'in_progress' ? 50 : 0;
-      const displayName = task.order_name 
-        ? `[${task.order_id}] ${task.task_name}` 
-        : `[${task.order_id}] ${task.task_name}`;
-      
+      const progress = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0;
       results.push({
         id: `task-${task.id}`,
-        name: displayName,
+        name: `[${task.order_id}] ${task.task_name}`,
         start: task.planned_start,
         end: task.planned_end,
         progress,
@@ -567,44 +663,15 @@ export class ProductionDAO {
       });
     }
 
-    const procurements = this.db.prepare(`
-      SELECT 
-        p.id,
-        p.item_name,
-        p.order_id,
-        p.kind,
-        p.eta,
-        p.received_at,
-        p.completed_at,
-        COALESCE(o.project_title, o.product_name, '') as order_name
-      FROM procurements p
-      LEFT JOIN orders o ON p.order_id = o.order_id
-      WHERE p.eta IS NOT NULL OR p.completed_at IS NOT NULL
-      ORDER BY COALESCE(p.eta, p.completed_at) ASC
-    `).all() as {
-      id: number;
-      item_name: string;
-      order_id: string | null;
-      kind: string;
-      eta: string | null;
-      received_at: string | null;
-      completed_at: string | null;
-      order_name: string;
-    }[];
-
-    for (const proc of procurements) {
+    for (const proc of (procsRes.data || []) as any[]) {
       const endDate = proc.eta || proc.completed_at;
       if (!endDate) continue;
-      
       const startDateObj = new Date(endDate);
       startDateObj.setDate(startDateObj.getDate() - 7);
       const startDate = startDateObj.toISOString().split('T')[0];
-      
       const isCompleted = proc.received_at !== null || proc.completed_at !== null;
-      const displayName = proc.order_id 
-        ? `[${proc.order_id}] ${proc.item_name} (調達)` 
-        : `${proc.item_name} (調達)`;
-      
+      const displayName = proc.order_id
+        ? `[${proc.order_id}] ${proc.item_name} (調達)` : `${proc.item_name} (調達)`;
       results.push({
         id: `proc-${proc.id}`,
         name: displayName,
@@ -615,112 +682,67 @@ export class ProductionDAO {
       });
     }
 
-    results.sort((a, b) => {
-      const aStart = a.start || '';
-      const bStart = b.start || '';
-      return aStart.localeCompare(bStart);
-    });
-
+    results.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
     return results;
   }
 
   async getGanttHierarchy(): Promise<{
-    orderId: string;
-    projectName: string;
-    tasks: {
-      id: string;
-      taskName: string;
-      startDate: string;
-      endDate: string;
-      progress: number;
-      type: 'task' | 'procurement';
-    }[];
+    orderId: string; projectName: string;
+    tasks: { id: string; taskName: string; startDate: string; endDate: string; progress: number; type: 'task' | 'procurement' }[];
   }[]> {
-    const projectsMap = new Map<string, {
-      orderId: string;
-      projectName: string;
-      tasks: {
-        id: string;
-        taskName: string;
-        startDate: string;
-        endDate: string;
-        progress: number;
-        type: 'task' | 'procurement';
-      }[];
-    }>();
+    const projectsMap = new Map<string, any>();
 
-    const tasks = this.db.prepare(`
-      SELECT 
-        t.id,
-        t.task_name,
-        t.planned_start,
-        t.planned_end,
-        t.status,
-        t.order_id,
-        t.std_time_per_unit,
-        t.qty,
-        COALESCE(o.project_title, o.product_name, o.order_id) as project_name
-      FROM tasks t
-      LEFT JOIN orders o ON t.order_id = o.order_id
-      WHERE t.planned_start IS NOT NULL AND t.planned_end IS NOT NULL
-      ORDER BY t.order_id, t.planned_start ASC
-    `).all() as {
-      id: number;
-      task_name: string;
-      planned_start: string;
-      planned_end: string;
-      status: string;
-      order_id: string;
-      std_time_per_unit: number | null;
-      qty: number | null;
-      project_name: string;
-    }[];
+    const [tasksRes, wlTaskRes, wlOrderRes, procsRes] = await Promise.all([
+      supabase.from('tasks').select('*')
+        .not('planned_start', 'is', null).not('planned_end', 'is', null)
+        .order('order_id').order('planned_start', { ascending: true }),
+      supabase.from('work_logs').select('order_id,task_name,duration_hours')
+        .not('order_id', 'is', null).not('task_name', 'is', null),
+      supabase.from('workers_log').select('order_id,qty,act_time_per_unit')
+        .not('order_id', 'is', null),
+      supabase.from('procurements')
+        .select('id,item_name,order_id,eta,received_at,completed_at')
+        .or('eta.not.is.null,completed_at.not.is.null')
+        .order('order_id').order('eta', { ascending: true, nullsFirst: false })
+    ]);
 
+    const tasks = (tasksRes.data || []) as any[];
+    const allOrderIds = [...new Set([
+      ...tasks.map((t: any) => t.order_id),
+      ...(procsRes.data || []).map((p: any) => p.order_id)
+    ].filter(Boolean) as string[])];
+
+    let orderNameMap = new Map<string, string>();
+    if (allOrderIds.length > 0) {
+      const { data: orders } = await supabase
+        .from('orders').select('order_id,project_title,product_name').in('order_id', allOrderIds);
+      for (const o of orders || []) {
+        orderNameMap.set(o.order_id, o.project_title || o.product_name || o.order_id);
+      }
+    }
+
+    // task別作業実績集計
     const workLogsByTask = new Map<string, number>();
     const ordersWithTaskLogs = new Set<string>();
-    const workLogsByTaskResult = this.db.prepare(`
-      SELECT 
-        order_id,
-        task_name,
-        SUM(COALESCE(duration_hours, 0)) as total_hours
-      FROM work_logs
-      WHERE order_id IS NOT NULL AND task_name IS NOT NULL AND task_name != ''
-      GROUP BY order_id, task_name
-    `).all() as {
-      order_id: string;
-      task_name: string;
-      total_hours: number;
-    }[];
-    
-    for (const log of workLogsByTaskResult) {
+    for (const log of (wlTaskRes.data || []) as any[]) {
+      if (!log.task_name || !log.task_name.trim()) continue;
       const key = `${log.order_id}|${log.task_name}`;
-      workLogsByTask.set(key, log.total_hours);
+      workLogsByTask.set(key, (workLogsByTask.get(key) || 0) + (log.duration_hours || 0));
       ordersWithTaskLogs.add(log.order_id);
     }
 
+    // 受注別実績時間（workers_log）
     const actualHoursByOrder = new Map<string, number>();
-    const workersLogTotals = this.db.prepare(`
-      SELECT 
-        order_id,
-        SUM(COALESCE(qty, 0) * COALESCE(act_time_per_unit, 0)) as total_hours
-      FROM workers_log
-      WHERE order_id IS NOT NULL
-      GROUP BY order_id
-    `).all() as {
-      order_id: string;
-      total_hours: number;
-    }[];
-    
-    for (const log of workersLogTotals) {
-      actualHoursByOrder.set(log.order_id, log.total_hours);
+    for (const log of (wlOrderRes.data || []) as any[]) {
+      const hours = (log.qty || 0) * (log.act_time_per_unit || 0);
+      actualHoursByOrder.set(log.order_id, (actualHoursByOrder.get(log.order_id) || 0) + hours);
     }
 
+    // 受注別計画時間
     const orderPlannedHours = new Map<string, number>();
-
     for (const task of tasks) {
-      const orderId = task.order_id || 'unknown';
       const plannedHours = (task.std_time_per_unit || 0) * (task.qty || 0);
-      orderPlannedHours.set(orderId, (orderPlannedHours.get(orderId) || 0) + plannedHours);
+      orderPlannedHours.set(task.order_id, (orderPlannedHours.get(task.order_id) || 0) + plannedHours);
     }
 
     for (const task of tasks) {
@@ -728,29 +750,25 @@ export class ProductionDAO {
       if (!projectsMap.has(orderId)) {
         projectsMap.set(orderId, {
           orderId,
-          projectName: task.project_name || orderId,
+          projectName: orderNameMap.get(orderId) || orderId,
           tasks: []
         });
       }
-      
+
       const taskPlannedHours = (task.std_time_per_unit || 0) * (task.qty || 0);
-      
       let progress = 0;
       if (task.status === 'completed') {
         progress = 100;
       } else {
         const taskKey = `${orderId}|${task.task_name}`;
         const taskSpecificHours = workLogsByTask.get(taskKey);
-        
         if (taskSpecificHours !== undefined && taskPlannedHours > 0) {
           progress = Math.min(100, Math.round((taskSpecificHours / taskPlannedHours) * 100));
         } else if (!ordersWithTaskLogs.has(orderId)) {
           const orderActualHours = actualHoursByOrder.get(orderId) || 0;
           const totalOrderPlanned = orderPlannedHours.get(orderId) || 0;
-          
           if (totalOrderPlanned > 0 && orderActualHours > 0) {
-            const orderProgress = Math.min(100, Math.round((orderActualHours / totalOrderPlanned) * 100));
-            progress = orderProgress;
+            progress = Math.min(100, Math.round((orderActualHours / totalOrderPlanned) * 100));
           } else if (task.status === 'in_progress') {
             progress = 50;
           }
@@ -758,7 +776,7 @@ export class ProductionDAO {
           progress = 50;
         }
       }
-      
+
       projectsMap.get(orderId)!.tasks.push({
         id: `task-${task.id}`,
         taskName: task.task_name,
@@ -769,30 +787,7 @@ export class ProductionDAO {
       });
     }
 
-    const procurements = this.db.prepare(`
-      SELECT 
-        p.id,
-        p.item_name,
-        p.order_id,
-        p.eta,
-        p.received_at,
-        p.completed_at,
-        COALESCE(o.project_title, o.product_name, p.order_id) as project_name
-      FROM procurements p
-      LEFT JOIN orders o ON p.order_id = o.order_id
-      WHERE p.eta IS NOT NULL OR p.completed_at IS NOT NULL
-      ORDER BY p.order_id, COALESCE(p.eta, p.completed_at) ASC
-    `).all() as {
-      id: number;
-      item_name: string;
-      order_id: string | null;
-      eta: string | null;
-      received_at: string | null;
-      completed_at: string | null;
-      project_name: string;
-    }[];
-
-    for (const proc of procurements) {
+    for (const proc of (procsRes.data || []) as any[]) {
       const orderId = proc.order_id || 'unknown';
       const endDate = proc.eta || proc.completed_at;
       if (!endDate) continue;
@@ -800,7 +795,7 @@ export class ProductionDAO {
       if (!projectsMap.has(orderId)) {
         projectsMap.set(orderId, {
           orderId,
-          projectName: proc.project_name || orderId,
+          projectName: orderNameMap.get(orderId) || orderId,
           tasks: []
         });
       }
@@ -821,140 +816,86 @@ export class ProductionDAO {
     }
 
     return Array.from(projectsMap.values()).sort((a, b) => {
-      const aMinStart = a.tasks.length > 0 ? Math.min(...a.tasks.map(t => new Date(t.startDate).getTime())) : Infinity;
-      const bMinStart = b.tasks.length > 0 ? Math.min(...b.tasks.map(t => new Date(t.startDate).getTime())) : Infinity;
-      return aMinStart - bMinStart;
+      const aMin = a.tasks.length > 0 ? Math.min(...a.tasks.map((t: any) => new Date(t.startDate).getTime())) : Infinity;
+      const bMin = b.tasks.length > 0 ? Math.min(...b.tasks.map((t: any) => new Date(t.startDate).getTime())) : Infinity;
+      return aMin - bMin;
     });
   }
 
   // ========== Tasks CRUD ==========
-  
+
   async createTask(taskData: InsertTask): Promise<number> {
     const now = new Date().toISOString();
-    
-    const stmt = this.db.prepare(`
-      INSERT INTO tasks (
-        order_id, task_name, assignee, planned_start, planned_end, 
-        std_time_per_unit, qty, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(
-      taskData.order_id,
-      taskData.task_name,
-      taskData.assignee || null,
-      taskData.planned_start,
-      taskData.planned_end,
-      taskData.std_time_per_unit,
-      taskData.qty,
-      taskData.status || 'not_started',
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    const row = {
+      order_id: taskData.order_id,
+      task_name: taskData.task_name,
+      assignee: taskData.assignee || null,
+      planned_start: taskData.planned_start,
+      planned_end: taskData.planned_end,
+      std_time_per_unit: taskData.std_time_per_unit,
+      qty: taskData.qty,
+      status: taskData.status || 'not_started',
+      created_at: now
+    };
+    const { data, error } = await supabase.from('tasks').insert(row).select('id').single();
+    if (error) throw new Error(`[createTask] ${error.message}`);
+    return (data as any).id as number;
   }
 
   async getTasks(options: {
-    order_id?: string;
-    status?: string;
-    from?: string;
-    to?: string;
-    page?: number;
-    pageSize?: number;
+    order_id?: string; status?: string; from?: string; to?: string;
+    page?: number; pageSize?: number;
   } = {}): Promise<{ tasks: Task[], total: number }> {
-    let query = `SELECT * FROM tasks WHERE 1=1`;
-    const params: any[] = [];
-    
-    if (options.order_id) {
-      query += ` AND order_id = ?`;
-      params.push(options.order_id);
-    }
-    
-    if (options.status) {
-      query += ` AND status = ?`;
-      params.push(options.status);
-    }
-    
-    if (options.from) {
-      query += ` AND planned_start >= ?`;
-      params.push(options.from);
-    }
-    
-    if (options.to) {
-      query += ` AND planned_end <= ?`;
-      params.push(options.to);
-    }
-    
-    query += ` ORDER BY planned_start ASC`;
-    
-    const countStmt = this.db.prepare(query.replace('SELECT *', 'SELECT COUNT(*) as count'));
-    const countResult = countStmt.get(...params) as { count: number };
-    const total = countResult.count;
-    
-    const page = options.page || 1;
-    const pageSize = options.pageSize || 20;
+    const { order_id, status, from, to, page = 1, pageSize = 20 } = options;
     const offset = (page - 1) * pageSize;
-    
-    query += ` LIMIT ? OFFSET ?`;
-    params.push(pageSize, offset);
-    
-    const tasks = this.db.prepare(query).all(...params) as Task[];
-    
-    return { tasks, total };
+
+    let countQuery = supabase.from('tasks').select('*', { count: 'exact', head: true });
+    let dataQuery = supabase.from('tasks').select('*');
+
+    if (order_id) { countQuery = countQuery.eq('order_id', order_id); dataQuery = dataQuery.eq('order_id', order_id); }
+    if (status) { countQuery = countQuery.eq('status', status); dataQuery = dataQuery.eq('status', status); }
+    if (from) { countQuery = countQuery.gte('planned_start', from); dataQuery = dataQuery.gte('planned_start', from); }
+    if (to) { countQuery = countQuery.lte('planned_end', to); dataQuery = dataQuery.lte('planned_end', to); }
+
+    dataQuery = dataQuery.order('planned_start', { ascending: true }).range(offset, offset + pageSize - 1);
+
+    const [{ count, error: ce }, { data, error: de }] = await Promise.all([countQuery, dataQuery]);
+    if (ce) throw new Error(`[getTasks count] ${ce.message}`);
+    if (de) throw new Error(`[getTasks data] ${de.message}`);
+
+    return { tasks: (data || []) as Task[], total: count ?? 0 };
   }
 
   async getTaskById(taskId: number): Promise<Task | null> {
-    const task = this.db.prepare(`
-      SELECT * FROM tasks WHERE id = ?
-    `).get(taskId) as Task | undefined;
-    
-    return task || null;
+    const { data, error } = await supabase.from('tasks').select('*').eq('id', taskId).maybeSingle();
+    if (error) throw new Error(`[getTaskById] ${error.message}`);
+    return data as Task | null;
   }
 
   async updateTask(taskId: number, updates: Partial<InsertTask>): Promise<boolean> {
     const allowedColumns = ['task_name', 'assignee', 'planned_start', 'planned_end', 'std_time_per_unit', 'qty', 'status'];
-    
-    const updateCols = Object.keys(updates).filter(key => allowedColumns.includes(key));
-    
-    if (updateCols.length === 0) {
-      return false;
+    const filtered: Record<string, any> = {};
+    for (const key of Object.keys(updates)) {
+      if (allowedColumns.includes(key)) filtered[key] = (updates as any)[key];
     }
-    
-    const setClause = updateCols.map(col => `${col} = ?`).join(', ');
-    const values = updateCols.map(col => (updates as any)[col]);
-    
-    const stmt = this.db.prepare(`
-      UPDATE tasks SET ${setClause} WHERE id = ?
-    `);
-    
-    const result = stmt.run(...values, taskId);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+    const { error } = await supabase.from('tasks').update(filtered).eq('id', taskId);
+    if (error) throw new Error(`[updateTask] ${error.message}`);
+    return true;
   }
 
   async deleteTask(taskId: number): Promise<boolean> {
-    const stmt = this.db.prepare(`DELETE FROM tasks WHERE id = ?`);
-    const result = stmt.run(taskId);
-    return result.changes > 0;
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (error) throw new Error(`[deleteTask] ${error.message}`);
+    return true;
   }
 
   // ========== Work Logs CRUD ==========
-  
+
   async createWorkLog(logData: InsertWorkLog): Promise<number> {
-    // Build dynamic INSERT statement to support both manual and CSV fields
-    const fields: string[] = [];
-    const placeholders: string[] = [];
-    const values: any[] = [];
-    
-    // Helper to add field if value exists
-    const addField = (fieldName: string, value: any) => {
-      if (value !== undefined && value !== null) {
-        fields.push(fieldName);
-        placeholders.push('?');
-        values.push(value);
-      }
-    };
-    
-    // ハーモスCSVフィールド
+    const row: Record<string, any> = {};
+    const addField = (k: string, v: any) => { if (v !== undefined && v !== null) row[k] = v; };
+
     addField('work_date', logData.work_date);
     addField('employee_name', logData.employee_name);
     addField('client_name', logData.client_name);
@@ -967,8 +908,6 @@ export class ProductionDAO {
     addField('actual_time', logData.actual_time);
     addField('total_work_time', logData.total_work_time);
     addField('note', logData.note);
-    
-    // 手動入力フィールド
     addField('date', logData.date);
     addField('worker', logData.worker);
     addField('task_name', logData.task_name);
@@ -979,751 +918,476 @@ export class ProductionDAO {
     addField('quantity', logData.quantity);
     addField('memo', logData.memo);
     addField('status', logData.status);
-    
-    // 共通フィールド
     addField('order_id', logData.order_id);
     addField('order_no', logData.order_no);
-    addField('match_status', logData.match_status || 'unlinked');
-    addField('source', logData.source || 'manual');
-    
-    if (fields.length === 0) {
-      throw new Error('No valid fields to insert');
-    }
-    
-    const stmt = this.db.prepare(`
-      INSERT INTO work_logs (${fields.join(', ')})
-      VALUES (${placeholders.join(', ')})
-    `);
-    
-    const result = stmt.run(...values);
-    return result.lastInsertRowid as number;
+    row.match_status = logData.match_status || 'unlinked';
+    row.source = logData.source || 'manual';
+
+    const { data, error } = await supabase.from('work_logs').insert(row).select('id').single();
+    if (error) throw new Error(`[createWorkLog] ${error.message}`);
+    return (data as any).id as number;
   }
 
   async getWorkLogs(options: {
-    date?: string;
-    worker?: string;
-    order_id?: string;
-    from?: string;
-    to?: string;
-    page?: number;
-    pageSize?: number;
+    date?: string; worker?: string; order_id?: string;
+    from?: string; to?: string; page?: number; pageSize?: number;
   } = {}): Promise<{ logs: (WorkLog & { product_name?: string })[], total: number }> {
-    let query = `
-      SELECT wl.*, o.product_name, t.task_name as task_name_from_ref
-      FROM work_logs wl
-      LEFT JOIN orders o ON wl.order_id = o.order_id
-      LEFT JOIN tasks t ON wl.task_id = t.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-    
-    if (options.date) {
-      query += ` AND wl.date = ?`;
-      params.push(options.date);
-    }
-    
-    if (options.worker) {
-      query += ` AND wl.worker = ?`;
-      params.push(options.worker);
-    }
-    
-    if (options.order_id) {
-      query += ` AND wl.order_id = ?`;
-      params.push(options.order_id);
-    }
-    
-    if (options.from) {
-      query += ` AND wl.date >= ?`;
-      params.push(options.from);
-    }
-    
-    if (options.to) {
-      query += ` AND wl.date <= ?`;
-      params.push(options.to);
-    }
-    
-    query += ` ORDER BY wl.date DESC, wl.start_time DESC`;
-    
-    const countQuery = `
-      SELECT COUNT(*) as count FROM work_logs wl WHERE 1=1
-      ${options.date ? ' AND wl.date = ?' : ''}
-      ${options.worker ? ' AND wl.worker = ?' : ''}
-      ${options.order_id ? ' AND wl.order_id = ?' : ''}
-      ${options.from ? ' AND wl.date >= ?' : ''}
-      ${options.to ? ' AND wl.date <= ?' : ''}
-    `;
-    const countResult = this.db.prepare(countQuery).get(...params) as { count: number };
-    const total = countResult.count;
-    
-    const page = options.page || 1;
-    const pageSize = options.pageSize || 50;
+    const { date, worker, order_id, from, to, page = 1, pageSize = 50 } = options;
     const offset = (page - 1) * pageSize;
-    
-    query += ` LIMIT ? OFFSET ?`;
-    params.push(pageSize, offset);
-    
-    const rawLogs = this.db.prepare(query).all(...params) as (WorkLog & { product_name?: string; task_name_from_ref?: string })[];
-    
-    // Use task_name from tasks table if task_id is set, otherwise use stored task_name
-    const logs = rawLogs.map(log => ({
-      ...log,
-      task_name: log.task_name_from_ref || log.task_name,
-    }));
-    
-    return { logs, total };
+
+    let countQuery = supabase.from('work_logs').select('*', { count: 'exact', head: true });
+    let dataQuery = supabase.from('work_logs').select('*');
+
+    if (date) { countQuery = countQuery.eq('date', date); dataQuery = dataQuery.eq('date', date); }
+    if (worker) { countQuery = countQuery.eq('worker', worker); dataQuery = dataQuery.eq('worker', worker); }
+    if (order_id) { countQuery = countQuery.eq('order_id', order_id); dataQuery = dataQuery.eq('order_id', order_id); }
+    if (from) { countQuery = countQuery.gte('date', from); dataQuery = dataQuery.gte('date', from); }
+    if (to) { countQuery = countQuery.lte('date', to); dataQuery = dataQuery.lte('date', to); }
+
+    dataQuery = dataQuery.order('date', { ascending: false }).order('start_time', { ascending: false }).range(offset, offset + pageSize - 1);
+
+    const [{ count, error: ce }, { data, error: de }] = await Promise.all([countQuery, dataQuery]);
+    if (ce) throw new Error(`[getWorkLogs count] ${ce.message}`);
+    if (de) throw new Error(`[getWorkLogs data] ${de.message}`);
+
+    const logs = (data || []) as (WorkLog & { product_name?: string })[];
+
+    // product_name取得
+    const orderIds = [...new Set(logs.map(l => l.order_id).filter(Boolean) as string[])];
+    if (orderIds.length > 0) {
+      const { data: orders } = await supabase
+        .from('orders').select('order_id,product_name').in('order_id', orderIds);
+      const nameMap = new Map<string, string>();
+      for (const o of orders || []) nameMap.set(o.order_id, o.product_name || '');
+      logs.forEach(l => { if (l.order_id) l.product_name = nameMap.get(l.order_id) || ''; });
+    }
+
+    return { logs, total: count ?? 0 };
   }
 
   async getWorkLogById(logId: number): Promise<WorkLog | null> {
-    const log = this.db.prepare(`
-      SELECT * FROM work_logs WHERE id = ?
-    `).get(logId) as WorkLog | undefined;
-    
-    return log || null;
+    const { data, error } = await supabase.from('work_logs').select('*').eq('id', logId).maybeSingle();
+    if (error) throw new Error(`[getWorkLogById] ${error.message}`);
+    return data as WorkLog | null;
   }
 
   async updateWorkLog(logId: number, updates: Partial<InsertWorkLog>): Promise<boolean> {
-    const allowedColumns = [
-      'date', 'order_id', 'task_name', 'task_id', 'worker', 'start_time', 'end_time',
-      'duration_hours', 'quantity', 'memo', 'status'
-    ];
-    
-    const updateCols = Object.keys(updates).filter(key => allowedColumns.includes(key));
-    
-    if (updateCols.length === 0) {
-      return false;
+    const allowedColumns = ['date', 'order_id', 'task_name', 'task_id', 'worker', 'start_time',
+      'end_time', 'duration_hours', 'quantity', 'memo', 'status'];
+    const filtered: Record<string, any> = {};
+    for (const key of Object.keys(updates)) {
+      if (allowedColumns.includes(key)) filtered[key] = (updates as any)[key];
     }
-    
-    const setClause = updateCols.map(col => `${col} = ?`).join(', ');
-    const values = updateCols.map(col => (updates as any)[col]);
-    
-    const stmt = this.db.prepare(`
-      UPDATE work_logs SET ${setClause} WHERE id = ?
-    `);
-    
-    const result = stmt.run(...values, logId);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+    const { error } = await supabase.from('work_logs').update(filtered).eq('id', logId);
+    if (error) throw new Error(`[updateWorkLog] ${error.message}`);
+    return true;
   }
 
   async deleteWorkLog(logId: number): Promise<boolean> {
-    const stmt = this.db.prepare(`DELETE FROM work_logs WHERE id = ?`);
-    const result = stmt.run(logId);
-    return result.changes > 0;
+    const { error } = await supabase.from('work_logs').delete().eq('id', logId);
+    if (error) throw new Error(`[deleteWorkLog] ${error.message}`);
+    return true;
   }
 
   async checkWorkLogOverlap(
-    worker: string, 
-    date: string, 
-    startTime: string, 
-    endTime: string,
-    excludeLogId?: number
+    worker: string, date: string, startTime: string, endTime: string, excludeLogId?: number
   ): Promise<WorkLog[]> {
-    let query = `
-      SELECT * FROM work_logs 
-      WHERE worker = ? 
-        AND date = ? 
-        AND start_time IS NOT NULL 
-        AND end_time IS NOT NULL
-        AND (
-          (start_time <= ? AND end_time > ?) OR
-          (start_time < ? AND end_time >= ?) OR
-          (start_time >= ? AND end_time <= ?)
-        )
-    `;
-    const params: any[] = [worker, date, startTime, startTime, endTime, endTime, startTime, endTime];
-    
-    if (excludeLogId) {
-      query += ` AND id != ?`;
-      params.push(excludeLogId);
-    }
-    
-    return this.db.prepare(query).all(...params) as WorkLog[];
+    // 時間重複チェック: start_time < endTime AND end_time > startTime
+    let query = supabase.from('work_logs').select('*')
+      .eq('worker', worker)
+      .eq('date', date)
+      .not('start_time', 'is', null)
+      .not('end_time', 'is', null)
+      .lt('start_time', endTime)
+      .gt('end_time', startTime);
+
+    if (excludeLogId) query = query.neq('id', excludeLogId);
+
+    const { data, error } = await query;
+    if (error) throw new Error(`[checkWorkLogOverlap] ${error.message}`);
+    return (data || []) as WorkLog[];
   }
 
   async getTasksByOrderId(orderId: string): Promise<Task[]> {
-    return this.db.prepare(`
-      SELECT * FROM tasks WHERE order_id = ? ORDER BY planned_start ASC
-    `).all(orderId) as Task[];
+    const { data, error } = await supabase.from('tasks').select('*')
+      .eq('order_id', orderId).order('planned_start', { ascending: true });
+    if (error) throw new Error(`[getTasksByOrderId] ${error.message}`);
+    return (data || []) as Task[];
   }
 
   // ========== Materials Master CRUD ==========
-  
-  async getMaterials(options?: {
-    material_type?: string;
-    search?: string;
-  }): Promise<Material[]> {
-    let query = `SELECT * FROM materials WHERE 1=1`;
-    const params: any[] = [];
-    
-    if (options?.material_type) {
-      query += ` AND material_type = ?`;
-      params.push(options.material_type);
-    }
-    
+
+  async getMaterials(options?: { material_type?: string; search?: string }): Promise<Material[]> {
+    let query = supabase.from('materials').select('*');
+    if (options?.material_type) query = query.eq('material_type', options.material_type);
     if (options?.search) {
-      query += ` AND (name LIKE ? OR size LIKE ? OR remark LIKE ?)`;
-      const searchTerm = `%${options.search}%`;
-      params.push(searchTerm, searchTerm, searchTerm);
+      query = query.or(
+        `name.ilike.%${options.search}%,size.ilike.%${options.search}%,remark.ilike.%${options.search}%`
+      );
     }
-    
-    query += ` ORDER BY material_type, name, size`;
-    
-    return this.db.prepare(query).all(...params) as Material[];
+    query = query.order('material_type').order('name').order('size');
+    const { data, error } = await query;
+    if (error) throw new Error(`[getMaterials] ${error.message}`);
+    return (data || []) as Material[];
   }
 
   async getMaterialById(id: number): Promise<Material | undefined> {
-    return this.db.prepare(`
-      SELECT * FROM materials WHERE id = ?
-    `).get(id) as Material | undefined;
+    const { data, error } = await supabase.from('materials').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(`[getMaterialById] ${error.message}`);
+    return data as Material | undefined;
   }
 
   async createMaterial(data: InsertMaterial): Promise<number> {
     const now = new Date().toISOString();
-    
-    const stmt = this.db.prepare(`
-      INSERT INTO materials (material_type, name, size, unit, unit_weight, unit_price, remark, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(
-      data.material_type,
-      data.name,
-      data.size,
-      data.unit,
-      data.unit_weight ?? null,
-      data.unit_price ?? null,
-      data.remark ?? null,
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    const row = {
+      material_type: data.material_type,
+      name: data.name,
+      size: data.size,
+      unit: data.unit,
+      unit_weight: data.unit_weight ?? null,
+      unit_price: data.unit_price ?? null,
+      remark: data.remark ?? null,
+      created_at: now
+    };
+    const { data: result, error } = await supabase.from('materials').insert(row).select('id').single();
+    if (error) throw new Error(`[createMaterial] ${error.message}`);
+    return (result as any).id as number;
   }
 
   async updateMaterial(id: number, data: Partial<InsertMaterial>): Promise<boolean> {
-    const updates: string[] = [];
-    const params: any[] = [];
-    
-    if (data.material_type !== undefined) {
-      updates.push('material_type = ?');
-      params.push(data.material_type);
+    const allowed = ['material_type', 'name', 'size', 'unit', 'unit_weight', 'unit_price', 'remark'];
+    const filtered: Record<string, any> = {};
+    for (const key of Object.keys(data)) {
+      if (allowed.includes(key)) filtered[key] = (data as any)[key];
     }
-    if (data.name !== undefined) {
-      updates.push('name = ?');
-      params.push(data.name);
-    }
-    if (data.size !== undefined) {
-      updates.push('size = ?');
-      params.push(data.size);
-    }
-    if (data.unit !== undefined) {
-      updates.push('unit = ?');
-      params.push(data.unit);
-    }
-    if (data.unit_weight !== undefined) {
-      updates.push('unit_weight = ?');
-      params.push(data.unit_weight);
-    }
-    if (data.unit_price !== undefined) {
-      updates.push('unit_price = ?');
-      params.push(data.unit_price);
-    }
-    if (data.remark !== undefined) {
-      updates.push('remark = ?');
-      params.push(data.remark);
-    }
-    
-    if (updates.length === 0) return false;
-    
-    params.push(id);
-    const stmt = this.db.prepare(`
-      UPDATE materials SET ${updates.join(', ')} WHERE id = ?
-    `);
-    
-    const result = stmt.run(...params);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+    const { error } = await supabase.from('materials').update(filtered).eq('id', id);
+    if (error) throw new Error(`[updateMaterial] ${error.message}`);
+    return true;
   }
 
   async deleteMaterial(id: number): Promise<boolean> {
-    const result = this.db.prepare(`
-      DELETE FROM materials WHERE id = ?
-    `).run(id);
-    
-    return result.changes > 0;
+    const { error } = await supabase.from('materials').delete().eq('id', id);
+    if (error) throw new Error(`[deleteMaterial] ${error.message}`);
+    return true;
   }
 
   async getMaterialTypes(): Promise<string[]> {
-    const rows = this.db.prepare(`
-      SELECT DISTINCT material_type FROM materials ORDER BY material_type
-    `).all() as Array<{ material_type: string }>;
-    
-    return rows.map(r => r.material_type);
+    const { data, error } = await supabase.from('materials').select('material_type');
+    if (error) throw new Error(`[getMaterialTypes] ${error.message}`);
+    const unique = [...new Set((data || []).map((r: any) => r.material_type).filter(Boolean))];
+    return unique.sort() as string[];
   }
 
   // ========== Material Usages CRUD ==========
-  
+
   async getMaterialUsages(options?: {
-    project_id?: string;
-    material_id?: number;
-    area?: string;
-    zone?: string;
+    project_id?: string; material_id?: number; area?: string; zone?: string;
   }): Promise<MaterialUsageWithMaterial[]> {
-    let query = `
-      SELECT 
-        mu.*,
-        m.material_type,
-        m.name AS material_name,
-        m.size AS material_size,
-        m.unit,
-        m.unit_weight,
-        CASE 
-          WHEN m.unit_weight IS NOT NULL AND mu.length IS NOT NULL 
-          THEN m.unit_weight * mu.length * mu.quantity
-          ELSE NULL
-        END AS total_weight
-      FROM material_usages mu
-      JOIN materials m ON mu.material_id = m.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-    
-    if (options?.project_id) {
-      query += ` AND mu.project_id = ?`;
-      params.push(options.project_id);
-    }
-    if (options?.material_id) {
-      query += ` AND mu.material_id = ?`;
-      params.push(options.material_id);
-    }
-    if (options?.area) {
-      query += ` AND mu.area = ?`;
-      params.push(options.area);
-    }
-    if (options?.zone) {
-      query += ` AND mu.zone = ?`;
-      params.push(options.zone);
-    }
-    
-    query += ` ORDER BY mu.project_id, mu.area, mu.zone, m.material_type, m.name`;
-    
-    return this.db.prepare(query).all(...params) as MaterialUsageWithMaterial[];
+    let muQuery = supabase.from('material_usages').select('*');
+    if (options?.project_id) muQuery = muQuery.eq('project_id', options.project_id);
+    if (options?.material_id) muQuery = muQuery.eq('material_id', options.material_id);
+    if (options?.area) muQuery = muQuery.eq('area', options.area);
+    if (options?.zone) muQuery = muQuery.eq('zone', options.zone);
+    muQuery = muQuery.order('project_id').order('area').order('zone');
+
+    const { data: usages, error } = await muQuery;
+    if (error) throw new Error(`[getMaterialUsages] ${error.message}`);
+
+    return this._enrichMaterialUsages((usages || []) as MaterialUsage[]);
   }
 
   async getMaterialUsageById(id: number): Promise<MaterialUsageWithMaterial | undefined> {
-    return this.db.prepare(`
-      SELECT 
-        mu.*,
-        m.material_type,
-        m.name AS material_name,
-        m.size AS material_size,
-        m.unit,
-        m.unit_weight,
-        CASE 
-          WHEN m.unit_weight IS NOT NULL AND mu.length IS NOT NULL 
-          THEN m.unit_weight * mu.length * mu.quantity
-          ELSE NULL
-        END AS total_weight
-      FROM material_usages mu
-      JOIN materials m ON mu.material_id = m.id
-      WHERE mu.id = ?
-    `).get(id) as MaterialUsageWithMaterial | undefined;
+    const { data, error } = await supabase.from('material_usages').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(`[getMaterialUsageById] ${error.message}`);
+    if (!data) return undefined;
+    const enriched = await this._enrichMaterialUsages([data as MaterialUsage]);
+    return enriched[0];
+  }
+
+  private async _enrichMaterialUsages(usages: MaterialUsage[]): Promise<MaterialUsageWithMaterial[]> {
+    if (usages.length === 0) return [];
+    const matIds = [...new Set(usages.map(u => u.material_id).filter(Boolean) as number[])];
+    const { data: mats } = await supabase.from('materials').select('*').in('id', matIds);
+    const matMap = new Map<number, any>();
+    for (const m of mats || []) matMap.set(m.id, m);
+
+    return usages.map(u => {
+      const m = matMap.get(u.material_id as number);
+      let totalWeight: number | null = null;
+      if (m?.unit_weight != null && u.length != null) {
+        totalWeight = m.unit_weight * (u.length as number) * ((u.quantity as number) || 1);
+      }
+      return {
+        ...u,
+        material_type: m?.material_type ?? null,
+        material_name: m?.name ?? null,
+        material_size: m?.size ?? null,
+        unit: m?.unit ?? null,
+        unit_weight: m?.unit_weight ?? null,
+        total_weight: totalWeight
+      } as MaterialUsageWithMaterial;
+    });
   }
 
   async createMaterialUsage(data: InsertMaterialUsage): Promise<number> {
     const now = new Date().toISOString();
-    
-    const stmt = this.db.prepare(`
-      INSERT INTO material_usages (project_id, area, zone, drawing_no, material_id, quantity, length, remark, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(
-      data.project_id,
-      data.area ?? null,
-      data.zone ?? null,
-      data.drawing_no ?? null,
-      data.material_id,
-      data.quantity ?? 1,
-      data.length ?? null,
-      data.remark ?? null,
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    const row = {
+      project_id: data.project_id,
+      area: data.area ?? null,
+      zone: data.zone ?? null,
+      drawing_no: data.drawing_no ?? null,
+      material_id: data.material_id,
+      quantity: data.quantity ?? 1,
+      length: data.length ?? null,
+      remark: data.remark ?? null,
+      created_at: now
+    };
+    const { data: result, error } = await supabase.from('material_usages').insert(row).select('id').single();
+    if (error) throw new Error(`[createMaterialUsage] ${error.message}`);
+    return (result as any).id as number;
   }
 
   async updateMaterialUsage(id: number, data: Partial<InsertMaterialUsage>): Promise<boolean> {
-    const updates: string[] = [];
-    const params: any[] = [];
-    
-    if (data.project_id !== undefined) {
-      updates.push('project_id = ?');
-      params.push(data.project_id);
+    const allowed = ['project_id', 'area', 'zone', 'drawing_no', 'material_id', 'quantity', 'length', 'remark'];
+    const filtered: Record<string, any> = {};
+    for (const key of Object.keys(data)) {
+      if (allowed.includes(key)) filtered[key] = (data as any)[key];
     }
-    if (data.area !== undefined) {
-      updates.push('area = ?');
-      params.push(data.area);
-    }
-    if (data.zone !== undefined) {
-      updates.push('zone = ?');
-      params.push(data.zone);
-    }
-    if (data.drawing_no !== undefined) {
-      updates.push('drawing_no = ?');
-      params.push(data.drawing_no);
-    }
-    if (data.material_id !== undefined) {
-      updates.push('material_id = ?');
-      params.push(data.material_id);
-    }
-    if (data.quantity !== undefined) {
-      updates.push('quantity = ?');
-      params.push(data.quantity);
-    }
-    if (data.length !== undefined) {
-      updates.push('length = ?');
-      params.push(data.length);
-    }
-    if (data.remark !== undefined) {
-      updates.push('remark = ?');
-      params.push(data.remark);
-    }
-    
-    if (updates.length === 0) return false;
-    
-    params.push(id);
-    const stmt = this.db.prepare(`
-      UPDATE material_usages SET ${updates.join(', ')} WHERE id = ?
-    `);
-    
-    const result = stmt.run(...params);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+    const { error } = await supabase.from('material_usages').update(filtered).eq('id', id);
+    if (error) throw new Error(`[updateMaterialUsage] ${error.message}`);
+    return true;
   }
 
   async deleteMaterialUsage(id: number): Promise<boolean> {
-    const result = this.db.prepare(`
-      DELETE FROM material_usages WHERE id = ?
-    `).run(id);
-    
-    return result.changes > 0;
+    const { error } = await supabase.from('material_usages').delete().eq('id', id);
+    if (error) throw new Error(`[deleteMaterialUsage] ${error.message}`);
+    return true;
   }
 
-  // Material Usages Summary - Aggregate by project_id, zone, and material_type
   async getMaterialUsageSummary(options?: {
-    project_id?: string;
-    group_by_material_type?: boolean;
+    project_id?: string; group_by_material_type?: boolean;
   }): Promise<Array<{
-    project_id: string;
-    zone: string | null;
-    material_type: string | null;
-    total_quantity: number;
-    total_weight: number | null;
-    record_count: number;
+    project_id: string; zone: string | null; material_type: string | null;
+    total_quantity: number; total_weight: number | null; record_count: number;
   }>> {
-    const groupByMaterialType = options?.group_by_material_type ?? true;
-    
-    let query = `
-      SELECT 
-        mu.project_id,
-        mu.zone,
-        ${groupByMaterialType ? 'm.material_type,' : 'NULL AS material_type,'}
-        SUM(mu.quantity) AS total_quantity,
-        SUM(
-          CASE 
-            WHEN m.unit_weight IS NOT NULL AND mu.length IS NOT NULL 
-            THEN m.unit_weight * mu.length * mu.quantity
-            ELSE NULL
-          END
-        ) AS total_weight,
-        COUNT(*) AS record_count
-      FROM material_usages mu
-      JOIN materials m ON mu.material_id = m.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-    
-    if (options?.project_id) {
-      query += ` AND mu.project_id = ?`;
-      params.push(options.project_id);
+    const grouped = options?.group_by_material_type ?? true;
+    const usages = await this.getMaterialUsages(options?.project_id ? { project_id: options.project_id } : undefined);
+
+    // JS集計
+    const summaryMap = new Map<string, any>();
+    for (const u of usages) {
+      const matType = grouped ? (u.material_type || null) : null;
+      const key = `${u.project_id}|${u.zone ?? 'null'}|${matType ?? 'null'}`;
+      if (!summaryMap.has(key)) {
+        summaryMap.set(key, {
+          project_id: u.project_id,
+          zone: u.zone ?? null,
+          material_type: matType,
+          total_quantity: 0,
+          total_weight: 0,
+          record_count: 0,
+          has_weight: false
+        });
+      }
+      const entry = summaryMap.get(key);
+      entry.total_quantity += (u.quantity as number) || 0;
+      if (u.total_weight != null) { entry.total_weight += u.total_weight; entry.has_weight = true; }
+      entry.record_count++;
     }
-    
-    if (groupByMaterialType) {
-      query += ` GROUP BY mu.project_id, mu.zone, m.material_type ORDER BY mu.project_id, mu.zone, m.material_type`;
-    } else {
-      query += ` GROUP BY mu.project_id, mu.zone ORDER BY mu.project_id, mu.zone`;
-    }
-    
-    const rows = this.db.prepare(query).all(...params) as Array<{
-      project_id: string;
-      zone: string | null;
-      material_type: string | null;
-      total_quantity: number;
-      total_weight: number | null;
-      record_count: number;
-    }>;
-    
-    return rows;
+
+    return Array.from(summaryMap.values()).map(e => ({
+      project_id: e.project_id,
+      zone: e.zone,
+      material_type: e.material_type,
+      total_quantity: e.total_quantity,
+      total_weight: e.has_weight ? e.total_weight : null,
+      record_count: e.record_count
+    }));
   }
 
   // ========== Cost Settings CRUD ==========
-  
+
   async getCostSettings(): Promise<CostSettings> {
-    const settings = this.db.prepare(`
-      SELECT * FROM cost_settings WHERE id = 1
-    `).get() as CostSettings | undefined;
-    
-    if (!settings) {
+    const { data, error } = await supabase.from('cost_settings').select('*').eq('id', 1).maybeSingle();
+    if (error) throw new Error(`[getCostSettings] ${error.message}`);
+
+    if (!data) {
       const now = new Date().toISOString();
-      this.db.prepare(`
-        INSERT INTO cost_settings (id, labor_rate_per_hour, updated_at)
-        VALUES (1, 3000, ?)
-      `).run(now);
-      
-      return {
-        id: 1,
-        labor_rate_per_hour: 3000,
-        updated_at: now
-      };
+      const defaults: CostSettings = { id: 1, labor_rate_per_hour: 3000, updated_at: now };
+      const { error: ie } = await supabase.from('cost_settings').upsert(defaults, { onConflict: 'id' });
+      if (ie) throw new Error(`[getCostSettings upsert] ${ie.message}`);
+      return defaults;
     }
-    
-    return settings;
+
+    return data as CostSettings;
   }
 
   async updateCostSettings(laborRatePerHour: number): Promise<CostSettings> {
     const now = new Date().toISOString();
-    this.db.prepare(`
-      UPDATE cost_settings SET labor_rate_per_hour = ?, updated_at = ? WHERE id = 1
-    `).run(laborRatePerHour, now);
-    
+    const { error } = await supabase.from('cost_settings').update({
+      labor_rate_per_hour: laborRatePerHour,
+      updated_at: now
+    }).eq('id', 1);
+    if (error) throw new Error(`[updateCostSettings] ${error.message}`);
     return this.getCostSettings();
   }
 
   // ========== Cost Aggregation ==========
-  
+
   async getCostAggregation(): Promise<CostAggregationResponse> {
     const settings = await this.getCostSettings();
     const laborRate = settings.labor_rate_per_hour;
 
-    // 案件×工区別の材料費を取得
-    const materialCostsByOrderZone = this.db.prepare(`
-      SELECT 
-        mu.project_id AS order_id,
-        COALESCE(mu.zone, '未設定') AS zone,
-        mu.area,
-        SUM(
-          CASE 
-            WHEN m.unit_price IS NOT NULL 
-            THEN m.unit_price * mu.quantity * COALESCE(
-              CASE 
-                WHEN m.unit = 'kg' AND m.unit_weight IS NOT NULL AND mu.length IS NOT NULL
-                THEN mu.length * m.unit_weight
-                WHEN m.unit = 'm' AND mu.length IS NOT NULL
-                THEN mu.length
-                ELSE 1
-              END,
-              1
-            )
-            ELSE 0
-          END
-        ) AS material_cost,
-        SUM(
-          CASE 
-            WHEN m.unit_price IS NULL 
-            THEN 1
-            ELSE 0
-          END
-        ) AS missing_prices_count
-      FROM material_usages mu
-      JOIN materials m ON mu.material_id = m.id
-      GROUP BY mu.project_id, COALESCE(mu.zone, '未設定'), mu.area
-    `).all() as { order_id: string; zone: string; area: string | null; material_cost: number; missing_prices_count: number }[];
+    // バッチ取得
+    const [ordersRes, muRes, wlRes, wlogRes, procRes, outRes, workersRes] = await Promise.all([
+      supabase.from('orders').select('order_id,project_title,client_name,estimated_amount'),
+      supabase.from('material_usages').select('*'),
+      supabase.from('work_logs').select('order_id,worker,employee_name,duration_hours')
+        .not('order_id', 'is', null).not('duration_hours', 'is', null).gt('duration_hours', 0),
+      supabase.from('workers_log').select('order_id,worker,qty,act_time_per_unit')
+        .not('order_id', 'is', null),
+      supabase.from('procurements').select('order_id,kind,is_approved,total_amount')
+        .eq('kind', 'purchase'),
+      supabase.from('outsourcing_costs').select('project_id,amount'),
+      supabase.from('workers_master').select('name,hourly_rate')
+    ]);
 
-    // 案件別の材料費合計を取得
-    const materialCostsByOrder = this.db.prepare(`
-      SELECT 
-        mu.project_id AS order_id,
-        SUM(
-          CASE 
-            WHEN m.unit_price IS NOT NULL 
-            THEN m.unit_price * mu.quantity * COALESCE(
-              CASE 
-                WHEN m.unit = 'kg' AND m.unit_weight IS NOT NULL AND mu.length IS NOT NULL
-                THEN mu.length * m.unit_weight
-                WHEN m.unit = 'm' AND mu.length IS NOT NULL
-                THEN mu.length
-                ELSE 1
-              END,
-              1
-            )
-            ELSE 0
-          END
-        ) AS material_cost,
-        SUM(
-          CASE 
-            WHEN m.unit_price IS NULL 
-            THEN 1
-            ELSE 0
-          END
-        ) AS missing_prices_count
-      FROM material_usages mu
-      JOIN materials m ON mu.material_id = m.id
-      GROUP BY mu.project_id
-    `).all() as { order_id: string; material_cost: number; missing_prices_count: number }[];
+    const orders = (ordersRes.data || []) as any[];
+    const materialUsages = (muRes.data || []) as MaterialUsage[];
+    const workLogs = (wlRes.data || []) as any[];
+    const workersLogs = (wlogRes.data || []) as any[];
+    const procurementsData = (procRes.data || []) as any[];
+    const outsourcingData = (outRes.data || []) as any[];
+    const workersMasterData = (workersRes.data || []) as any[];
 
-    // 作業者別単価マップを取得（マスタに登録された作業者の単価）
-    const workerRatesMap = this.getWorkerRatesMap();
-    const defaultRate = laborRate; // デフォルト単価（マスタにない作業者用）
+    // 材料IDから材料情報を取得
+    const matIds = [...new Set(materialUsages.map(u => u.material_id).filter(Boolean) as number[])];
+    let matsMap = new Map<number, any>();
+    if (matIds.length > 0) {
+      const { data: mats } = await supabase.from('materials').select('id,unit,unit_weight,unit_price').in('id', matIds);
+      for (const m of mats || []) matsMap.set(m.id, m);
+    }
 
-    // 実績時間（work_logsのduration_hours）を作業者別に取得 - 優先的に使用
-    const actualHoursByOrderWorker = this.db.prepare(`
-      SELECT 
-        order_id,
-        COALESCE(worker, employee_name, '不明') AS worker_name,
-        SUM(COALESCE(duration_hours, 0)) AS total_hours
-      FROM work_logs
-      WHERE order_id IS NOT NULL AND duration_hours IS NOT NULL AND duration_hours > 0
-      GROUP BY order_id, COALESCE(worker, employee_name, '不明')
-    `).all() as { order_id: string; worker_name: string; total_hours: number }[];
+    // 作業者単価マップ
+    const workerRatesMap = new Map<string, number>();
+    for (const w of workersMasterData) workerRatesMap.set(w.name, w.hourly_rate);
+    const defaultRate = laborRate;
 
-    // 推定時間（workers_logのqty × act_time_per_unit）を作業者別に取得 - 実績がない場合のフォールバック
-    const estimatedHoursByOrderWorker = this.db.prepare(`
-      SELECT 
-        order_id,
-        worker AS worker_name,
-        SUM(COALESCE(qty, 0) * COALESCE(act_time_per_unit, 0)) AS total_hours
-      FROM workers_log
-      WHERE order_id IS NOT NULL
-      GROUP BY order_id, worker
-    `).all() as { order_id: string; worker_name: string; total_hours: number }[];
+    // 材料費集計（受注別・工区別）
+    const materialCostByOrderZone = new Map<string, Map<string, { cost: number; hasMissing: boolean }>>();
+    const materialCostByOrder = new Map<string, { cost: number; hasMissing: boolean }>();
 
-    const orders = this.db.prepare(`
-      SELECT 
-        order_id,
-        project_title,
-        client_name,
-        estimated_amount
-      FROM orders
-    `).all() as { order_id: string; project_title: string | null; client_name: string | null; estimated_amount: number | null }[];
+    for (const mu of materialUsages) {
+      const orderId = mu.project_id as string;
+      if (!orderId) continue;
+      const zone = (mu.zone as string) || '未設定';
+      const m = matsMap.get(mu.material_id as number);
 
-    // 工区別材料費をマップに整理（order_id -> zone配列）
-    // 注: 労務費は工区単位では取得できないため、工区別は材料費のみ
-    const zoneCostMap = new Map<string, ZoneCostSummary[]>();
-    for (const row of materialCostsByOrderZone) {
-      if (!zoneCostMap.has(row.order_id)) {
-        zoneCostMap.set(row.order_id, []);
+      let cost = 0;
+      let hasMissing = false;
+
+      if (m?.unit_price != null) {
+        const qty = (mu.quantity as number) || 0;
+        let factor = 1;
+        if (m.unit === 'kg' && m.unit_weight != null && mu.length != null) {
+          factor = (mu.length as number) * m.unit_weight;
+        } else if (m.unit === 'm' && mu.length != null) {
+          factor = mu.length as number;
+        }
+        cost = m.unit_price * qty * factor;
+      } else {
+        hasMissing = true;
       }
-      zoneCostMap.get(row.order_id)!.push({
-        zone: row.zone,
-        area: row.area,
-        material_cost: Math.round(row.material_cost || 0),
-        has_missing_prices: row.missing_prices_count > 0
-      });
+
+      // 工区別
+      if (!materialCostByOrderZone.has(orderId)) materialCostByOrderZone.set(orderId, new Map());
+      const zoneMap = materialCostByOrderZone.get(orderId)!;
+      if (!zoneMap.has(zone)) zoneMap.set(zone, { cost: 0, hasMissing: false });
+      const zEntry = zoneMap.get(zone)!;
+      zEntry.cost += cost;
+      if (hasMissing) zEntry.hasMissing = true;
+
+      // 受注別
+      if (!materialCostByOrder.has(orderId)) materialCostByOrder.set(orderId, { cost: 0, hasMissing: false });
+      const oEntry = materialCostByOrder.get(orderId)!;
+      oEntry.cost += cost;
+      if (hasMissing) oEntry.hasMissing = true;
     }
 
-    const materialCostMap = new Map<string, { cost: number; hasMissing: boolean }>();
-    for (const row of materialCostsByOrder) {
-      materialCostMap.set(row.order_id, {
-        cost: row.material_cost || 0,
-        hasMissing: row.missing_prices_count > 0
-      });
-    }
-
-    // 実績労務費マップ（work_logsから・作業者別単価で計算）
-    // 構造: order_id -> { totalHours, totalCost }
+    // 実績労務費（work_logs）
     const actualLaborMap = new Map<string, { totalHours: number; totalCost: number }>();
-    for (const row of actualHoursByOrderWorker) {
-      const hours = row.total_hours || 0;
-      const rate = workerRatesMap.get(row.worker_name) || defaultRate;
+    for (const wl of workLogs) {
+      const hours = wl.duration_hours || 0;
+      const workerName = wl.worker || wl.employee_name || '不明';
+      const rate = workerRatesMap.get(workerName) ?? defaultRate;
       const cost = hours * rate;
-      
-      if (!actualLaborMap.has(row.order_id)) {
-        actualLaborMap.set(row.order_id, { totalHours: 0, totalCost: 0 });
-      }
-      const entry = actualLaborMap.get(row.order_id)!;
-      entry.totalHours += hours;
-      entry.totalCost += cost;
+      if (!actualLaborMap.has(wl.order_id)) actualLaborMap.set(wl.order_id, { totalHours: 0, totalCost: 0 });
+      const e = actualLaborMap.get(wl.order_id)!;
+      e.totalHours += hours;
+      e.totalCost += cost;
     }
 
-    // 推定労務費マップ（workers_logから・作業者別単価で計算）
+    // 推定労務費（workers_log）
     const estimatedLaborMap = new Map<string, { totalHours: number; totalCost: number }>();
-    for (const row of estimatedHoursByOrderWorker) {
-      const hours = row.total_hours || 0;
-      const rate = workerRatesMap.get(row.worker_name) || defaultRate;
+    for (const wl of workersLogs) {
+      const hours = (wl.qty || 0) * (wl.act_time_per_unit || 0);
+      const rate = workerRatesMap.get(wl.worker) ?? defaultRate;
       const cost = hours * rate;
-      
-      if (!estimatedLaborMap.has(row.order_id)) {
-        estimatedLaborMap.set(row.order_id, { totalHours: 0, totalCost: 0 });
-      }
-      const entry = estimatedLaborMap.get(row.order_id)!;
-      entry.totalHours += hours;
-      entry.totalCost += cost;
+      if (!estimatedLaborMap.has(wl.order_id)) estimatedLaborMap.set(wl.order_id, { totalHours: 0, totalCost: 0 });
+      const e = estimatedLaborMap.get(wl.order_id)!;
+      e.totalHours += hours;
+      e.totalCost += cost;
     }
 
-    // 外注費を案件別に集計（調達管理の購買手配で承認済みのものを集計）
-    // 旧outsourcing_costsテーブルも併せて集計
-    const outsourcingCostsFromProcurements = this.db.prepare(`
-      SELECT 
-        order_id,
-        SUM(COALESCE(total_amount, 0)) AS outsourcing_cost
-      FROM procurements
-      WHERE kind = 'purchase' AND is_approved = 1 AND total_amount IS NOT NULL
-      GROUP BY order_id
-    `).all() as { order_id: string; outsourcing_cost: number }[];
-
-    const outsourcingCostsFromLegacy = this.db.prepare(`
-      SELECT 
-        project_id AS order_id,
-        SUM(amount) AS outsourcing_cost
-      FROM outsourcing_costs
-      GROUP BY project_id
-    `).all() as { order_id: string; outsourcing_cost: number }[];
-
+    // 外注費（procurements + outsourcing_costs）
     const outsourcingCostMap = new Map<string, number>();
-    // 調達管理からの外注費
-    for (const row of outsourcingCostsFromProcurements) {
-      outsourcingCostMap.set(row.order_id, (outsourcingCostMap.get(row.order_id) || 0) + (row.outsourcing_cost || 0));
+    for (const p of procurementsData) {
+      if (normBool(p.is_approved) && p.total_amount != null) {
+        outsourcingCostMap.set(p.order_id, (outsourcingCostMap.get(p.order_id) || 0) + p.total_amount);
+      }
     }
-    // 旧外注費テーブルからの外注費（互換性のため）
-    for (const row of outsourcingCostsFromLegacy) {
-      outsourcingCostMap.set(row.order_id, (outsourcingCostMap.get(row.order_id) || 0) + (row.outsourcing_cost || 0));
+    for (const oc of outsourcingData) {
+      if (oc.project_id && oc.amount != null) {
+        outsourcingCostMap.set(oc.project_id, (outsourcingCostMap.get(oc.project_id) || 0) + oc.amount);
+      }
     }
 
     const orderSummaries: OrderCostSummary[] = [];
-    let totalMaterialCost = 0;
-    let totalLaborCost = 0;
-    let totalOutsourcingCost = 0;
+    let totalMaterialCost = 0, totalLaborCost = 0, totalOutsourcingCost = 0;
 
     for (const order of orders) {
-      const materialData = materialCostMap.get(order.order_id) || { cost: 0, hasMissing: false };
-      const zones = zoneCostMap.get(order.order_id) || [];
+      const materialData = materialCostByOrder.get(order.order_id) || { cost: 0, hasMissing: false };
       const outsourcingCost = outsourcingCostMap.get(order.order_id) || 0;
-      
-      // 実績労務費を優先、なければ推定労務費を使用（作業者別単価で計算済み）
+
       const actualLabor = actualLaborMap.get(order.order_id);
       const estimatedLabor = estimatedLaborMap.get(order.order_id);
-      
-      let laborHours: number;
-      let laborCost: number;
-      let laborSource: 'actual' | 'estimated' | 'none';
-      
+
+      let laborHours: number, laborCost: number, laborSource: 'actual' | 'estimated' | 'none';
       if (actualLabor && actualLabor.totalHours > 0) {
-        laborHours = actualLabor.totalHours;
-        laborCost = actualLabor.totalCost;
-        laborSource = 'actual';
+        laborHours = actualLabor.totalHours; laborCost = actualLabor.totalCost; laborSource = 'actual';
       } else if (estimatedLabor && estimatedLabor.totalHours > 0) {
-        laborHours = estimatedLabor.totalHours;
-        laborCost = estimatedLabor.totalCost;
-        laborSource = 'estimated';
+        laborHours = estimatedLabor.totalHours; laborCost = estimatedLabor.totalCost; laborSource = 'estimated';
       } else {
-        laborHours = 0;
-        laborCost = 0;
-        laborSource = 'none';
+        laborHours = 0; laborCost = 0; laborSource = 'none';
       }
-      
+
       const totalCost = materialData.cost + laborCost + outsourcingCost;
-      
-      const profit = order.estimated_amount !== null ? order.estimated_amount - totalCost : null;
-      const profitRate = order.estimated_amount !== null && order.estimated_amount > 0 
-        ? Math.round((profit! / order.estimated_amount) * 100 * 10) / 10 
-        : null;
+      const profit = order.estimated_amount != null ? order.estimated_amount - totalCost : null;
+      const profitRate = order.estimated_amount != null && order.estimated_amount > 0
+        ? Math.round((profit! / order.estimated_amount) * 100 * 10) / 10 : null;
+
+      // 工区別サマリー
+      const zones: ZoneCostSummary[] = [];
+      const zoneMap = materialCostByOrderZone.get(order.order_id);
+      if (zoneMap) {
+        for (const [zone, zData] of zoneMap.entries()) {
+          zones.push({ zone, area: null, material_cost: Math.round(zData.cost), has_missing_prices: zData.hasMissing });
+        }
+        zones.sort((a, b) => a.zone.localeCompare(b.zone));
+      }
 
       if (materialData.cost > 0 || laborCost > 0 || outsourcingCost > 0) {
         orderSummaries.push({
@@ -1732,17 +1396,16 @@ export class ProductionDAO {
           client_name: order.client_name,
           material_cost: Math.round(materialData.cost),
           labor_cost: Math.round(laborCost),
-          labor_hours: Math.round(laborHours * 100) / 100, // 小数点2桁
+          labor_hours: Math.round(laborHours * 100) / 100,
           labor_source: laborSource,
           outsourcing_cost: Math.round(outsourcingCost),
           total_cost: Math.round(totalCost),
           estimated_amount: order.estimated_amount,
-          profit: profit !== null ? Math.round(profit) : null,
+          profit: profit != null ? Math.round(profit) : null,
           profit_rate: profitRate,
           has_missing_prices: materialData.hasMissing,
-          zones: zones.sort((a, b) => a.zone.localeCompare(b.zone))
+          zones
         });
-
         totalMaterialCost += materialData.cost;
         totalLaborCost += laborCost;
         totalOutsourcingCost += outsourcingCost;
@@ -1762,294 +1425,199 @@ export class ProductionDAO {
   }
 
   // ========== Workers Master CRUD ==========
-  
+
   async createWorkerMaster(data: InsertWorkerMaster): Promise<number> {
     const now = new Date().toISOString();
-    const stmt = this.db.prepare(`
-      INSERT INTO workers_master (name, hourly_rate, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(
-      data.name,
-      data.hourly_rate,
-      data.is_active ? 1 : 0,
-      now,
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    const row = {
+      name: data.name,
+      hourly_rate: data.hourly_rate,
+      is_active: data.is_active ?? true,
+      created_at: now,
+      updated_at: now
+    };
+    const { data: result, error } = await supabase.from('workers_master').insert(row).select('id').single();
+    if (error) throw new Error(`[createWorkerMaster] ${error.message}`);
+    return (result as any).id as number;
   }
 
   async getWorkersMaster(includeInactive: boolean = false): Promise<WorkerMaster[]> {
-    const query = includeInactive
-      ? 'SELECT * FROM workers_master ORDER BY name'
-      : 'SELECT * FROM workers_master WHERE is_active = 1 ORDER BY name';
-    
-    return this.db.prepare(query).all() as WorkerMaster[];
+    let query = supabase.from('workers_master').select('*').order('name');
+    if (!includeInactive) query = query.eq('is_active', true);
+    const { data, error } = await query;
+    if (error) throw new Error(`[getWorkersMaster] ${error.message}`);
+    return (data || []) as WorkerMaster[];
   }
 
   async getWorkerMasterById(id: number): Promise<WorkerMaster | null> {
-    const row = this.db.prepare('SELECT * FROM workers_master WHERE id = ?').get(id);
-    return row as WorkerMaster | null;
+    const { data, error } = await supabase.from('workers_master').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(`[getWorkerMasterById] ${error.message}`);
+    return data as WorkerMaster | null;
   }
 
   async getWorkerMasterByName(name: string): Promise<WorkerMaster | null> {
-    const row = this.db.prepare('SELECT * FROM workers_master WHERE name = ?').get(name);
-    return row as WorkerMaster | null;
+    const { data, error } = await supabase.from('workers_master').select('*').eq('name', name).maybeSingle();
+    if (error) throw new Error(`[getWorkerMasterByName] ${error.message}`);
+    return data as WorkerMaster | null;
   }
 
   async updateWorkerMaster(id: number, data: Partial<InsertWorkerMaster>): Promise<boolean> {
     const now = new Date().toISOString();
-    const updates: string[] = [];
-    const params: any[] = [];
-
-    if (data.name !== undefined) {
-      updates.push('name = ?');
-      params.push(data.name);
+    const allowed = ['name', 'hourly_rate', 'is_active'];
+    const filtered: Record<string, any> = {};
+    for (const key of Object.keys(data)) {
+      if (allowed.includes(key)) filtered[key] = (data as any)[key];
     }
-    if (data.hourly_rate !== undefined) {
-      updates.push('hourly_rate = ?');
-      params.push(data.hourly_rate);
-    }
-    if (data.is_active !== undefined) {
-      updates.push('is_active = ?');
-      params.push(data.is_active ? 1 : 0);
-    }
-
-    if (updates.length === 0) return false;
-
-    updates.push('updated_at = ?');
-    params.push(now);
-    params.push(id);
-
-    const stmt = this.db.prepare(`UPDATE workers_master SET ${updates.join(', ')} WHERE id = ?`);
-    const result = stmt.run(...params);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+    filtered.updated_at = now;
+    const { error } = await supabase.from('workers_master').update(filtered).eq('id', id);
+    if (error) throw new Error(`[updateWorkerMaster] ${error.message}`);
+    return true;
   }
 
   async deleteWorkerMaster(id: number): Promise<boolean> {
-    const stmt = this.db.prepare('DELETE FROM workers_master WHERE id = ?');
-    const result = stmt.run(id);
-    return result.changes > 0;
+    const { error } = await supabase.from('workers_master').delete().eq('id', id);
+    if (error) throw new Error(`[deleteWorkerMaster] ${error.message}`);
+    return true;
   }
 
-  // 作業者名から時間単価を取得（マスタにない場合はデフォルト単価を返す）
   async getWorkerHourlyRate(workerName: string): Promise<{ rate: number; source: 'worker' | 'default' }> {
     const worker = await this.getWorkerMasterByName(workerName);
-    if (worker) {
-      return { rate: worker.hourly_rate, source: 'worker' };
-    }
+    if (worker) return { rate: worker.hourly_rate, source: 'worker' };
     const settings = await this.getCostSettings();
     return { rate: settings.labor_rate_per_hour, source: 'default' };
   }
 
-  // 全作業者の単価マップを取得（履歴計算用に非アクティブも含む）
-  getWorkerRatesMap(): Map<string, number> {
-    // 非アクティブな作業者も含める（過去の作業記録の正確な労務費計算のため）
-    const workers = this.db.prepare('SELECT name, hourly_rate FROM workers_master').all() as { name: string; hourly_rate: number }[];
+  async getWorkerRatesMap(): Promise<Map<string, number>> {
+    const { data, error } = await supabase.from('workers_master').select('name,hourly_rate');
+    if (error) throw new Error(`[getWorkerRatesMap] ${error.message}`);
     const map = new Map<string, number>();
-    for (const w of workers) {
-      map.set(w.name, w.hourly_rate);
-    }
+    for (const w of (data || []) as any[]) map.set(w.name, w.hourly_rate);
     return map;
   }
 
   // ========== Vendors Master CRUD ==========
-  
+
   async createVendorMaster(data: InsertVendorMaster): Promise<number> {
     const now = new Date().toISOString();
-    const stmt = this.db.prepare(`
-      INSERT INTO vendors_master (name, contact_person, phone, email, address, note, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(
-      data.name,
-      data.contact_person || null,
-      data.phone || null,
-      data.email || null,
-      data.address || null,
-      data.note || null,
-      data.is_active ? 1 : 0,
-      now,
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    const row = {
+      name: data.name,
+      contact_person: data.contact_person || null,
+      phone: data.phone || null,
+      email: data.email || null,
+      address: data.address || null,
+      note: data.note || null,
+      is_active: data.is_active ?? true,
+      created_at: now,
+      updated_at: now
+    };
+    const { data: result, error } = await supabase.from('vendors_master').insert(row).select('id').single();
+    if (error) throw new Error(`[createVendorMaster] ${error.message}`);
+    return (result as any).id as number;
   }
 
   async getVendorsMaster(includeInactive: boolean = false): Promise<VendorMaster[]> {
-    const query = includeInactive
-      ? 'SELECT * FROM vendors_master ORDER BY name'
-      : 'SELECT * FROM vendors_master WHERE is_active = 1 ORDER BY name';
-    
-    return this.db.prepare(query).all() as VendorMaster[];
+    let query = supabase.from('vendors_master').select('*').order('name');
+    if (!includeInactive) query = query.eq('is_active', true);
+    const { data, error } = await query;
+    if (error) throw new Error(`[getVendorsMaster] ${error.message}`);
+    return (data || []) as VendorMaster[];
   }
 
   async getVendorMasterById(id: number): Promise<VendorMaster | null> {
-    const row = this.db.prepare('SELECT * FROM vendors_master WHERE id = ?').get(id);
-    return row as VendorMaster | null;
+    const { data, error } = await supabase.from('vendors_master').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(`[getVendorMasterById] ${error.message}`);
+    return data as VendorMaster | null;
   }
 
   async updateVendorMaster(id: number, data: Partial<InsertVendorMaster>): Promise<boolean> {
     const now = new Date().toISOString();
-    const updates: string[] = [];
-    const params: any[] = [];
-
-    if (data.name !== undefined) {
-      updates.push('name = ?');
-      params.push(data.name);
+    const allowed = ['name', 'contact_person', 'phone', 'email', 'address', 'note', 'is_active'];
+    const filtered: Record<string, any> = {};
+    for (const key of Object.keys(data)) {
+      if (allowed.includes(key)) filtered[key] = (data as any)[key] ?? null;
     }
-    if (data.contact_person !== undefined) {
-      updates.push('contact_person = ?');
-      params.push(data.contact_person || null);
-    }
-    if (data.phone !== undefined) {
-      updates.push('phone = ?');
-      params.push(data.phone || null);
-    }
-    if (data.email !== undefined) {
-      updates.push('email = ?');
-      params.push(data.email || null);
-    }
-    if (data.address !== undefined) {
-      updates.push('address = ?');
-      params.push(data.address || null);
-    }
-    if (data.note !== undefined) {
-      updates.push('note = ?');
-      params.push(data.note || null);
-    }
-    if (data.is_active !== undefined) {
-      updates.push('is_active = ?');
-      params.push(data.is_active ? 1 : 0);
-    }
-
-    if (updates.length === 0) return false;
-
-    updates.push('updated_at = ?');
-    params.push(now);
-    params.push(id);
-
-    const stmt = this.db.prepare(`UPDATE vendors_master SET ${updates.join(', ')} WHERE id = ?`);
-    const result = stmt.run(...params);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+    filtered.updated_at = now;
+    const { error } = await supabase.from('vendors_master').update(filtered).eq('id', id);
+    if (error) throw new Error(`[updateVendorMaster] ${error.message}`);
+    return true;
   }
 
   async deleteVendorMaster(id: number): Promise<boolean> {
-    const stmt = this.db.prepare('DELETE FROM vendors_master WHERE id = ?');
-    const result = stmt.run(id);
-    return result.changes > 0;
+    const { error } = await supabase.from('vendors_master').delete().eq('id', id);
+    if (error) throw new Error(`[deleteVendorMaster] ${error.message}`);
+    return true;
   }
 
   // ========== Outsourcing Costs CRUD ==========
 
   async createOutsourcingCost(data: InsertOutsourcingCost): Promise<number> {
     const now = new Date().toISOString();
-    const stmt = this.db.prepare(`
-      INSERT INTO outsourcing_costs (project_id, vendor_id, description, amount, date, note, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(
-      data.project_id,
-      data.vendor_id,
-      data.description,
-      data.amount,
-      data.date,
-      data.note || null,
-      now
-    );
-    
-    return result.lastInsertRowid as number;
+    const row = {
+      project_id: data.project_id,
+      vendor_id: data.vendor_id,
+      description: data.description,
+      amount: data.amount,
+      date: data.date,
+      note: data.note || null,
+      created_at: now
+    };
+    const { data: result, error } = await supabase.from('outsourcing_costs').insert(row).select('id').single();
+    if (error) throw new Error(`[createOutsourcingCost] ${error.message}`);
+    return (result as any).id as number;
   }
 
   async getOutsourcingCosts(filters: { project_id?: string; vendor_id?: number }): Promise<OutsourcingCostWithVendor[]> {
-    let query = `
-      SELECT 
-        oc.*,
-        v.name AS vendor_name
-      FROM outsourcing_costs oc
-      JOIN vendors_master v ON oc.vendor_id = v.id
-    `;
-    const conditions: string[] = [];
-    const params: any[] = [];
+    let query = supabase.from('outsourcing_costs').select('*').order('date', { ascending: false }).order('id', { ascending: false });
+    if (filters.project_id) query = query.eq('project_id', filters.project_id);
+    if (filters.vendor_id) query = query.eq('vendor_id', filters.vendor_id);
 
-    if (filters.project_id) {
-      conditions.push('oc.project_id = ?');
-      params.push(filters.project_id);
-    }
-    if (filters.vendor_id) {
-      conditions.push('oc.vendor_id = ?');
-      params.push(filters.vendor_id);
+    const { data, error } = await query;
+    if (error) throw new Error(`[getOutsourcingCosts] ${error.message}`);
+
+    const costs = (data || []) as OutsourcingCost[];
+    const vendorIds = [...new Set(costs.map(c => c.vendor_id).filter(Boolean) as number[])];
+    const vendorMap = new Map<number, string>();
+    if (vendorIds.length > 0) {
+      const { data: vendors } = await supabase.from('vendors_master').select('id,name').in('id', vendorIds);
+      for (const v of vendors || []) vendorMap.set(v.id, v.name);
     }
 
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
-    query += ' ORDER BY oc.date DESC, oc.id DESC';
-
-    return this.db.prepare(query).all(...params) as OutsourcingCostWithVendor[];
+    return costs.map(c => ({ ...c, vendor_name: c.vendor_id ? vendorMap.get(c.vendor_id as number) || '' : '' })) as OutsourcingCostWithVendor[];
   }
 
   async getOutsourcingCostById(id: number): Promise<OutsourcingCostWithVendor | null> {
-    const row = this.db.prepare(`
-      SELECT 
-        oc.*,
-        v.name AS vendor_name
-      FROM outsourcing_costs oc
-      JOIN vendors_master v ON oc.vendor_id = v.id
-      WHERE oc.id = ?
-    `).get(id);
-    return row as OutsourcingCostWithVendor | null;
+    const { data, error } = await supabase.from('outsourcing_costs').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(`[getOutsourcingCostById] ${error.message}`);
+    if (!data) return null;
+    const cost = data as OutsourcingCost;
+    let vendor_name = '';
+    if (cost.vendor_id) {
+      const { data: v } = await supabase.from('vendors_master').select('name').eq('id', cost.vendor_id).maybeSingle();
+      vendor_name = (v as any)?.name || '';
+    }
+    return { ...cost, vendor_name } as OutsourcingCostWithVendor;
   }
 
   async updateOutsourcingCost(id: number, data: Partial<InsertOutsourcingCost>): Promise<boolean> {
-    const updates: string[] = [];
-    const params: any[] = [];
-
-    if (data.project_id !== undefined) {
-      updates.push('project_id = ?');
-      params.push(data.project_id);
+    const allowed = ['project_id', 'vendor_id', 'description', 'amount', 'date', 'note'];
+    const filtered: Record<string, any> = {};
+    for (const key of Object.keys(data)) {
+      if (allowed.includes(key)) filtered[key] = (data as any)[key] ?? null;
     }
-    if (data.vendor_id !== undefined) {
-      updates.push('vendor_id = ?');
-      params.push(data.vendor_id);
-    }
-    if (data.description !== undefined) {
-      updates.push('description = ?');
-      params.push(data.description);
-    }
-    if (data.amount !== undefined) {
-      updates.push('amount = ?');
-      params.push(data.amount);
-    }
-    if (data.date !== undefined) {
-      updates.push('date = ?');
-      params.push(data.date);
-    }
-    if (data.note !== undefined) {
-      updates.push('note = ?');
-      params.push(data.note || null);
-    }
-
-    if (updates.length === 0) return false;
-
-    params.push(id);
-
-    const stmt = this.db.prepare(`UPDATE outsourcing_costs SET ${updates.join(', ')} WHERE id = ?`);
-    const result = stmt.run(...params);
-    return result.changes > 0;
+    if (Object.keys(filtered).length === 0) return false;
+    const { error } = await supabase.from('outsourcing_costs').update(filtered).eq('id', id);
+    if (error) throw new Error(`[updateOutsourcingCost] ${error.message}`);
+    return true;
   }
 
   async deleteOutsourcingCost(id: number): Promise<boolean> {
-    const stmt = this.db.prepare('DELETE FROM outsourcing_costs WHERE id = ?');
-    const result = stmt.run(id);
-    return result.changes > 0;
+    const { error } = await supabase.from('outsourcing_costs').delete().eq('id', id);
+    if (error) throw new Error(`[deleteOutsourcingCost] ${error.message}`);
+    return true;
   }
 
   close(): void {
-    this.db.close();
+    // Supabaseはコネクションプールを自動管理するため不要
   }
 }

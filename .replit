@@ -44,3 +44,10 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_object_storage:1.0.0", "javascript_mem_db:1.0.0", "javascript_database:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+SUPABASE_URL = "https://ntdvhsngtkaqwmwnefae.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50ZHZoc25ndGthcXdtd25lZmFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4MDM3MTksImV4cCI6MjA4OTM3OTcxOX0.p6953yG00rqsNBWQHi9Ee1cy8yltkjga2nF7j0VXYEE"
+SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50ZHZoc25ndGthcXdtd25lZmFlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzgwMzcxOSwiZXhwIjoyMDg5Mzc5NzE5fQ.TXUitev4yN6WRiY4ZQG5ceHyveb47m6P6fGQG6dTVTE"
