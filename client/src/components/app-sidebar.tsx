@@ -2,7 +2,7 @@
 import { 
   Package, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown, Timer,
-  ListChecks, ShoppingCart, GanttChart, Database, FileSpreadsheet,
+  ListChecks, ClipboardList, GanttChart, Database, FileSpreadsheet,
   Calculator, Users, Settings, Building2, Hammer, TrendingUp
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -35,7 +35,7 @@ const orderPlanningItems = [
 const fieldWorkItems = [
   { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
   { title: "作業実績入力", url: "/work-results", icon: Timer },
-  { title: "調達管理", url: "/procurement", icon: ShoppingCart }
+  { title: "発注管理", url: "/procurement", icon: ClipboardList }
 ];
 
 // Section 3: 原価・分析

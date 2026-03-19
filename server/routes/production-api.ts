@@ -251,11 +251,19 @@ router.get('/api/production/orders/:id', async (req, res) => {
         due_date: result.kpi.due_date && result.kpi.due_date !== '' ? toJST(result.kpi.due_date) : ''
       } : null,
       procurements: result.procurements.map(p => ({
-        ...p,
-        eta: p.eta ? toJST(p.eta) : null,
-        received_at: p.received_at ? toJST(p.received_at) : null,
-        completed_at: p.completed_at ? toJST(p.completed_at) : null,
-        created_at: toJST(p.created_at)
+        id: p.id,
+        order_id: p.order_id,
+        vendor_id: p.vendor_id,
+        material_id: p.material_id,
+        account_type: p.account_type,
+        description: p.description,
+        quantity: p.quantity,
+        unit_price: p.unit_price,
+        amount: p.amount,
+        order_date: p.order_date,
+        status: p.status,
+        notes: p.notes,
+        created_at: p.created_at
       })),
       workerLogs: result.workerLogs.map(w => ({
         ...w,
@@ -438,7 +446,6 @@ router.get('/api/procurements', async (req, res) => {
   try {
     const { 
       order_id, 
-      kind, 
       status, 
       page = '1', 
       page_size = '50' 
@@ -446,7 +453,6 @@ router.get('/api/procurements', async (req, res) => {
 
     const options = {
       orderId: order_id || undefined,
-      kind: kind as 'purchase' | 'manufacture' | undefined,
       status,
       page: parseInt(page),
       pageSize: parseInt(page_size)
@@ -454,17 +460,8 @@ router.get('/api/procurements', async (req, res) => {
 
     const result = await dao.getProcurements(options);
 
-    // Convert dates to JST
-    const procurementsWithJST = result.procurements.map(p => ({
-      ...p,
-      eta: p.eta ? toJST(p.eta) : null,
-      received_at: p.received_at ? toJST(p.received_at) : null,
-      completed_at: p.completed_at ? toJST(p.completed_at) : null,
-      created_at: toJST(p.created_at)
-    }));
-
     res.json({
-      data: procurementsWithJST,
+      data: result.procurements,
       meta: {
         total: result.total,
         page: parseInt(page),
@@ -496,11 +493,22 @@ router.post('/api/procurements', async (req, res) => {
       });
     }
 
+    const data = validation.data;
+
+    // Content validation: require either material_id or non-empty description
+    if (!data.material_id && (!data.description || data.description.trim() === '')) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: '内容は材料マスタから選択するか、テキストで入力してください'
+      });
+    }
+
+    const qty = data.quantity ?? 1;
+    const unitPrice = data.unit_price ?? 0;
     const procData = {
-      ...validation.data,
-      eta: validation.data.eta ? toUTC(validation.data.eta) : null,
-      received_at: validation.data.received_at ? toUTC(validation.data.received_at) : null,
-      completed_at: validation.data.completed_at ? toUTC(validation.data.completed_at) : null,
+      ...data,
+      quantity: qty,
+      amount: qty * unitPrice,
     };
 
     const procId = await dao.createProcurement(procData);
@@ -536,17 +544,25 @@ router.patch('/api/procurements/:id', async (req, res) => {
       });
     }
 
-    const updates = validation.data;
+    const baseUpdates = validation.data;
     
     // Check if there are any valid updates
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(baseUpdates).length === 0) {
       return res.status(400).json({ error: 'No valid updates provided' });
     }
 
-    // Convert dates to UTC if provided
-    if (updates.eta) updates.eta = toUTC(updates.eta);
-    if (updates.received_at) updates.received_at = toUTC(updates.received_at);
-    if (updates.completed_at) updates.completed_at = toUTC(updates.completed_at);
+    // Auto-calculate amount when quantity or unit_price is patched
+    // Fetch existing row to fill in the missing side of the calculation
+    let updates: typeof baseUpdates & { amount?: number } = baseUpdates;
+    if (baseUpdates.quantity !== undefined || baseUpdates.unit_price !== undefined) {
+      const existing = await dao.getProcurementById(procId);
+      if (!existing) {
+        return res.status(404).json({ error: 'Not found', message: 'Procurement not found' });
+      }
+      const qty = baseUpdates.quantity !== undefined ? baseUpdates.quantity : (existing.quantity ?? 0);
+      const unitPrice = baseUpdates.unit_price !== undefined ? baseUpdates.unit_price : (existing.unit_price ?? 0);
+      updates = { ...baseUpdates, amount: qty * unitPrice };
+    }
 
     const success = await dao.updateProcurement(procId, updates);
 

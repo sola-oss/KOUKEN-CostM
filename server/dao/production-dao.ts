@@ -39,20 +39,14 @@ function calcOrderKPIFromData(
   const sales = (order.sales as number) ?? 0;
   const stdTimePerUnit = (order.std_time_per_unit as number) ?? 0;
 
-  // 材料費
+  // 材料費（procurementsは新スキーマのため旧kind/unit_priceは参照しない）
   const baseMaterialCost = qty * estimatedMaterialCost;
-  const purchaseMaterialCost = procurements
-    .filter(p => p.kind === 'purchase' && p.status === 'received')
-    .reduce((sum, p) => sum + ((p.qty as number) ?? 0) * ((p.unit_price as number) ?? 0), 0);
-  const materialCost = baseMaterialCost + purchaseMaterialCost;
+  const materialCost = baseMaterialCost;
 
-  // 実労働時間
-  const manufactureHours = procurements
-    .filter(p => p.kind === 'manufacture')
-    .reduce((sum, p) => sum + ((p.qty as number) ?? 0) * ((p.act_time_per_unit as number) ?? 0), 0);
+  // 実労働時間（workers_logのみ参照）
   const workerLogHours = workerLogs
     .reduce((sum, w) => sum + ((w.qty as number) ?? 0) * ((w.act_time_per_unit as number) ?? 0), 0);
-  const totalActualHours = manufactureHours + workerLogHours;
+  const totalActualHours = workerLogHours;
   const actualTimePerUnit = qty > 0 ? totalActualHours / qty : 0;
 
   // 労務費
@@ -265,22 +259,16 @@ export class ProductionDAO {
     const now = new Date().toISOString();
     const row = {
       order_id: procData.order_id,
-      kind: procData.kind,
-      item_name: procData.item_name,
-      qty: procData.qty,
-      unit: procData.unit,
-      eta: procData.eta,
-      status: procData.status,
-      vendor: procData.vendor,
-      unit_price: procData.unit_price,
-      received_at: procData.received_at,
-      std_time_per_unit: procData.std_time_per_unit,
-      act_time_per_unit: procData.act_time_per_unit,
-      worker: procData.worker,
-      completed_at: procData.completed_at,
       vendor_id: procData.vendor_id ?? null,
-      total_amount: procData.total_amount ?? null,
-      is_approved: procData.is_approved ?? false,
+      material_id: procData.material_id ?? null,
+      account_type: procData.account_type ?? '外注費',
+      description: procData.description ?? null,
+      quantity: procData.quantity ?? null,
+      unit_price: procData.unit_price ?? null,
+      amount: procData.amount ?? null,
+      order_date: procData.order_date ?? null,
+      status: procData.status ?? '発注中',
+      notes: procData.notes ?? null,
       created_at: now
     };
 
@@ -291,12 +279,11 @@ export class ProductionDAO {
 
   async getProcurements(options: {
     orderId?: string;
-    kind?: 'purchase' | 'manufacture';
     status?: string;
     page?: number;
     pageSize?: number;
   } = {}): Promise<{ procurements: Procurement[], total: number }> {
-    const { orderId, kind, status, page = 1, pageSize = 50 } = options;
+    const { orderId, status, page = 1, pageSize = 50 } = options;
     const offset = (page - 1) * pageSize;
 
     let countQuery = supabase.from('procurements').select('*', { count: 'exact', head: true });
@@ -305,10 +292,6 @@ export class ProductionDAO {
     if (orderId) {
       countQuery = countQuery.eq('order_id', orderId);
       dataQuery = dataQuery.eq('order_id', orderId);
-    }
-    if (kind) {
-      countQuery = countQuery.eq('kind', kind);
-      dataQuery = dataQuery.eq('kind', kind);
     }
     if (status) {
       countQuery = countQuery.eq('status', status);
@@ -323,31 +306,18 @@ export class ProductionDAO {
 
     const procs = (data || []) as Procurement[];
 
-    // product_name取得（JOINの代わり）
-    const orderIds = [...new Set(procs.map(p => p.order_id).filter(Boolean) as string[])];
-    let orderNameMap = new Map<string, string>();
-    if (orderIds.length > 0) {
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('order_id,product_name,project_title')
-        .in('order_id', orderIds);
-      for (const o of orders || []) {
-        orderNameMap.set(o.order_id, o.product_name || o.project_title || '');
-      }
-    }
+    return { procurements: procs, total: count ?? 0 };
+  }
 
-    const procurements = procs.map(p => ({
-      ...p,
-      product_name: p.order_id ? orderNameMap.get(p.order_id) || '' : ''
-    }));
-
-    return { procurements, total: count ?? 0 };
+  async getProcurementById(procId: number): Promise<Procurement | null> {
+    const { data, error } = await supabase.from('procurements').select('*').eq('id', procId).single();
+    if (error) return null;
+    return data as Procurement;
   }
 
   async updateProcurement(procId: number, updates: Partial<InsertProcurement>): Promise<boolean> {
-    const allowedColumns = ['kind', 'item_name', 'qty', 'unit', 'eta', 'status', 'vendor', 'unit_price',
-      'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at',
-      'vendor_id', 'total_amount', 'is_approved'];
+    const allowedColumns = ['vendor_id', 'material_id', 'account_type', 'description', 'quantity',
+      'unit_price', 'amount', 'order_date', 'status', 'notes'];
 
     const filtered: Record<string, any> = {};
     for (const key of Object.keys(updates)) {
@@ -486,19 +456,12 @@ export class ProductionDAO {
 
     const avgVariancePct = validVarianceCount > 0 ? varianceSum / validVarianceCount : 0;
 
-    const purchases = procurements.filter(p => p.kind === 'purchase');
-    const manufactures = procurements.filter(p => p.kind === 'manufacture');
-    const purchaseCompletionRate = purchases.length > 0
-      ? (purchases.filter(p => p.status === 'received').length / purchases.length) * 100 : 0;
-    const manufactureCompletionRate = manufactures.length > 0
-      ? (manufactures.filter(p => p.status === 'done').length / manufactures.length) * 100 : 0;
-
     return {
       total_sales: totalSales, total_gross_profit: totalGrossProfit,
       total_std_hours: totalStdHours, total_actual_hours: totalActualHours,
       avg_variance_pct: avgVariancePct,
-      purchase_completion_rate: purchaseCompletionRate,
-      manufacture_completion_rate: manufactureCompletionRate
+      purchase_completion_rate: 0,
+      manufacture_completion_rate: 0
     };
   }
 
@@ -529,39 +492,17 @@ export class ProductionDAO {
     if (orderIds.length > 0) {
       const { data: procs } = await supabase
         .from('procurements')
-        .select('id,order_id,kind,item_name,eta,status,received_at,completed_at')
+        .select('id,order_id,description,order_date,status')
         .in('order_id', orderIds);
 
       for (const proc of (procs || []) as any[]) {
-        if (proc.eta) {
+        if (proc.order_date) {
           events.push({
-            id: `proc-eta-${proc.id}`,
-            title: `${proc.kind === 'purchase' ? '入荷予定' : '製造予定'}: ${proc.item_name || ''}`,
-            date: proc.eta,
+            id: `proc-${proc.id}`,
+            title: `発注: ${proc.description || ''}`,
+            date: proc.order_date,
             type: 'eta',
-            status: proc.status === 'received' || proc.status === 'done' ? 'completed' : 'pending',
-            order_id: proc.order_id,
-            procurement_id: proc.id
-          });
-        }
-        if (proc.received_at) {
-          events.push({
-            id: `proc-received-${proc.id}`,
-            title: `入荷完了: ${proc.item_name || ''}`,
-            date: proc.received_at,
-            type: 'received',
-            status: 'completed',
-            order_id: proc.order_id,
-            procurement_id: proc.id
-          });
-        }
-        if (proc.completed_at) {
-          events.push({
-            id: `proc-completed-${proc.id}`,
-            title: `製造完了: ${proc.item_name || ''}`,
-            date: proc.completed_at,
-            type: 'completed',
-            status: 'completed',
+            status: proc.status === '完了' ? 'completed' : 'pending',
             order_id: proc.order_id,
             procurement_id: proc.id
           });
@@ -631,9 +572,9 @@ export class ProductionDAO {
       supabase.from('tasks').select('id,task_name,planned_start,planned_end,status,order_id')
         .not('planned_start', 'is', null).not('planned_end', 'is', null)
         .order('planned_start', { ascending: true }),
-      supabase.from('procurements').select('id,item_name,order_id,kind,eta,received_at,completed_at')
-        .or('eta.not.is.null,completed_at.not.is.null')
-        .order('eta', { ascending: true, nullsFirst: false })
+      supabase.from('procurements').select('id,description,order_id,order_date,status')
+        .not('order_date', 'is', null)
+        .order('order_date', { ascending: true, nullsFirst: false })
     ]);
 
     const tasks = (tasksRes.data || []) as any[];
@@ -664,18 +605,18 @@ export class ProductionDAO {
     }
 
     for (const proc of (procsRes.data || []) as any[]) {
-      const endDate = proc.eta || proc.completed_at;
-      if (!endDate) continue;
-      const startDateObj = new Date(endDate);
-      startDateObj.setDate(startDateObj.getDate() - 7);
-      const startDate = startDateObj.toISOString().split('T')[0];
-      const isCompleted = proc.received_at !== null || proc.completed_at !== null;
+      const orderDate = proc.order_date;
+      if (!orderDate) continue;
+      const endDateObj = new Date(orderDate);
+      endDateObj.setDate(endDateObj.getDate() + 7);
+      const endDate = endDateObj.toISOString().split('T')[0];
+      const isCompleted = proc.status === '完了';
       const displayName = proc.order_id
-        ? `[${proc.order_id}] ${proc.item_name} (調達)` : `${proc.item_name} (調達)`;
+        ? `[${proc.order_id}] ${proc.description || '発注'} (調達)` : `${proc.description || '発注'} (調達)`;
       results.push({
         id: `proc-${proc.id}`,
         name: displayName,
-        start: startDate,
+        start: orderDate,
         end: endDate,
         progress: isCompleted ? 100 : 0,
         type: 'procurement'
@@ -701,9 +642,9 @@ export class ProductionDAO {
       supabase.from('workers_log').select('order_id,qty,act_time_per_unit')
         .not('order_id', 'is', null),
       supabase.from('procurements')
-        .select('id,item_name,order_id,eta,received_at,completed_at')
-        .or('eta.not.is.null,completed_at.not.is.null')
-        .order('order_id').order('eta', { ascending: true, nullsFirst: false })
+        .select('id,description,order_id,order_date,status')
+        .not('order_date', 'is', null)
+        .order('order_id').order('order_date', { ascending: true, nullsFirst: false })
     ]);
 
     const tasks = (tasksRes.data || []) as any[];
@@ -789,8 +730,8 @@ export class ProductionDAO {
 
     for (const proc of (procsRes.data || []) as any[]) {
       const orderId = proc.order_id || 'unknown';
-      const endDate = proc.eta || proc.completed_at;
-      if (!endDate) continue;
+      const startDate = proc.order_date;
+      if (!startDate) continue;
 
       if (!projectsMap.has(orderId)) {
         projectsMap.set(orderId, {
@@ -800,14 +741,14 @@ export class ProductionDAO {
         });
       }
 
-      const startDateObj = new Date(endDate);
-      startDateObj.setDate(startDateObj.getDate() - 7);
-      const startDate = startDateObj.toISOString().split('T')[0];
-      const isCompleted = proc.received_at !== null || proc.completed_at !== null;
+      const endDateObj = new Date(startDate);
+      endDateObj.setDate(endDateObj.getDate() + 7);
+      const endDate = endDateObj.toISOString().split('T')[0];
+      const isCompleted = proc.status === '完了';
 
       projectsMap.get(orderId)!.tasks.push({
         id: `proc-${proc.id}`,
-        taskName: `${proc.item_name} (調達)`,
+        taskName: `${proc.description || '発注'} (調達)`,
         startDate,
         endDate,
         progress: isCompleted ? 100 : 0,
@@ -1259,8 +1200,7 @@ export class ProductionDAO {
         .not('order_id', 'is', null).not('duration_hours', 'is', null).gt('duration_hours', 0),
       supabase.from('workers_log').select('order_id,worker,qty,act_time_per_unit')
         .not('order_id', 'is', null),
-      supabase.from('procurements').select('order_id,kind,is_approved,total_amount')
-        .eq('kind', 'purchase'),
+      supabase.from('procurements').select('order_id,account_type,amount'),
       supabase.from('outsourcing_costs').select('project_id,amount'),
       supabase.from('workers_master').select('name,hourly_rate')
     ]);
@@ -1352,11 +1292,11 @@ export class ProductionDAO {
       e.totalCost += cost;
     }
 
-    // 外注費（procurements + outsourcing_costs）
+    // 外注費（procurements[account_type='外注費'] + outsourcing_costs）
     const outsourcingCostMap = new Map<string, number>();
     for (const p of procurementsData) {
-      if (normBool(p.is_approved) && p.total_amount != null) {
-        outsourcingCostMap.set(p.order_id, (outsourcingCostMap.get(p.order_id) || 0) + p.total_amount);
+      if (p.account_type === '外注費' && p.amount != null && p.order_id) {
+        outsourcingCostMap.set(p.order_id, (outsourcingCostMap.get(p.order_id) || 0) + p.amount);
       }
     }
     for (const oc of outsourcingData) {

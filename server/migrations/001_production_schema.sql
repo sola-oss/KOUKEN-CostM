@@ -147,8 +147,8 @@ CREATE INDEX IF NOT EXISTS idx_orders_start ON orders(start_date);
 CREATE INDEX IF NOT EXISTS idx_orders_order_date ON orders(order_date);
 CREATE INDEX IF NOT EXISTS idx_orders_invoice_month ON orders(invoice_month);
 
--- Procurements indexes
-CREATE INDEX IF NOT EXISTS idx_proc_orders ON procurements(order_id, kind, status);
+-- Procurements indexes (updated in migration 011)
+-- CREATE INDEX IF NOT EXISTS idx_proc_orders ON procurements(order_id, kind, status);
 
 -- Workers log indexes
 CREATE INDEX IF NOT EXISTS idx_wlog_order ON workers_log(order_id, date);

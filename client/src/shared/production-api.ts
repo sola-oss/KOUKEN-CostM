@@ -127,38 +127,31 @@ export interface OrderPayload {
 // Procurement Types  
 export interface Procurement {
   id: number;
-  order_id: string | null;
-  kind: 'purchase' | 'manufacture';
-  item_name: string;
-  qty: number;
-  unit: string | null;
-  eta: string;
-  status: 'planned' | 'ordered' | 'received' | 'completed';
-  vendor: string | null;
-  unit_price: number;
-  received_at: string | null;
-  std_time_per_unit: number | null;
-  act_time_per_unit: number | null;
-  worker: string | null;
-  completed_at: string | null;
+  order_id: string;
+  vendor_id: number | null;
+  material_id: number | null;
+  account_type: string;
+  description: string | null;
+  quantity: number | null;
+  unit_price: number | null;
+  amount: number | null;
+  order_date: string | null;
+  status: string | null;
+  notes: string | null;
   created_at: string;
 }
 
 export interface ProcurementPayload {
-  order_id?: string;
-  kind: 'purchase' | 'manufacture';
-  item_name: string;
-  qty: number;
-  unit?: string;
-  eta: string;
-  status: 'planned' | 'ordered' | 'received' | 'completed';
-  vendor?: string;
-  unit_price: number;
-  received_at?: string;
-  std_time_per_unit?: number;
-  act_time_per_unit?: number;
-  worker?: string;
-  completed_at?: string;
+  order_id: string;
+  vendor_id?: number | null;
+  material_id?: number | null;
+  account_type: string;
+  description?: string | null;
+  quantity?: number | null;
+  unit_price?: number | null;
+  order_date?: string | null;
+  status?: string | null;
+  notes?: string | null;
 }
 
 // Worker Log Types
@@ -298,13 +291,13 @@ export async function listProcurements(params?: {
   page?: number;
   page_size?: number;
   order_id?: string;
-  kind?: 'purchase' | 'manufacture';
+  status?: string;
 }): Promise<{ data: Procurement[]; meta: any }> {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.append('page', params.page.toString());
   if (params?.page_size) searchParams.append('page_size', params.page_size.toString());
   if (params?.order_id) searchParams.append('order_id', params.order_id.toString());
-  if (params?.kind) searchParams.append('kind', params.kind);
+  if (params?.status) searchParams.append('status', params.status);
   
   const queryString = searchParams.toString();
   const endpoint = queryString ? `/api/procurements?${queryString}` : '/api/procurements';

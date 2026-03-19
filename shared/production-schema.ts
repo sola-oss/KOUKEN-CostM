@@ -65,31 +65,25 @@ export const orders = sqliteTable("orders", {
   invoiceMonthIdx: index("idx_orders_invoice_month").on(table.invoice_month),
 }));
 
-// 手配 (Procurements) - 購買(purchase) と 製造(manufacture) を統合
-// 外注費管理も統合（vendor_id, total_amount, is_approved）
+// 発注管理 (Procurements) - 外注費の記録・集計
 export const procurements = sqliteTable("procurements", {
   id: integer("id").primaryKey(),
   order_id: text("order_id").notNull().references(() => orders.order_id, { onDelete: "cascade" }),
-  kind: text("kind", { enum: ['purchase', 'manufacture'] }).notNull(),
-  item_name: text("item_name"),
-  qty: real("qty"),
-  unit: text("unit"),                            // 単位（個、本、kg、m、L など）
-  eta: text("eta"),                              // 予定日(UTC)
-  status: text("status"),                        // 'planned'|'ordered'|'received'|'done' など
-  vendor: text("vendor"),                        // kind=purchase 用（任意テキスト - レガシー）
-  vendor_id: integer("vendor_id"),               // 業者マスタ参照（外注費統合）
-  unit_price: real("unit_price"),                // kind=purchase 用（入荷時に金額算出）
-  total_amount: real("total_amount"),            // 合計金額（外注費統合）
-  is_approved: integer("is_approved", { mode: 'boolean' }).default(false), // 承認フラグ（外注費統合）
-  received_at: text("received_at"),              // kind=purchase 用（UTC）
-  std_time_per_unit: real("std_time_per_unit"),  // kind=manufacture 用 [h/個]
-  act_time_per_unit: real("act_time_per_unit"),  // kind=manufacture 用 [h/個]
-  worker: text("worker"),                        // kind=manufacture 用（任意）
-  completed_at: text("completed_at"),            // kind=manufacture 用（UTC）
+  vendor_id: integer("vendor_id"),               // 業者マスタ参照
+  material_id: integer("material_id"),           // 材料マスタ参照（任意）
+  account_type: text("account_type").notNull().default("外注費"), // 科目（例：外注費）
+  description: text("description"),             // 内容（テキスト入力の場合）
+  quantity: real("quantity"),                    // 数量
+  unit_price: real("unit_price"),                // 単価
+  amount: real("amount"),                        // 金額（quantity × unit_price）
+  order_date: text("order_date"),                // 発注日
+  status: text("status").default("発注中"),      // ステータス（発注中/完了/キャンセル）
+  notes: text("notes"),                          // 備考
   created_at: text("created_at").notNull(),
 }, (table) => ({
-  orderKindStatusIdx: index("idx_proc_orders").on(table.order_id, table.kind, table.status),
+  orderStatusIdx: index("idx_proc_order_status").on(table.order_id, table.status),
   vendorIdx: index("idx_proc_vendor").on(table.vendor_id),
+  accountTypeIdx: index("idx_proc_account_type").on(table.account_type),
 }));
 
 // 工数入力 (Workers Log) - スタッフ用の簡易打刻
@@ -220,8 +214,15 @@ export const insertProcurementSchema = createInsertSchema(procurements).omit({
   created_at: true,
 }).extend({
   vendor_id: z.coerce.number().optional().nullable(),
-  total_amount: z.coerce.number().optional().nullable(),
-  is_approved: z.boolean().default(false),
+  material_id: z.coerce.number().optional().nullable(),
+  account_type: z.string().default("外注費"),
+  description: z.string().optional().nullable(),
+  quantity: z.coerce.number().optional().nullable(),
+  unit_price: z.coerce.number().optional().nullable(),
+  amount: z.coerce.number().optional().nullable(),
+  order_date: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
 });
 
 export const insertWorkerLogSchema = createInsertSchema(workers_log).omit({
@@ -299,8 +300,8 @@ export const ALLOWED_ORDER_UPDATE_COLUMNS = [
 ] as const;
 
 export const ALLOWED_PROCUREMENT_UPDATE_COLUMNS = [
-  'kind', 'item_name', 'qty', 'unit', 'eta', 'status', 'vendor', 'unit_price',
-  'received_at', 'std_time_per_unit', 'act_time_per_unit', 'worker', 'completed_at'
+  'vendor_id', 'material_id', 'account_type', 'description', 'quantity', 'unit_price',
+  'amount', 'order_date', 'status', 'notes'
 ] as const;
 
 export const ALLOWED_WORKER_LOG_UPDATE_COLUMNS = [
