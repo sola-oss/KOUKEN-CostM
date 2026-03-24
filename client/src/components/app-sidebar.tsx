@@ -1,8 +1,8 @@
 // Production Management System Sidebar
 import { 
   Package, ClipboardCheck, BarChart3, 
-  ChevronRight, ChevronDown, Timer,
-  ListChecks, ClipboardList, GanttChart, Database, FileSpreadsheet,
+  ChevronRight, ChevronDown,
+  CheckSquare, ClipboardList, GanttChart, Database, FileSpreadsheet,
   Calculator, Users, Settings, Building2, Hammer, TrendingUp
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -27,14 +27,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 // Section 1: 受注と計画
 const orderPlanningItems = [
   { title: "受注管理", url: "/projects", icon: Package },
-  { title: "作業計画", url: "/task-planning", icon: ListChecks },
+  { title: "作業管理", url: "/task-management", icon: CheckSquare },
   { title: "ガントチャート", url: "/gantt", icon: GanttChart }
 ];
 
 // Section 2: 現場実績
 const fieldWorkItems = [
   { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
-  { title: "作業実績入力", url: "/work-results", icon: Timer },
   { title: "発注管理", url: "/procurement", icon: ClipboardList }
 ];
 

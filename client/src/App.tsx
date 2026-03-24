@@ -12,6 +12,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import Projects from "@/pages/production/projects";
 import ProjectDetail from "@/pages/production/project-detail";
 import TaskPlanning from "@/pages/production/task-planning";
+import TaskManagement from "@/pages/production/task-management";
 import Procurement from "@/pages/production/procurement";
 import WorkResults from "@/pages/production/work-results";
 import GanttSimple from "@/pages/production/gantt-simple";
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/projects" component={Projects} />
       <Route path="/project/:id" component={ProjectDetail} />
       <Route path="/task-planning" component={TaskPlanning} />
+      <Route path="/task-management" component={TaskManagement} />
       <Route path="/procurement" component={Procurement} />
       <Route path="/work-results" component={WorkResults} />
       <Route path="/gantt" component={GanttSimple} />
