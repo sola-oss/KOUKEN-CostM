@@ -3,6 +3,39 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { AuthContext, AuthUser } from "./auth-context";
 
+const PROFILE_CACHE_KEY = "auth_profile_cache";
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const AUTH_TIMEOUT_MS = 5000; // 5 seconds
+
+interface ProfileCache {
+  user: AuthUser;
+  cachedAt: number;
+}
+
+function getCachedProfile(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed: ProfileCache = JSON.parse(raw);
+    if (Date.now() - parsed.cachedAt > PROFILE_CACHE_TTL_MS) {
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+      return null;
+    }
+    return parsed.user;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedProfile(user: AuthUser | null) {
+  if (!user) {
+    localStorage.removeItem(PROFILE_CACHE_KEY);
+    return;
+  }
+  const cache: ProfileCache = { user, cachedAt: Date.now() };
+  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cache));
+}
+
 async function loadUserProfile(userId: string, email: string): Promise<AuthUser | null> {
   try {
     const { data, error } = await supabase
@@ -24,39 +57,88 @@ async function loadUserProfile(userId: string, email: string): Promise<AuthUser 
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedUser = getCachedProfile();
+  const [user, setUser] = useState<AuthUser | null>(cachedUser);
+  const [loading, setLoading] = useState(cachedUser === null);
   const [, setLocation] = useLocation();
 
   useEffect(() => {
     let mounted = true;
 
-    // 初回セッション確認
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!mounted) return;
-      if (session?.user) {
-        const profile = await loadUserProfile(session.user.id, session.user.email ?? "");
-        if (mounted) setUser(profile);
-      }
-      if (mounted) setLoading(false);
-    });
+    async function initAuth() {
+      try {
+        const { data: { session } } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_TIMEOUT_MS
+        );
 
-    // 認証状態変化の監視
+        if (!mounted) return;
+
+        if (session?.user) {
+          const profile = await withTimeout(
+            loadUserProfile(session.user.id, session.user.email ?? ""),
+            AUTH_TIMEOUT_MS
+          );
+          if (mounted) {
+            setUser(profile);
+            setCachedProfile(profile);
+            setLoading(false);
+          }
+        } else {
+          if (mounted) {
+            setUser(null);
+            setCachedProfile(null);
+            setLoading(false);
+          }
+        }
+      } catch {
+        if (mounted) {
+          setUser(null);
+          setCachedProfile(null);
+          setLoading(false);
+        }
+      }
+    }
+
+    initAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
       if (session?.user) {
-        // SIGNED_IN のタイミングで loading=true にしてレース条件を防ぐ
         if (event === "SIGNED_IN") {
           setLoading(true);
         }
-        const profile = await loadUserProfile(session.user.id, session.user.email ?? "");
-        if (!mounted) return;
-        setUser(profile);
-        setLoading(false);
+        try {
+          const profile = await withTimeout(
+            loadUserProfile(session.user.id, session.user.email ?? ""),
+            AUTH_TIMEOUT_MS
+          );
+          if (!mounted) return;
+          setUser(profile);
+          setCachedProfile(profile);
+          setLoading(false);
+        } catch {
+          if (mounted) {
+            setUser(null);
+            setCachedProfile(null);
+            setLoading(false);
+          }
+        }
       } else {
         setUser(null);
+        setCachedProfile(null);
         setLoading(false);
         if (event === "SIGNED_OUT") {
           setLocation("/login");
@@ -73,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function signOut() {
     await supabase.auth.signOut();
     setUser(null);
+    setCachedProfile(null);
     setLocation("/login");
   }
 

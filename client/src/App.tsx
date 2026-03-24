@@ -1,4 +1,4 @@
-import { type CSSProperties } from "react";
+import { lazy, Suspense, type CSSProperties } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -12,24 +12,32 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { useAuth } from "@/contexts/auth-context";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
-// Pages
-import Login from "@/pages/login";
-import Projects from "@/pages/production/projects";
-import ProjectDetail from "@/pages/production/project-detail";
-import TaskPlanning from "@/pages/production/task-planning";
-import TaskManagement from "@/pages/production/task-management";
-import Procurement from "@/pages/production/procurement";
-import WorkResults from "@/pages/production/work-results";
-import GanttSimple from "@/pages/production/gantt-simple";
-import MaterialUsages from "@/pages/production/material-usages";
-import MaterialSummary from "@/pages/production/material-summary";
-import MaterialsMaster from "@/pages/production/materials-master";
-import CostSummary from "@/pages/cost/cost-summary";
-import WorkersMaster from "@/pages/cost/workers-master";
-import VendorsMaster from "@/pages/cost/vendors-master";
-import CustomersMaster from "@/pages/production/customers-master";
-import UserManagement from "@/pages/user-management";
-import NotFound from "@/pages/not-found";
+// Pages — lazy loaded for code splitting
+const Login = lazy(() => import("@/pages/login"));
+const Projects = lazy(() => import("@/pages/production/projects"));
+const ProjectDetail = lazy(() => import("@/pages/production/project-detail"));
+const TaskPlanning = lazy(() => import("@/pages/production/task-planning"));
+const TaskManagement = lazy(() => import("@/pages/production/task-management"));
+const Procurement = lazy(() => import("@/pages/production/procurement"));
+const WorkResults = lazy(() => import("@/pages/production/work-results"));
+const GanttSimple = lazy(() => import("@/pages/production/gantt-simple"));
+const MaterialUsages = lazy(() => import("@/pages/production/material-usages"));
+const MaterialSummary = lazy(() => import("@/pages/production/material-summary"));
+const MaterialsMaster = lazy(() => import("@/pages/production/materials-master"));
+const CostSummary = lazy(() => import("@/pages/cost/cost-summary"));
+const WorkersMaster = lazy(() => import("@/pages/cost/workers-master"));
+const VendorsMaster = lazy(() => import("@/pages/cost/vendors-master"));
+const CustomersMaster = lazy(() => import("@/pages/production/customers-master"));
+const UserManagement = lazy(() => import("@/pages/user-management"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+
+function PageFallback() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <p className="text-muted-foreground">読み込み中...</p>
+    </div>
+  );
+}
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const style = {
@@ -64,14 +72,14 @@ function Router() {
 
   if (location === "/login") {
     return (
-      <Switch>
-        <Route path="/login" component={Login} />
-      </Switch>
+      <Suspense fallback={<PageFallback />}>
+        <Switch>
+          <Route path="/login" component={Login} />
+        </Switch>
+      </Suspense>
     );
   }
 
-  // While auth is resolving, show a blank screen instead of the sidebar
-  // to avoid briefly flashing the wrong role's menu items.
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -83,25 +91,27 @@ function Router() {
   return (
     <AppLayout>
       <ProtectedRoute>
-        <Switch>
-          <Route path="/" component={Projects} />
-          <Route path="/projects" component={Projects} />
-          <Route path="/project/:id" component={ProjectDetail} />
-          <Route path="/task-planning" component={TaskPlanning} />
-          <Route path="/task-management" component={TaskManagement} />
-          <Route path="/procurement" component={Procurement} />
-          <Route path="/work-results" component={WorkResults} />
-          <Route path="/gantt" component={GanttSimple} />
-          <Route path="/material-usages" component={MaterialUsages} />
-          <Route path="/material-summary" component={MaterialSummary} />
-          <Route path="/materials-master" component={MaterialsMaster} />
-          <Route path="/cost-summary" component={CostSummary} />
-          <Route path="/workers-master" component={WorkersMaster} />
-          <Route path="/vendors-master" component={VendorsMaster} />
-          <Route path="/customers-master" component={CustomersMaster} />
-          <Route path="/user-management" component={UserManagement} />
-          <Route component={NotFound} />
-        </Switch>
+        <Suspense fallback={<PageFallback />}>
+          <Switch>
+            <Route path="/" component={Projects} />
+            <Route path="/projects" component={Projects} />
+            <Route path="/project/:id" component={ProjectDetail} />
+            <Route path="/task-planning" component={TaskPlanning} />
+            <Route path="/task-management" component={TaskManagement} />
+            <Route path="/procurement" component={Procurement} />
+            <Route path="/work-results" component={WorkResults} />
+            <Route path="/gantt" component={GanttSimple} />
+            <Route path="/material-usages" component={MaterialUsages} />
+            <Route path="/material-summary" component={MaterialSummary} />
+            <Route path="/materials-master" component={MaterialsMaster} />
+            <Route path="/cost-summary" component={CostSummary} />
+            <Route path="/workers-master" component={WorkersMaster} />
+            <Route path="/vendors-master" component={VendorsMaster} />
+            <Route path="/customers-master" component={CustomersMaster} />
+            <Route path="/user-management" component={UserManagement} />
+            <Route component={NotFound} />
+          </Switch>
+        </Suspense>
       </ProtectedRoute>
     </AppLayout>
   );
