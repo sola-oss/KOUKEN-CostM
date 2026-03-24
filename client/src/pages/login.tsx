@@ -26,30 +26,14 @@ export default function Login() {
       });
 
       if (signInError || !data.user) {
-        console.error("signInError:", signInError?.message, signInError?.status, signInError?.code);
-        setError(`ログインに失敗しました（${signInError?.message ?? "不明なエラー"}）`);
+        setError("メールアドレスまたはパスワードが正しくありません");
         setLoading(false);
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from("user_profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single();
-
-      if (profileError || !profile) {
-        console.error("profileError:", profileError?.message, profileError?.code);
-        setError(`ユーザー情報の取得に失敗しました（${profileError?.message ?? "プロフィールが見つかりません"}）`);
-        setLoading(false);
-        return;
-      }
-
-      if (profile.role === "admin") {
-        setLocation("/projects");
-      } else {
-        setLocation("/task-management");
-      }
+      // 認証成功 — AuthContext の onAuthStateChange がプロフィールを取得し、
+      // ProtectedRoute がロールに応じた画面遷移を担当する
+      setLocation("/");
     } catch {
       setError("ログインに失敗しました。もう一度お試しください。");
       setLoading(false);

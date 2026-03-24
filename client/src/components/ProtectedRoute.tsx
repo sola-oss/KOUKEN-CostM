@@ -1,5 +1,5 @@
 import { useLocation, Redirect } from "wouter";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/auth-context";
 
 const WORKER_ALLOWED_PATHS = ["/task-management", "/material-usages"];
 

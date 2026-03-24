@@ -1,38 +1,17 @@
-// @refresh reset
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { AuthContext, AuthUser } from "./auth-context";
 
-interface AuthUser {
-  id: string;
-  name: string;
-  role: "admin" | "worker";
-  email: string;
-}
-
-interface AuthContextValue {
-  user: AuthUser | null;
-  loading: boolean;
-  signOut: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [, setLocation] = useLocation();
-
-  async function loadUserProfile(userId: string, email: string) {
+async function loadUserProfile(userId: string, email: string): Promise<AuthUser | null> {
+  try {
     const { data, error } = await supabase
       .from("user_profiles")
       .select("id, name, role")
       .eq("id", userId)
       .single();
 
-    if (error || !data) {
-      return null;
-    }
+    if (error || !data) return null;
 
     return {
       id: data.id,
@@ -40,11 +19,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role: data.role as "admin" | "worker",
       email,
     };
+  } catch {
+    return null;
   }
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     let mounted = true;
 
+    // 初回セッション確認
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return;
       if (session?.user) {
@@ -54,18 +42,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (mounted) setLoading(false);
     });
 
+    // 認証状態変化の監視
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
+
       if (session?.user) {
+        // SIGNED_IN のタイミングで loading=true にしてレース条件を防ぐ
+        if (event === "SIGNED_IN") {
+          setLoading(true);
+        }
         const profile = await loadUserProfile(session.user.id, session.user.email ?? "");
+        if (!mounted) return;
         setUser(profile);
+        setLoading(false);
       } else {
         setUser(null);
+        setLoading(false);
         if (event === "SIGNED_OUT") {
           setLocation("/login");
         }
       }
-      setLoading(false);
     });
 
     return () => {
@@ -85,12 +81,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return ctx;
 }
