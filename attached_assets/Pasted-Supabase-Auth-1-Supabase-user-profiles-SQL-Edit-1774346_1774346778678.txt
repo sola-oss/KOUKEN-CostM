@@ -1,0 +1,106 @@
+Supabase Authを使ったログイン機能・ロール制御・ユーザー管理画面を実装してください。
+
+---
+
+【1】Supabaseにuser_profilesテーブルを作成（SQL Editorで実行済みのため不要、すでにある場合はスキップ）
+CREATE TABLE IF NOT EXISTS user_profiles (
+  id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'worker',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+---
+
+【2】フロントエンド用Supabaseクライアントの作成
+ファイル: client/src/lib/supabase.ts（新規作成）
+
+import { createClient } from '@supabase/supabase-js'
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+---
+
+【3】認証Contextの作成
+ファイル: client/src/contexts/AuthContext.tsx（新規作成）
+
+- Supabase Authのセッションを管理するContextを作成
+- ログイン中のユーザー情報（id・name・role）をアプリ全体で参照できるようにする
+- セッションが切れた場合は自動的に /login にリダイレクト
+- user_profilesテーブルからroleとnameを取得してContextに保存
+
+---
+
+【4】ログインページの作成
+ファイル: client/src/pages/login.tsx（新規作成）
+
+- メールアドレスとパスワードでログイン（Supabase AuthのsignInWithPassword使用）
+- シンプルなデザイン：ロゴ「KOUKEN 生産管理システム」・メール入力・パスワード入力・ログインボタン
+- ログイン成功時：roleに応じてリダイレクト（admin → /orders、worker → /task-management）
+- エラー時：「メールアドレスまたはパスワードが正しくありません」と表示
+- このページはログイン不要でアクセス可能
+
+---
+
+【5】ルートガード（アクセス制御）
+ファイル: client/src/components/ProtectedRoute.tsx（新規作成）
+
+- 未ログイン → すべてのページを /login にリダイレクト
+- ロール「worker」がアクセスできるページ：/task-management・/material-usages のみ
+- ロール「admin」はすべてのページにアクセス可能
+- workerが管理者ページにアクセスした場合は /task-management にリダイレクト
+
+---
+
+【6】サイドバーの変更
+ファイル: client/src/components/sidebar.tsx
+
+- roleに応じてメニュー項目を表示/非表示
+  - admin：すべてのメニュー表示＋「ユーザー管理」メニューを追加（href="/user-management"）
+  - worker：「作業管理」と「材料使用入力」のみ表示
+- サイドバー下部にログインユーザー名とロールを表示
+- 「ログアウト」ボタンを追加（Supabase AuthのsignOut使用、ログアウト後は /login にリダイレクト）
+
+---
+
+【7】ユーザー管理ページの作成（管理者専用）
+ファイル: client/src/pages/user-management.tsx（新規作成）
+
+ページタイトル：「ユーザー管理」
+サブタイトル：「ログインユーザーの追加・管理」
+
+■ 新規ユーザー追加フォーム
+- 名前（テキスト入力・必須）
+- メールアドレス（メール入力・必須）
+- パスワード（パスワード入力・必須・8文字以上）
+- ロール（ドロップダウン：「管理者（admin）」「現場作業者（worker）」・デフォルト：worker）
+- 「ユーザーを追加」ボタン
+
+登録処理：
+① Supabase Authのadmin APIでユーザー作成（supabase.auth.admin.createUser）
+② user_profilesテーブルにname・roleをINSERT
+③ 成功時：「ユーザーを追加しました」と表示、フォームをリセット
+④ エラー時：エラーメッセージを表示
+
+■ ユーザー一覧
+- 名前 / メールアドレス / ロール / 登録日 / 操作（削除）
+- 削除ボタン：Supabase AuthからユーザーをdeleteUser＋user_profilesからも削除
+- 自分自身は削除できないよう制御
+
+---
+
+【8】App.tsxの変更
+- AuthProviderでアプリ全体をラップ
+- /login ルートを追加（ProtectedRoute不要）
+- /user-management ルートを追加（adminのみアクセス可能）
+- 全ルートをProtectedRouteでラップ
+
+---
+
+【注意事項】
+- VITE_SUPABASE_URLとVITE_SUPABASE_ANON_KEYはReplitのSecretsに登録済み
+- supabase.auth.admin.createUser はサービスロールキーが必要なため、サーバーサイドAPIエンドポイント（POST /api/auth/create-user）を作成してそこから呼び出すこと
+- 同様にユーザー削除もサーバーサイドAPI（DELETE /api/auth/delete-user/:id）で実装
+- サーバーサイドではSUPABASE_SERVICE_ROLE_KEY（既存のSecretsに登録済み）を使用
+- 既存のページ・APIの動作は変更しないこと
