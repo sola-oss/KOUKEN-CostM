@@ -179,7 +179,11 @@ function WorkLogInlineForm({ task, workers, onClose, onSuccess }: WorkLogInlineF
   const createMutation = useMutation({
     mutationFn: createWorkLog,
     onSuccess: async () => {
-      await updateTask(task.id, { status: "in_progress" });
+      try {
+        await updateTask(task.id, { status: "in_progress" });
+      } catch {
+        // タスクステータス更新失敗は非致命的（実績は既に保存済み）
+      }
       queryClient.invalidateQueries({ queryKey: ["work-logs"] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast({ title: "実績を保存しました" });
