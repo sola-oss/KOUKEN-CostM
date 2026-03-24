@@ -36,7 +36,7 @@ export const helmetConfig = helmet({
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: process.env.NODE_ENV === 'development'
         ? ["'self'", "ws:", "wss:", "http://localhost:*", "https:"]
-        : ["'self'"],
+        : ["'self'", "https://ntdvhsngtkaqwmwnefae.supabase.co"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
