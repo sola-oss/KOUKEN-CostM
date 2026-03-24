@@ -8,7 +8,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Pages
@@ -58,12 +58,23 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 function Router() {
   const [location] = useLocation();
+  const { loading } = useAuth();
 
   if (location === "/login") {
     return (
       <Switch>
         <Route path="/login" component={Login} />
       </Switch>
+    );
+  }
+
+  // While auth is resolving, show a blank screen instead of the sidebar
+  // to avoid briefly flashing the wrong role's menu items.
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-muted-foreground">読み込み中...</p>
+      </div>
     );
   }
 
