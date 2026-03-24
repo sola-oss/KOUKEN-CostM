@@ -3,7 +3,8 @@ import {
   Package, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown,
   CheckSquare, ClipboardList, GanttChart, Database, FileSpreadsheet,
-  Calculator, Users, Settings, Building2, Hammer, TrendingUp
+  Calculator, Users, Settings, Building2, Hammer, TrendingUp,
+  LogOut, UserCircle
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -23,6 +24,8 @@ import {
   SidebarHeader
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Section 1: 受注と計画
 const orderPlanningItems = [
@@ -50,17 +53,31 @@ const masterItems = [
   { title: "業者マスタ", url: "/vendors-master", icon: Building2 }
 ];
 
+// Worker-only allowed routes
+const WORKER_ALLOWED_ROUTES = ["/task-management", "/material-usages"];
+
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user, signOut } = useAuth();
+  const isWorker = user?.role === "worker";
+
   const [isOrderPlanningOpen, setIsOrderPlanningOpen] = useState(true);
   const [isFieldWorkOpen, setIsFieldWorkOpen] = useState(true);
   const [isCostAnalysisOpen, setIsCostAnalysisOpen] = useState(true);
   const [isMasterOpen, setIsMasterOpen] = useState(true);
 
-  const isOrderPlanningActive = orderPlanningItems.some(item => location === item.url);
-  const isFieldWorkActive = fieldWorkItems.some(item => location === item.url);
-  const isCostAnalysisActive = costAnalysisItems.some(item => location === item.url);
+  // Filter items based on role
+  const visibleOrderPlanningItems = isWorker
+    ? orderPlanningItems.filter(item => WORKER_ALLOWED_ROUTES.includes(item.url))
+    : orderPlanningItems;
+
+  const visibleFieldWorkItems = isWorker
+    ? fieldWorkItems.filter(item => WORKER_ALLOWED_ROUTES.includes(item.url))
+    : fieldWorkItems;
+
   const isMasterActive = masterItems.some(item => location === item.url);
+
+  const roleLabel = user?.role === "admin" ? "管理者" : "作業者";
 
   return (
     <Sidebar>
@@ -72,173 +89,204 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {/* Section 1: 受注と計画 */}
-        <SidebarGroup>
-          <Collapsible
-            open={isOrderPlanningOpen}
-            onOpenChange={setIsOrderPlanningOpen}
-            className="group/collapsible"
-          >
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:bg-sidebar-accent rounded px-2 py-1">
-                <div className="flex items-center gap-2">
-                  <ClipboardCheck className="h-4 w-4" />
-                  <span>受注と計画</span>
-                </div>
-                {isOrderPlanningOpen ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {orderPlanningItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
-                        asChild
-                        className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
-                      >
-                        <Link href={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </SidebarGroup>
+        {visibleOrderPlanningItems.length > 0 && (
+          <SidebarGroup>
+            <Collapsible
+              open={isOrderPlanningOpen}
+              onOpenChange={setIsOrderPlanningOpen}
+              className="group/collapsible"
+            >
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:bg-sidebar-accent rounded px-2 py-1">
+                  <div className="flex items-center gap-2">
+                    <ClipboardCheck className="h-4 w-4" />
+                    <span>受注と計画</span>
+                  </div>
+                  {isOrderPlanningOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visibleOrderPlanningItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton 
+                          asChild
+                          className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+        )}
 
         {/* Section 2: 現場実績 */}
-        <SidebarGroup>
-          <Collapsible
-            open={isFieldWorkOpen}
-            onOpenChange={setIsFieldWorkOpen}
-            className="group/collapsible"
-          >
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:bg-sidebar-accent rounded px-2 py-1">
-                <div className="flex items-center gap-2">
-                  <Hammer className="h-4 w-4" />
-                  <span>現場実績</span>
-                </div>
-                {isFieldWorkOpen ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {fieldWorkItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
-                        asChild
-                        className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
-                      >
-                        <Link href={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </SidebarGroup>
-
-        {/* Section 3: 原価・分析 */}
-        <SidebarGroup>
-          <Collapsible
-            open={isCostAnalysisOpen}
-            onOpenChange={setIsCostAnalysisOpen}
-            className="group/collapsible"
-          >
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:bg-sidebar-accent rounded px-2 py-1">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  <span>原価・分析</span>
-                </div>
-                {isCostAnalysisOpen ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {costAnalysisItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
-                        asChild
-                        className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
-                      >
-                        <Link href={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </SidebarGroup>
-      </SidebarContent>
-      {/* Section 4: マスタ (Footer) */}
-      <SidebarFooter className="border-t">
-        <SidebarMenu>
-          <Collapsible
-            open={isMasterOpen}
-            onOpenChange={setIsMasterOpen}
-            className="group/collapsible"
-          >
-            <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton 
-                  className={isMasterActive ? 'bg-primary/10 text-primary font-medium' : ''}
-                >
-                  <Settings className="h-4 w-4" />
-                  <span className="flex-1">マスター</span>
-                  {isMasterOpen ? (
-                    <ChevronDown className="h-4 w-4 transition-transform" />
+        {visibleFieldWorkItems.length > 0 && (
+          <SidebarGroup>
+            <Collapsible
+              open={isFieldWorkOpen}
+              onOpenChange={setIsFieldWorkOpen}
+              className="group/collapsible"
+            >
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:bg-sidebar-accent rounded px-2 py-1">
+                  <div className="flex items-center gap-2">
+                    <Hammer className="h-4 w-4" />
+                    <span>現場実績</span>
+                  </div>
+                  {isFieldWorkOpen ? (
+                    <ChevronDown className="h-4 w-4" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 transition-transform" />
+                    <ChevronRight className="h-4 w-4" />
                   )}
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
               <CollapsibleContent>
-                <SidebarMenuSub>
-                  {masterItems.map((subItem) => (
-                    <SidebarMenuSubItem key={subItem.title}>
-                      <SidebarMenuSubButton 
-                        asChild
-                        className={location === subItem.url ? 'bg-primary/10 text-primary font-medium' : ''}
-                      >
-                        <Link href={subItem.url}>
-                          <subItem.icon className="h-4 w-4" />
-                          <span>{subItem.title}</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visibleFieldWorkItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton 
+                          asChild
+                          className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
               </CollapsibleContent>
-            </SidebarMenuItem>
-          </Collapsible>
-        </SidebarMenu>
+            </Collapsible>
+          </SidebarGroup>
+        )}
+
+        {/* Section 3: 原価・分析 (admin only) */}
+        {!isWorker && (
+          <SidebarGroup>
+            <Collapsible
+              open={isCostAnalysisOpen}
+              onOpenChange={setIsCostAnalysisOpen}
+              className="group/collapsible"
+            >
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer hover:bg-sidebar-accent rounded px-2 py-1">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    <span>原価・分析</span>
+                  </div>
+                  {isCostAnalysisOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {costAnalysisItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton 
+                          asChild
+                          className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+        )}
+      </SidebarContent>
+
+      <SidebarFooter className="border-t flex flex-col gap-2 p-3">
+        {/* Section 4: マスタ (admin only) */}
+        {!isWorker && (
+          <SidebarMenu>
+            <Collapsible
+              open={isMasterOpen}
+              onOpenChange={setIsMasterOpen}
+              className="group/collapsible"
+            >
+              <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton 
+                    className={isMasterActive ? 'bg-primary/10 text-primary font-medium' : ''}
+                  >
+                    <Settings className="h-4 w-4" />
+                    <span className="flex-1">マスター</span>
+                    {isMasterOpen ? (
+                      <ChevronDown className="h-4 w-4 transition-transform" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 transition-transform" />
+                    )}
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <SidebarMenuSub>
+                    {masterItems.map((subItem) => (
+                      <SidebarMenuSubItem key={subItem.title}>
+                        <SidebarMenuSubButton 
+                          asChild
+                          className={location === subItem.url ? 'bg-primary/10 text-primary font-medium' : ''}
+                        >
+                          <Link href={subItem.url}>
+                            <subItem.icon className="h-4 w-4" />
+                            <span>{subItem.title}</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </SidebarMenuItem>
+            </Collapsible>
+          </SidebarMenu>
+        )}
+
+        {/* User info and logout */}
+        {user && (
+          <div className="flex flex-col gap-2 pt-1">
+            <div className="flex items-center gap-2 px-2 py-1">
+              <UserCircle className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-medium truncate">{user.name}</span>
+                <span className="text-xs text-muted-foreground">{roleLabel}</span>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2"
+              onClick={signOut}
+            >
+              <LogOut className="h-4 w-4" />
+              ログアウト
+            </Button>
+          </div>
+        )}
       </SidebarFooter>
     </Sidebar>
   );
