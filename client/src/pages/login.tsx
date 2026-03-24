@@ -27,7 +27,7 @@ export default function Login() {
 
       if (signInError || !data.user) {
         console.error("signInError:", signInError?.message, signInError?.status, signInError?.code);
-        setError("メールアドレスまたはパスワードが正しくありません");
+        setError(`ログインに失敗しました（${signInError?.message ?? "不明なエラー"}）`);
         setLoading(false);
         return;
       }
@@ -39,7 +39,8 @@ export default function Login() {
         .single();
 
       if (profileError || !profile) {
-        setError("ユーザー情報の取得に失敗しました");
+        console.error("profileError:", profileError?.message, profileError?.code);
+        setError(`ユーザー情報の取得に失敗しました（${profileError?.message ?? "プロフィールが見つかりません"}）`);
         setLoading(false);
         return;
       }
