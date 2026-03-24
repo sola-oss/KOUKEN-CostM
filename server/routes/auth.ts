@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
@@ -14,16 +14,47 @@ const supabaseAdmin = createClient(
   }
 );
 
-// GET /api/auth/users - List all users from user_profiles
-router.get('/api/auth/users', async (req, res) => {
+// ---- Middleware: require Supabase JWT + admin role ----
+
+async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: '認証が必要です' });
+  }
+
+  const token = authHeader.slice(7);
+
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) {
+    return res.status(401).json({ error: '無効なトークンです' });
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError || !profile || profile.role !== 'admin') {
+    return res.status(403).json({ error: '管理者権限が必要です' });
+  }
+
+  (req as any).currentUserId = user.id;
+  next();
+}
+
+// ---- Routes ----
+
+// GET /api/auth/users - List all users (admin only)
+router.get('/api/auth/users', requireAdmin, async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data: profiles, error: profileError } = await supabaseAdmin
       .from('user_profiles')
       .select('id, name, role, created_at')
       .order('created_at', { ascending: true });
 
-    if (error) {
-      console.error('List users error:', error);
+    if (profileError) {
+      console.error('List users error:', profileError);
       return res.status(500).json({ error: 'ユーザー一覧の取得に失敗しました' });
     }
 
@@ -35,7 +66,7 @@ router.get('/api/auth/users', async (req, res) => {
 
     const emailMap = new Map(authData.users.map((u) => [u.id, u.email ?? '']));
 
-    const users = (data ?? []).map((profile) => ({
+    const users = (profiles ?? []).map((profile) => ({
       id: profile.id,
       name: profile.name,
       role: profile.role,
@@ -50,8 +81,8 @@ router.get('/api/auth/users', async (req, res) => {
   }
 });
 
-// POST /api/auth/create-user - Create a new user
-router.post('/api/auth/create-user', async (req, res) => {
+// POST /api/auth/create-user - Create a new user (admin only)
+router.post('/api/auth/create-user', requireAdmin, async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
@@ -101,13 +132,19 @@ router.post('/api/auth/create-user', async (req, res) => {
   }
 });
 
-// DELETE /api/auth/delete-user/:id - Delete a user
-router.delete('/api/auth/delete-user/:id', async (req, res) => {
+// DELETE /api/auth/delete-user/:id - Delete a user (admin only, no self-delete)
+router.delete('/api/auth/delete-user/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const currentUserId = (req as any).currentUserId as string;
 
     if (!id) {
       return res.status(400).json({ error: 'ユーザーIDが指定されていません' });
+    }
+
+    // Enforce no-self-delete on server side
+    if (id === currentUserId) {
+      return res.status(400).json({ error: '自分自身を削除することはできません' });
     }
 
     const { error: profileError } = await supabaseAdmin

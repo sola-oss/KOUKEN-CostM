@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -6,7 +5,6 @@ import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, UserPlus, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,17 +42,31 @@ interface UserProfile {
   created_at: string;
 }
 
+async function getAuthToken(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("認証情報が見つかりません。再ログインしてください。");
+  return token;
+}
+
 async function fetchUsers(): Promise<UserProfile[]> {
-  const res = await fetch("/api/auth/users");
-  if (!res.ok) throw new Error("ユーザー一覧の取得に失敗しました");
+  const token = await getAuthToken();
+  const res = await fetch("/api/auth/users", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error ?? "ユーザー一覧の取得に失敗しました");
+  }
   const data = await res.json();
   return data.users;
 }
 
 async function createUser(body: CreateUserFormData): Promise<void> {
+  const token = await getAuthToken();
   const res = await fetch("/api/auth/create-user", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
   const data = await res.json();
@@ -61,7 +74,11 @@ async function createUser(body: CreateUserFormData): Promise<void> {
 }
 
 async function deleteUser(id: string): Promise<void> {
-  const res = await fetch(`/api/auth/delete-user/${id}`, { method: "DELETE" });
+  const token = await getAuthToken();
+  const res = await fetch(`/api/auth/delete-user/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "ユーザーの削除に失敗しました");
 }
