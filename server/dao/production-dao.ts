@@ -86,6 +86,20 @@ function calcOrderKPIFromData(
 export class ProductionDAO {
   constructor() {}
 
+  async verifyProcurementsSchema(): Promise<void> {
+    // Using compatibility layer: new fields mapped to old Supabase columns
+    // (item_name→description, qty→quantity, total_amount→amount, eta→order_date, vendor JSON→material_id/account_type/notes)
+    const { error } = await supabase
+      .from('procurements')
+      .select('id, item_name, qty, unit_price, total_amount, eta, status, vendor, vendor_id')
+      .limit(1);
+    if (error) {
+      console.error('✗ Supabase procurements schema check failed:', error.message, '| code:', error.code);
+    } else {
+      console.log('✓ Supabase procurements table OK (compatibility mode: old schema → new field mapping)');
+    }
+  }
+
   // ========== Orders CRUD ==========
 
   async createOrder(orderData: InsertOrder): Promise<string> {
@@ -255,23 +269,57 @@ export class ProductionDAO {
   }
 
   // ========== Procurements CRUD ==========
+  // NOTE: Supabase uses the OLD procurements schema (migration 001).
+  // New fields (material_id, account_type, notes) are stored as JSON in the `vendor` column.
+  // Column mapping: description→item_name, quantity→qty, amount→total_amount, order_date→eta.
+
+  private _procToOld(procData: Partial<InsertProcurement>, now?: string): Record<string, any> {
+    const extra = JSON.stringify({
+      material_id: procData.material_id ?? null,
+      account_type: procData.account_type ?? '外注費',
+      notes: procData.notes ?? null,
+    });
+    const row: Record<string, any> = {
+      vendor_id: procData.vendor_id ?? null,
+      item_name: procData.description ?? null,
+      qty: procData.quantity ?? null,
+      unit_price: procData.unit_price ?? null,
+      total_amount: procData.amount ?? null,
+      eta: procData.order_date ?? null,
+      status: procData.status ?? '発注中',
+      vendor: extra,
+    };
+    if (procData.order_id !== undefined) row.order_id = procData.order_id;
+    if (now) {
+      row.kind = 'purchase';
+      row.created_at = now;
+    }
+    return row;
+  }
+
+  private _procFromOld(row: any): Procurement {
+    let extra: any = {};
+    try { extra = JSON.parse(row.vendor || '{}'); } catch { /* ignore */ }
+    return {
+      id: row.id,
+      order_id: row.order_id,
+      vendor_id: row.vendor_id ?? null,
+      material_id: extra.material_id ?? null,
+      account_type: extra.account_type ?? '外注費',
+      description: row.item_name ?? null,
+      quantity: row.qty ?? null,
+      unit_price: row.unit_price ?? null,
+      amount: row.total_amount ?? null,
+      order_date: row.eta ?? null,
+      status: row.status ?? '発注中',
+      notes: extra.notes ?? null,
+      created_at: row.created_at,
+    } as Procurement;
+  }
 
   async createProcurement(procData: InsertProcurement): Promise<number> {
     const now = new Date().toISOString();
-    const row = {
-      order_id: procData.order_id,
-      vendor_id: procData.vendor_id ?? null,
-      material_id: procData.material_id ?? null,
-      account_type: procData.account_type ?? '外注費',
-      description: procData.description ?? null,
-      quantity: procData.quantity ?? null,
-      unit_price: procData.unit_price ?? null,
-      amount: procData.amount ?? null,
-      order_date: procData.order_date ?? null,
-      status: procData.status ?? '発注中',
-      notes: procData.notes ?? null,
-      created_at: now
-    };
+    const row = this._procToOld(procData, now);
 
     const { data, error } = await supabase.from('procurements').insert(row).select('id').single();
     if (error) throw new Error(`[createProcurement] ${error.message}`);
@@ -305,7 +353,7 @@ export class ProductionDAO {
     if (ce) throw new Error(`[getProcurements count] ${ce.message}`);
     if (de) throw new Error(`[getProcurements data] ${de.message}`);
 
-    const procs = (data || []) as Procurement[];
+    const procs = (data || []).map((r: any) => this._procFromOld(r));
 
     return { procurements: procs, total: count ?? 0 };
   }
@@ -313,19 +361,12 @@ export class ProductionDAO {
   async getProcurementById(procId: number): Promise<Procurement | null> {
     const { data, error } = await supabase.from('procurements').select('*').eq('id', procId).single();
     if (error) return null;
-    return data as Procurement;
+    return this._procFromOld(data);
   }
 
   async updateProcurement(procId: number, updates: Partial<InsertProcurement>): Promise<boolean> {
-    const allowedColumns = ['vendor_id', 'material_id', 'account_type', 'description', 'quantity',
-      'unit_price', 'amount', 'order_date', 'status', 'notes'];
-
-    const filtered: Record<string, any> = {};
-    for (const key of Object.keys(updates)) {
-      if (allowedColumns.includes(key)) {
-        filtered[key] = (updates as any)[key];
-      }
-    }
+    const filtered = this._procToOld(updates);
+    // Rebuild vendor JSON from existing + updates to preserve un-changed extra fields
     if (Object.keys(filtered).length === 0) return false;
 
     const { error } = await supabase.from('procurements').update(filtered).eq('id', procId);
@@ -493,15 +534,15 @@ export class ProductionDAO {
     if (orderIds.length > 0) {
       const { data: procs } = await supabase
         .from('procurements')
-        .select('id,order_id,description,order_date,status')
+        .select('id,order_id,item_name,eta,status')
         .in('order_id', orderIds);
 
       for (const proc of (procs || []) as any[]) {
-        if (proc.order_date) {
+        if (proc.eta) {
           events.push({
             id: `proc-${proc.id}`,
-            title: `発注: ${proc.description || ''}`,
-            date: proc.order_date,
+            title: `発注: ${proc.item_name || ''}`,
+            date: proc.eta,
             type: 'eta',
             status: proc.status === '完了' ? 'completed' : 'pending',
             order_id: proc.order_id,
@@ -573,9 +614,9 @@ export class ProductionDAO {
       supabase.from('tasks').select('id,task_name,planned_start,planned_end,status,order_id')
         .not('planned_start', 'is', null).not('planned_end', 'is', null)
         .order('planned_start', { ascending: true }),
-      supabase.from('procurements').select('id,description,order_id,order_date,status')
-        .not('order_date', 'is', null)
-        .order('order_date', { ascending: true, nullsFirst: false })
+      supabase.from('procurements').select('id,item_name,order_id,eta,status')
+        .not('eta', 'is', null)
+        .order('eta', { ascending: true, nullsFirst: false })
     ]);
 
     const tasks = (tasksRes.data || []) as any[];
@@ -606,14 +647,14 @@ export class ProductionDAO {
     }
 
     for (const proc of (procsRes.data || []) as any[]) {
-      const orderDate = proc.order_date;
+      const orderDate = proc.eta;
       if (!orderDate) continue;
       const endDateObj = new Date(orderDate);
       endDateObj.setDate(endDateObj.getDate() + 7);
       const endDate = endDateObj.toISOString().split('T')[0];
       const isCompleted = proc.status === '完了';
       const displayName = proc.order_id
-        ? `[${proc.order_id}] ${proc.description || '発注'} (調達)` : `${proc.description || '発注'} (調達)`;
+        ? `[${proc.order_id}] ${proc.item_name || '発注'} (調達)` : `${proc.item_name || '発注'} (調達)`;
       results.push({
         id: `proc-${proc.id}`,
         name: displayName,
@@ -643,9 +684,9 @@ export class ProductionDAO {
       supabase.from('workers_log').select('order_id,qty,act_time_per_unit')
         .not('order_id', 'is', null),
       supabase.from('procurements')
-        .select('id,description,order_id,order_date,status')
-        .not('order_date', 'is', null)
-        .order('order_id').order('order_date', { ascending: true, nullsFirst: false })
+        .select('id,item_name,order_id,eta,status')
+        .not('eta', 'is', null)
+        .order('order_id').order('eta', { ascending: true, nullsFirst: false })
     ]);
 
     const tasks = (tasksRes.data || []) as any[];
@@ -731,7 +772,7 @@ export class ProductionDAO {
 
     for (const proc of (procsRes.data || []) as any[]) {
       const orderId = proc.order_id || 'unknown';
-      const startDate = proc.order_date;
+      const startDate = proc.eta;
       if (!startDate) continue;
 
       if (!projectsMap.has(orderId)) {
@@ -749,7 +790,7 @@ export class ProductionDAO {
 
       projectsMap.get(orderId)!.tasks.push({
         id: `proc-${proc.id}`,
-        taskName: `${proc.description || '発注'} (調達)`,
+        taskName: `${proc.item_name || '発注'} (調達)`,
         startDate,
         endDate,
         progress: isCompleted ? 100 : 0,
@@ -1201,7 +1242,7 @@ export class ProductionDAO {
         .not('order_id', 'is', null).not('duration_hours', 'is', null).gt('duration_hours', 0),
       supabase.from('workers_log').select('order_id,worker,qty,act_time_per_unit')
         .not('order_id', 'is', null),
-      supabase.from('procurements').select('order_id,account_type,amount'),
+      supabase.from('procurements').select('order_id,vendor,total_amount'),
       supabase.from('outsourcing_costs').select('project_id,amount'),
       supabase.from('workers_master').select('name,hourly_rate')
     ]);
@@ -1294,10 +1335,14 @@ export class ProductionDAO {
     }
 
     // 外注費（procurements[account_type='外注費'] + outsourcing_costs）
+    // NOTE: account_type is stored as JSON in old Supabase `vendor` column
     const outsourcingCostMap = new Map<string, number>();
     for (const p of procurementsData) {
-      if (p.account_type === '外注費' && p.amount != null && p.order_id) {
-        outsourcingCostMap.set(p.order_id, (outsourcingCostMap.get(p.order_id) || 0) + p.amount);
+      let accountType = '外注費';
+      try { accountType = JSON.parse(p.vendor || '{}').account_type ?? '外注費'; } catch { /* ignore */ }
+      const amount = p.total_amount;
+      if (accountType === '外注費' && amount != null && p.order_id) {
+        outsourcingCostMap.set(p.order_id, (outsourcingCostMap.get(p.order_id) || 0) + amount);
       }
     }
     for (const oc of outsourcingData) {

@@ -43,6 +43,15 @@ app.use('/api', apiRateLimitConfig);
     process.exit(1);
   }
 
+  // Verify Supabase procurements table schema
+  try {
+    const { ProductionDAO } = await import('./dao/production-dao.js');
+    const checkDAO = new ProductionDAO();
+    await checkDAO.verifyProcurementsSchema();
+  } catch (error) {
+    console.warn('⚠ Could not verify Supabase procurements schema:', error);
+  }
+
   // Initialize Sales Orders SQLite database
   try {
     const { sqliteInitializer } = await import('./lib/sqlite-init.js');

@@ -18,7 +18,12 @@ export async function apiClient<T = any>(
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      let errMsg = `HTTP ${response.status}`;
+      try {
+        const errBody = await response.json();
+        if (errBody?.message) errMsg = errBody.message;
+      } catch { /* ignore parse errors */ }
+      throw new Error(errMsg);
     }
 
     const data = await response.json();

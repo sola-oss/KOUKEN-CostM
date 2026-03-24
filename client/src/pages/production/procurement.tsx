@@ -66,16 +66,25 @@ const procurementFormSchema = z.object({
   order_date: z.string().optional().nullable(),
   status: z.string().default("発注中"),
   notes: z.string().optional().nullable(),
-}).refine(
-  (data) => {
-    if (data.content_mode === "material") return data.material_id != null;
-    return data.description != null && data.description.trim().length > 0;
-  },
-  {
-    message: "内容は材料マスタから選択するか、テキストで入力してください",
-    path: ["description"],
+}).superRefine((data, ctx) => {
+  if (data.content_mode === "material") {
+    if (data.material_id == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "材料を選択してください",
+        path: ["material_id"],
+      });
+    }
+  } else {
+    if (!data.description || data.description.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "内容を入力してください",
+        path: ["description"],
+      });
+    }
   }
-);
+});
 
 type FormData = z.infer<typeof procurementFormSchema>;
 
@@ -524,8 +533,9 @@ export default function ProcurementManagement() {
       toast({ title: "発注を登録しました" });
       form.reset(defaultFormValues);
     },
-    onError: () => {
-      toast({ title: "エラー", description: "発注の登録に失敗しました", variant: "destructive" });
+    onError: (error: unknown) => {
+      const msg = error instanceof Error ? error.message : "発注の登録に失敗しました";
+      toast({ title: "エラー", description: msg, variant: "destructive" });
     },
   });
 
@@ -538,8 +548,9 @@ export default function ProcurementManagement() {
       setIsEditDialogOpen(false);
       setEditingProcurement(null);
     },
-    onError: () => {
-      toast({ title: "エラー", description: "発注の更新に失敗しました", variant: "destructive" });
+    onError: (error: unknown) => {
+      const msg = error instanceof Error ? error.message : "発注の更新に失敗しました";
+      toast({ title: "エラー", description: msg, variant: "destructive" });
     },
   });
 

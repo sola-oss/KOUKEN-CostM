@@ -537,10 +537,11 @@ router.post('/api/procurements', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Procurement creation error:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Procurement creation error:', msg);
     res.status(500).json({ 
       error: 'Internal server error',
-      message: 'Failed to create procurement'
+      message: msg || 'Failed to create procurement'
     });
   }
 });
