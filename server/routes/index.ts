@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import productionApiRouter from './production-api.js';
 import salesOrdersRouter from './sales-orders-sqlite.js';
+import authRouter from './auth.js';
 
 const router = Router();
 
@@ -11,5 +12,8 @@ router.use(productionApiRouter);
 
 // Use sales orders API routes
 router.use('/api', salesOrdersRouter);
+
+// Auth routes (user management via Supabase Admin API)
+router.use(authRouter);
 
 export default router;

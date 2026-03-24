@@ -3,7 +3,8 @@ import {
   Package, ClipboardCheck, BarChart3, 
   ChevronRight, ChevronDown,
   CheckSquare, ClipboardList, GanttChart, Database, FileSpreadsheet,
-  Calculator, Users, Settings, Building2, Hammer, TrendingUp
+  Calculator, Users, Settings, Building2, Hammer, TrendingUp,
+  UserCog, LogOut
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -23,6 +24,8 @@ import {
   SidebarHeader
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Section 1: 受注と計画
 const orderPlanningItems = [
@@ -50,6 +53,14 @@ const masterItems = [
   { title: "業者マスタ", url: "/vendors-master", icon: Building2 }
 ];
 
+// Worker-only items
+const workerItems = [
+  { title: "作業管理", url: "/task-management", icon: CheckSquare },
+  { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
+];
+
+const roleLabel = (role: string) => role === "admin" ? "管理者" : "現場作業者";
+
 export function AppSidebar() {
   const [location] = useLocation();
   const [isOrderPlanningOpen, setIsOrderPlanningOpen] = useState(true);
@@ -57,10 +68,62 @@ export function AppSidebar() {
   const [isCostAnalysisOpen, setIsCostAnalysisOpen] = useState(true);
   const [isMasterOpen, setIsMasterOpen] = useState(true);
 
-  const isOrderPlanningActive = orderPlanningItems.some(item => location === item.url);
-  const isFieldWorkActive = fieldWorkItems.some(item => location === item.url);
-  const isCostAnalysisActive = costAnalysisItems.some(item => location === item.url);
+  const { user, signOut } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const isMasterActive = masterItems.some(item => location === item.url);
+
+  if (!isAdmin) {
+    return (
+      <Sidebar>
+        <SidebarHeader className="border-b bg-primary text-primary-foreground">
+          <div className="flex items-center gap-2 px-2 py-4">
+            <Package className="h-6 w-6" />
+            <span className="text-sm font-semibold">生産管理システム</span>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>メニュー</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {workerItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="border-t">
+          <div className="px-3 py-2">
+            <p className="text-sm font-medium truncate">{user?.name}</p>
+            <p className="text-xs text-muted-foreground">{roleLabel(user?.role ?? "worker")}</p>
+          </div>
+          <div className="px-2 pb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={signOut}
+            >
+              <LogOut className="h-4 w-4" />
+              ログアウト
+            </Button>
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+    );
+  }
 
   return (
     <Sidebar>
@@ -197,7 +260,8 @@ export function AppSidebar() {
           </Collapsible>
         </SidebarGroup>
       </SidebarContent>
-      {/* Section 4: マスタ (Footer) */}
+
+      {/* Footer: マスタ + ユーザー管理 + ユーザー情報 */}
       <SidebarFooter className="border-t">
         <SidebarMenu>
           <Collapsible
@@ -238,7 +302,37 @@ export function AppSidebar() {
               </CollapsibleContent>
             </SidebarMenuItem>
           </Collapsible>
+
+          {/* ユーザー管理 (admin only) */}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              className={location === "/user-management" ? 'bg-primary/10 text-primary font-medium' : ''}
+            >
+              <Link href="/user-management">
+                <UserCog className="h-4 w-4" />
+                <span>ユーザー管理</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
+
+        {/* ログインユーザー情報 */}
+        <div className="px-3 py-2 border-t">
+          <p className="text-sm font-medium truncate">{user?.name}</p>
+          <p className="text-xs text-muted-foreground">{roleLabel(user?.role ?? "admin")}</p>
+        </div>
+        <div className="px-2 pb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2"
+            onClick={signOut}
+          >
+            <LogOut className="h-4 w-4" />
+            ログアウト
+          </Button>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
