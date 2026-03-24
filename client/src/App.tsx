@@ -26,6 +26,7 @@ import MaterialsMaster from "@/pages/production/materials-master";
 import CostSummary from "@/pages/cost/cost-summary";
 import WorkersMaster from "@/pages/cost/workers-master";
 import VendorsMaster from "@/pages/cost/vendors-master";
+import CustomersMaster from "@/pages/production/customers-master";
 import UserManagement from "@/pages/user-management";
 import NotFound from "@/pages/not-found";
 
@@ -96,6 +97,7 @@ function Router() {
           <Route path="/cost-summary" component={CostSummary} />
           <Route path="/workers-master" component={WorkersMaster} />
           <Route path="/vendors-master" component={VendorsMaster} />
+          <Route path="/customers-master" component={CustomersMaster} />
           <Route path="/user-management" component={UserManagement} />
           <Route component={NotFound} />
         </Switch>

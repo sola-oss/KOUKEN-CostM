@@ -10,6 +10,7 @@ import {
   insertWorkerMasterSchema,
   insertVendorMasterSchema,
   insertOutsourcingCostSchema,
+  insertCustomerMasterSchema,
   updateOrderSchema,
   updateProcurementSchema,
   updateTaskSchema,
@@ -37,6 +38,13 @@ let dao: ProductionDAO;
 try {
   dao = new ProductionDAO();
   console.log('✓ Production DAO initialized successfully');
+  dao.ensureCustomersMasterSeeded().then(async () => {
+    console.log('✓ Customers master table ready');
+    await dao.seedOrderCustomerMappings();
+    console.log('✓ Order-customer mappings ready');
+  }).catch((err: Error) => {
+    console.error('✗ Failed to seed customers master:', err.message);
+  });
 } catch (error) {
   console.error('✗ Failed to initialize Production DAO:', error);
 }
@@ -107,16 +115,17 @@ router.get('/api/production/orders', async (req, res) => {
 
     const result = await dao.getOrders(options);
 
-    // Helper to convert SQLite boolean (0/1/null) to JavaScript boolean (true/false/null)
+    const orderIds = result.orders.map(o => o.order_id);
+    const customerIdMap = await dao.getOrderCustomerIds(orderIds);
+
     const toBool = (val: any): boolean | null => {
       if (val === null || val === undefined) return null;
       return val === 1 || val === true;
     };
 
-    // Convert dates to JST and booleans from SQLite integers for response
     const ordersWithJST = result.orders.map(order => ({
       ...order,
-      // Convert date fields to JST
+      customer_id: customerIdMap[order.order_id] ?? null,
       order_date: order.order_date ? toJST(order.order_date) : null,
       start_date: order.start_date ? toJST(order.start_date) : null,
       due_date: order.due_date ? toJST(order.due_date) : null,
@@ -307,8 +316,13 @@ router.post('/api/production/orders', async (req, res) => {
       confirmed_date: validation.data.confirmed_date && validation.data.confirmed_date !== '' ? toUTC(validation.data.confirmed_date) : undefined,
     };
 
+    const customerId = req.body.customer_id ?? null;
     const orderId = await dao.createOrder(orderData);
     
+    if (customerId !== null) {
+      await dao.setOrderCustomerId(orderId, customerId);
+    }
+
     // Fetch the created order to return full object
     const result = await dao.getOrderById(orderId);
     
@@ -398,6 +412,10 @@ router.patch('/api/production/orders/:id', async (req, res) => {
         error: 'Not found',
         message: 'Order not found or no changes made' 
       });
+    }
+
+    if ('customer_id' in req.body) {
+      await dao.setOrderCustomerId(orderId, req.body.customer_id ?? null);
     }
 
     res.json({ 
@@ -2061,6 +2079,130 @@ router.delete('/api/outsourcing-costs/:id', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal server error',
       message: 'Failed to delete outsourcing cost'
+    });
+  }
+});
+
+// ========== Customers Master API ==========
+
+// GET /api/customers-master - Get all customers
+router.get('/api/customers-master', async (req, res) => {
+  try {
+    const includeInactive = req.query.include_inactive === 'true';
+    const customers = await dao.getCustomersMaster(includeInactive);
+    res.json(customers);
+  } catch (error) {
+    console.error('Get customers master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch customers'
+    });
+  }
+});
+
+// GET /api/customers-master/:id - Get single customer
+router.get('/api/customers-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid customer ID' });
+    }
+    
+    const customer = await dao.getCustomerMasterById(id);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    res.json(customer);
+  } catch (error) {
+    console.error('Get customer master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to fetch customer'
+    });
+  }
+});
+
+// POST /api/customers-master - Create customer
+router.post('/api/customers-master', async (req, res) => {
+  try {
+    const parsed = insertCustomerMasterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parsed.error.flatten()
+      });
+    }
+    
+    const id = await dao.createCustomerMaster(parsed.data);
+    const customer = await dao.getCustomerMasterById(id);
+    res.status(201).json(customer);
+  } catch (error: any) {
+    console.error('Create customer master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to create customer'
+    });
+  }
+});
+
+// PUT /api/customers-master/:id - Update customer
+router.put('/api/customers-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid customer ID' });
+    }
+    
+    const parsed = insertCustomerMasterSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: parsed.error.flatten()
+      });
+    }
+    
+    const success = await dao.updateCustomerMaster(id, parsed.data);
+    if (!success) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    const customer = await dao.getCustomerMasterById(id);
+    res.json(customer);
+  } catch (error: any) {
+    console.error('Update customer master error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to update customer'
+    });
+  }
+});
+
+// DELETE /api/customers-master/:id - Delete customer
+router.delete('/api/customers-master/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid customer ID' });
+    }
+    
+    const success = await dao.deleteCustomerMaster(id);
+    if (!success) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('Delete customer master error:', error);
+    if (error.message?.includes('FOREIGN KEY constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Deletion error',
+        message: 'この得意先は受注で使用されているため削除できません'
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Failed to delete customer'
     });
   }
 });

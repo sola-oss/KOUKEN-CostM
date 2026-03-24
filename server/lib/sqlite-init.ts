@@ -12,17 +12,14 @@ export class SQLiteInitializer {
   async initialize(): Promise<Database.Database> {
     const dbPath = process.env.DB_PATH || './server/db/app.sqlite';
     
-    // Ensure directory exists
     const dbDir = path.dirname(dbPath);
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
     
-    // Connect to database
     this.db = new Database(dbPath);
     console.log(`SQLite database initialized at: ${dbPath}`);
     
-    // Run migrations
     await this.runMigrations();
     
     return this.db;
@@ -49,13 +46,34 @@ export class SQLiteInitializer {
       const migrationPath = path.join(migrationsDir, file);
       const migration = fs.readFileSync(migrationPath, 'utf8');
       
-      try {
-        this.db.exec(migration);
-        console.log(`✓ Migration ${file} completed successfully`);
-      } catch (error) {
-        console.error(`✗ Migration ${file} failed:`, error);
-        throw error;
+      const statements = migration
+        .split(';')
+        .map(s => s.split('\n').filter(line => !line.trimStart().startsWith('--')).join('\n').trim())
+        .filter(s => s.length > 0);
+
+      let hasError = false;
+      for (const stmt of statements) {
+        try {
+          this.db.exec(stmt + ';');
+        } catch (error: any) {
+          const msg: string = error?.message ?? '';
+          const isAlterDuplicate =
+            stmt.toUpperCase().includes('ALTER TABLE') &&
+            (msg.includes('duplicate column') || msg.includes('already exists'));
+          if (isAlterDuplicate) {
+            console.log(`  (skipped: column already exists)`);
+          } else {
+            console.error(`✗ Migration ${file} failed on statement:`, stmt);
+            console.error(error);
+            hasError = true;
+            break;
+          }
+        }
       }
+      if (hasError) {
+        throw new Error(`Migration ${file} failed`);
+      }
+      console.log(`✓ Migration ${file} completed successfully`);
     }
   }
   

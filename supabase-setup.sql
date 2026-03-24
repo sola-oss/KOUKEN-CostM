@@ -190,6 +190,24 @@ CREATE TABLE IF NOT EXISTS outsourcing_costs (
   created_at TEXT NOT NULL
 );
 
+-- 得意先マスタテーブル
+CREATE TABLE IF NOT EXISTS customers_master (
+  id SERIAL PRIMARY KEY,
+  code TEXT,
+  name TEXT NOT NULL,
+  zip TEXT,
+  address1 TEXT,
+  address2 TEXT,
+  phone TEXT,
+  note TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_master_name ON customers_master(name);
+CREATE INDEX IF NOT EXISTS idx_customers_master_code ON customers_master(code);
+
 -- 原価設定の初期データ
 INSERT INTO cost_settings (id, labor_rate_per_hour, updated_at)
 VALUES (1, 3000, NOW()::TEXT)

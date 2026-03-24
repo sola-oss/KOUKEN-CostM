@@ -18,11 +18,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronLeft, ChevronRight, ChevronsUpDown } from "lucide-react";
 import { listOrders, type Order } from "@/shared/production-api";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import type { CustomerMaster } from "@shared/production-schema";
 
 // ========== FORM VALIDATION SCHEMA ==========
 
@@ -121,6 +124,19 @@ export default function Projects() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   
+  const [customerComboOpen, setCustomerComboOpen] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+
+  // Fetch customers master for combobox
+  const { data: customers = [] } = useQuery<CustomerMaster[]>({
+    queryKey: ['/api/customers-master'],
+    queryFn: async () => {
+      const res = await fetch('/api/customers-master?include_inactive=false');
+      if (!res.ok) throw new Error('Failed to fetch customers');
+      return res.json();
+    }
+  });
+
   // Form hook
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
@@ -304,6 +320,7 @@ export default function Projects() {
   // Form handlers
   const handleCreateOrder = () => {
     setEditingOrder(null);
+    setSelectedCustomerId(null);
     form.reset({
       order_id: "",
       order_date: new Date().toISOString().split('T')[0],
@@ -330,9 +347,11 @@ export default function Projects() {
     setIsFormOpen(true);
   };
 
-  const handleEditOrder = (order: Order, e: React.MouseEvent) => {
+  const handleEditOrder = (order: Order & { customer_id?: number | null }, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingOrder(order);
+    const cid = order.customer_id ?? customers.find(c => c.name === order.client_name)?.id ?? null;
+    setSelectedCustomerId(cid);
     form.reset({
       order_id: order.order_id,
       order_date: order.order_date || "",
@@ -360,9 +379,10 @@ export default function Projects() {
   };
 
   const handleFormSubmit = (values: OrderFormValues) => {
-    const orderData: Partial<Order> = {
+    const orderData: Partial<Order> & { customer_id?: number | null } = {
       order_id: values.order_id || undefined,
       order_date: values.order_date || "",
+      customer_id: selectedCustomerId,
       client_name: values.client_name,
       customer_code: values.customer_code || "",
       customer_zip: values.customer_zip || "",
@@ -726,15 +746,78 @@ export default function Projects() {
                       control={form.control}
                       name="client_name"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="md:col-span-2">
                           <FormLabel>得意先 <span className="text-destructive">*</span></FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="得意先を入力" 
-                              data-testid="input-client-name"
-                            />
-                          </FormControl>
+                          <div className="flex gap-2">
+                            <Popover open={customerComboOpen} onOpenChange={setCustomerComboOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={customerComboOpen}
+                                  className="flex-1 justify-between font-normal"
+                                  data-testid="combobox-customer"
+                                >
+                                  {selectedCustomerId
+                                    ? customers.find(c => c.id === selectedCustomerId)?.name || field.value || "得意先を選択"
+                                    : field.value || "得意先を選択"}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[400px] p-0" align="start">
+                                <Command>
+                                  <CommandInput placeholder="得意先を検索..." />
+                                  <CommandList>
+                                    <CommandEmpty>該当する得意先がありません</CommandEmpty>
+                                    <CommandGroup>
+                                      {customers.map((customer) => (
+                                        <CommandItem
+                                          key={customer.id}
+                                          value={customer.name}
+                                          onSelect={() => {
+                                            setSelectedCustomerId(customer.id);
+                                            form.setValue("client_name", customer.name);
+                                            form.setValue("customer_code", customer.code || "");
+                                            form.setValue("customer_zip", customer.zip || "");
+                                            form.setValue("customer_address1", customer.address1 || "");
+                                            form.setValue("customer_address2", customer.address2 || "");
+                                            setCustomerComboOpen(false);
+                                          }}
+                                          data-testid={`customer-option-${customer.id}`}
+                                        >
+                                          <Check
+                                            className={`mr-2 h-4 w-4 ${selectedCustomerId === customer.id ? "opacity-100" : "opacity-0"}`}
+                                          />
+                                          <span className="font-medium">{customer.name}</span>
+                                          {customer.code && (
+                                            <span className="ml-2 text-xs text-muted-foreground">({customer.code})</span>
+                                          )}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                            {selectedCustomerId && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setSelectedCustomerId(null);
+                                  form.setValue("client_name", "");
+                                  form.setValue("customer_code", "");
+                                  form.setValue("customer_zip", "");
+                                  form.setValue("customer_address1", "");
+                                  form.setValue("customer_address2", "");
+                                }}
+                                data-testid="button-clear-customer"
+                              >
+                                ×
+                              </Button>
+                            )}
+                          </div>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -749,7 +832,9 @@ export default function Projects() {
                           <FormControl>
                             <Input 
                               {...field} 
-                              placeholder="得意先コードを入力" 
+                              placeholder="得意先コード" 
+                              readOnly={!!selectedCustomerId}
+                              className={selectedCustomerId ? "bg-muted text-muted-foreground" : ""}
                               data-testid="input-customer-code"
                             />
                           </FormControl>
@@ -768,6 +853,8 @@ export default function Projects() {
                             <Input 
                               {...field} 
                               placeholder="例: 123-4567" 
+                              readOnly={!!selectedCustomerId}
+                              className={selectedCustomerId ? "bg-muted text-muted-foreground" : ""}
                               data-testid="input-customer-zip"
                             />
                           </FormControl>
@@ -786,6 +873,8 @@ export default function Projects() {
                             <Input 
                               {...field} 
                               placeholder="都道府県・市区町村" 
+                              readOnly={!!selectedCustomerId}
+                              className={selectedCustomerId ? "bg-muted text-muted-foreground" : ""}
                               data-testid="input-customer-address1"
                             />
                           </FormControl>
@@ -804,6 +893,8 @@ export default function Projects() {
                             <Input 
                               {...field} 
                               placeholder="番地・建物名など" 
+                              readOnly={!!selectedCustomerId}
+                              className={selectedCustomerId ? "bg-muted text-muted-foreground" : ""}
                               data-testid="input-customer-address2"
                             />
                           </FormControl>

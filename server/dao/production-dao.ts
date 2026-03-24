@@ -4,7 +4,8 @@ import type {
   Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
   OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse, ZoneCostSummary,
-  WorkerMaster, InsertWorkerMaster, VendorMaster, InsertVendorMaster, OutsourcingCost, InsertOutsourcingCost, OutsourcingCostWithVendor
+  WorkerMaster, InsertWorkerMaster, VendorMaster, InsertVendorMaster, OutsourcingCost, InsertOutsourcingCost, OutsourcingCostWithVendor,
+  CustomerMaster, InsertCustomerMaster
 } from '../../shared/production-schema.js';
 
 // ============================================================
@@ -1564,6 +1565,200 @@ export class ProductionDAO {
   async deleteOutsourcingCost(id: number): Promise<boolean> {
     const { error } = await supabase.from('outsourcing_costs').delete().eq('id', id);
     if (error) throw new Error(`[deleteOutsourcingCost] ${error.message}`);
+    return true;
+  }
+
+  // ========== Customers Master CRUD (Replit PostgreSQL) ==========
+
+  async ensureCustomersMasterSeeded(): Promise<void> {
+    const { sql } = await import('../lib/database.js');
+    await sql`
+      CREATE TABLE IF NOT EXISTS customers_master (
+        id SERIAL PRIMARY KEY,
+        code TEXT,
+        name TEXT NOT NULL,
+        zip TEXT,
+        address1 TEXT,
+        address2 TEXT,
+        phone TEXT,
+        note TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_customers_master_name ON customers_master(name)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_customers_master_code ON customers_master(code)`;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS order_customer_map (
+        order_id TEXT PRIMARY KEY,
+        customer_id INTEGER NOT NULL REFERENCES customers_master(id) ON DELETE CASCADE,
+        updated_at TEXT NOT NULL
+      )
+    `;
+
+    const existing = await sql`SELECT count(*)::int AS cnt FROM customers_master`;
+    if (existing[0].cnt > 0) return;
+
+    const now = '2025-01-01T00:00:00Z';
+    const seed: Array<{ code?: string; name: string; zip?: string; address1?: string }> = [
+      { code: '109', name: 'the HOUSE' },
+      { code: '056', name: 'テイサ産業株式会社', zip: '569-0834', address1: '大阪府高槻市大字唐崎1270番地' },
+      { code: '038', name: '三晃特殊金属工業株式会社', zip: '740-8535', address1: '山口県岩国市室の木町1丁目4番55号' },
+      { code: '083', name: '光井商事\u3000有限会社', zip: '743-0001', address1: '光市室積西伊保木994の3' },
+      { code: '096', name: '兼安石灰機工\u3000株式会社', zip: '746-0012', address1: '周南市政所3丁目7番2号' },
+      { code: '024', name: '岐山化工機株式会社', zip: '745-0862', address1: '周南市江口3丁目1-8' },
+      { code: '015', name: '川岸工業（株）山口工場', zip: '744-0061', address1: '山口県下松市葉山2丁目904-30' },
+      { code: '014', name: '川崎エンジニアリング株式会社' },
+      { code: '061', name: '徳機\u3000株式会社', zip: '746-0028', address1: '周南市港町11番1号' },
+      { code: '063', name: '徳機\u3000株式会社\u3000エコ事業部', zip: '745-0802', address1: '周南市栗屋字奈切50-5' },
+      { code: '062', name: '徳機工事株式会社', zip: '746-0028', address1: '山口県周南市港町12-18' },
+      { code: '044', name: '新山陽剪断株式会社', zip: '746-0028', address1: '周南市港町12-26' },
+      { code: '069', name: '有限会社\u3000日進工務所', zip: '746-0022', address1: '周南市野村1丁目17-4' },
+      { code: '095', name: '有限会社\u3000環境造形', zip: '746-0024', address1: '周南市古泉3丁目8番25号' },
+      { code: '078', name: '有限会社\u3000福田鉄工', zip: '746-0043', address1: '周南市新田2丁目3-5' },
+      { code: '003', name: '株式会社\u3000アクシス', zip: '750-0323', address1: '下関市菊川町日新11142-1' },
+      { code: '039', name: '株式会社\u3000サンライト', zip: '745-0631', address1: '周南市大字安田166-1' },
+      { code: '108', name: '株式会社\u3000スティールフォース' },
+      { code: '082', name: '株式会社\u3000ミヤハラ', zip: '745-0802', address1: '山口県周南市大字栗屋字奈切50番地-47' },
+      { code: '066', name: '株式会社\u3000中村鉄工所', zip: '745-0056', address1: '山口県周南市新宿通3丁目8番地' },
+      { code: '065', name: '株式会社\u3000徳機製作所\u3000ベンダ事業部', zip: '746-0028', address1: '周南市港町6-60' },
+      { name: '株式会社\u3000河村工機' },
+      { code: '026', name: '株式会社\u3000蔵澄鉄工所', zip: '746-0026', address1: '周南市浜田1-7-15' },
+      { code: '018', name: '株式会社\u3000鹿野興産', zip: '745-0402', address1: '周南市大字金峰4300番地' },
+      { code: '043', name: '白井興業\u3000株式会社', zip: '743-0063', address1: '山口県光市島田2-27-1' },
+      { code: '071', name: '白鷺特殊鋼株式会社\u3000山口支店', zip: '754-0894', address1: '山口県山口市佐山字村山3-41山口テクノパーク' },
+      { code: '059', name: '藤和工業株式会社', zip: '756-0021', address1: '山陽小野田市高畑77-107' },
+      { code: '012', name: '長州産業株式会社' },
+      { code: '102', name: '高橋産業\u3000株式会社', zip: '750-0086', address1: '山口県下関市彦島塩浜町1丁目8番3号' },
+    ];
+
+    for (const c of seed) {
+      await sql`
+        INSERT INTO customers_master (code, name, zip, address1, address2, phone, note, is_active, created_at, updated_at)
+        VALUES (${c.code}, ${c.name}, ${c.zip || null}, ${c.address1 || null}, ${null}, ${null}, ${null}, ${true}, ${now}, ${now})
+      `;
+    }
+    console.log(`[DAO] Seeded ${seed.length} customers into customers_master`);
+  }
+
+  async setOrderCustomerId(orderId: string, customerId: number | null): Promise<void> {
+    const { sql } = await import('../lib/database.js');
+    if (customerId === null) {
+      await sql`DELETE FROM order_customer_map WHERE order_id = ${orderId}`;
+    } else {
+      const now = new Date().toISOString();
+      await sql`
+        INSERT INTO order_customer_map (order_id, customer_id, updated_at)
+        VALUES (${orderId}, ${customerId}, ${now})
+        ON CONFLICT (order_id) DO UPDATE SET customer_id = ${customerId}, updated_at = ${now}
+      `;
+    }
+  }
+
+  async getOrderCustomerId(orderId: string): Promise<number | null> {
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`SELECT customer_id FROM order_customer_map WHERE order_id = ${orderId} LIMIT 1`;
+    return rows.length > 0 ? rows[0].customer_id : null;
+  }
+
+  async getOrderCustomerIds(orderIds: string[]): Promise<Record<string, number>> {
+    if (orderIds.length === 0) return {};
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`SELECT order_id, customer_id FROM order_customer_map WHERE order_id = ANY(${orderIds})`;
+    const map: Record<string, number> = {};
+    for (const row of rows) {
+      map[row.order_id] = row.customer_id;
+    }
+    return map;
+  }
+
+  async seedOrderCustomerMappings(): Promise<void> {
+    const { sql } = await import('../lib/database.js');
+    const customers = await this.getCustomersMaster(true);
+    const { data: orders } = await supabase.from('orders').select('order_id, client_name');
+    if (!orders || orders.length === 0) return;
+
+    const existingMaps = await sql`SELECT order_id FROM order_customer_map`;
+    const mappedOrderIds = new Set(existingMaps.map((r: { order_id: string }) => r.order_id));
+
+    const now = new Date().toISOString();
+    let linked = 0;
+    for (const order of orders) {
+      if (mappedOrderIds.has(order.order_id)) continue;
+      const matched = customers.find(c => c.name === order.client_name);
+      if (matched) {
+        await sql`
+          INSERT INTO order_customer_map (order_id, customer_id, updated_at)
+          VALUES (${order.order_id}, ${matched.id}, ${now})
+          ON CONFLICT (order_id) DO NOTHING
+        `;
+        linked++;
+      }
+    }
+    if (linked > 0) {
+      console.log(`[DAO] Linked ${linked} existing orders to customers`);
+    }
+  }
+
+  async createCustomerMaster(data: InsertCustomerMaster): Promise<number> {
+    const now = new Date().toISOString();
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`
+      INSERT INTO customers_master (code, name, zip, address1, address2, phone, note, is_active, created_at, updated_at)
+      VALUES (${data.code || null}, ${data.name}, ${data.zip || null}, ${data.address1 || null}, ${data.address2 || null}, ${data.phone || null}, ${data.note || null}, ${data.is_active ?? true}, ${now}, ${now})
+      RETURNING id
+    `;
+    return rows[0].id as number;
+  }
+
+  async getCustomersMaster(includeInactive: boolean = false): Promise<CustomerMaster[]> {
+    const { sql } = await import('../lib/database.js');
+    let rows;
+    if (includeInactive) {
+      rows = await sql`SELECT * FROM customers_master ORDER BY name`;
+    } else {
+      rows = await sql`SELECT * FROM customers_master WHERE is_active = true ORDER BY name`;
+    }
+    return rows as CustomerMaster[];
+  }
+
+  async getCustomerMasterById(id: number): Promise<CustomerMaster | null> {
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`SELECT * FROM customers_master WHERE id = ${id} LIMIT 1`;
+    return (rows[0] as CustomerMaster) || null;
+  }
+
+  async updateCustomerMaster(id: number, data: Partial<InsertCustomerMaster>): Promise<boolean> {
+    const now = new Date().toISOString();
+    const existing = await this.getCustomerMasterById(id);
+    if (!existing) return false;
+    const merged = {
+      code: data.code !== undefined ? (data.code || null) : existing.code,
+      name: data.name !== undefined ? data.name : existing.name,
+      zip: data.zip !== undefined ? (data.zip || null) : existing.zip,
+      address1: data.address1 !== undefined ? (data.address1 || null) : existing.address1,
+      address2: data.address2 !== undefined ? (data.address2 || null) : existing.address2,
+      phone: data.phone !== undefined ? (data.phone || null) : existing.phone,
+      note: data.note !== undefined ? (data.note || null) : existing.note,
+      is_active: data.is_active !== undefined ? data.is_active : existing.is_active
+    };
+    const { sql } = await import('../lib/database.js');
+    await sql`
+      UPDATE customers_master
+      SET code = ${merged.code}, name = ${merged.name}, zip = ${merged.zip},
+          address1 = ${merged.address1}, address2 = ${merged.address2},
+          phone = ${merged.phone}, note = ${merged.note}, is_active = ${merged.is_active},
+          updated_at = ${now}
+      WHERE id = ${id}
+    `;
+    return true;
+  }
+
+  async deleteCustomerMaster(id: number): Promise<boolean> {
+    const { sql } = await import('../lib/database.js');
+    await sql`DELETE FROM customers_master WHERE id = ${id}`;
     return true;
   }
 

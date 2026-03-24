@@ -4,7 +4,7 @@ import {
   ChevronRight, ChevronDown,
   CheckSquare, ClipboardList, GanttChart, Database, FileSpreadsheet,
   Calculator, Users, Settings, Building2, Hammer, TrendingUp,
-  UserCog, LogOut
+  UserCog, LogOut, Contact
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -50,7 +50,8 @@ const costAnalysisItems = [
 const masterItems = [
   { title: "材料マスタ", url: "/materials-master", icon: Database },
   { title: "作業者マスタ", url: "/workers-master", icon: Users },
-  { title: "業者マスタ", url: "/vendors-master", icon: Building2 }
+  { title: "業者マスタ", url: "/vendors-master", icon: Building2 },
+  { title: "得意先マスタ", url: "/customers-master", icon: Contact }
 ];
 
 // Worker-only items

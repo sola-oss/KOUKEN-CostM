@@ -53,7 +53,6 @@ export const orders = sqliteTable("orders", {
   customer_zip: text("customer_zip"),            // 得意先郵便番号
   customer_address1: text("customer_address1"),  // 得意先住所1
   customer_address2: text("customer_address2"),  // 得意先住所2
-  
   // システム管理
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),
@@ -296,7 +295,9 @@ export const ALLOWED_ORDER_UPDATE_COLUMNS = [
   'subcontractor', 'processing_hours', 'note',
   // レガシー項目（互換性のため残す）
   'product_name', 'qty', 'start_date', 'sales', 'estimated_material_cost', 
-  'std_time_per_unit', 'status', 'customer_name'
+  'std_time_per_unit', 'status', 'customer_name',
+  // 得意先マスタ連携
+  'customer_code', 'customer_zip', 'customer_address1', 'customer_address2'
 ] as const;
 
 export const ALLOWED_PROCUREMENT_UPDATE_COLUMNS = [
@@ -500,6 +501,43 @@ export interface MaterialUsageWithMaterial extends MaterialUsage {
   total_weight: number | null;  // Calculated: unit_weight × length × quantity
   total_cost: number | null;    // Calculated: unit_price × quantity × (length or 1)
 }
+
+// ========== Customers Master (得意先マスタ) ==========
+// 得意先（客先）の登録管理
+export const customersMaster = sqliteTable("customers_master", {
+  id: integer("id").primaryKey(),
+  code: text("code"),                                 // 得意先コード
+  name: text("name").notNull(),                       // 得意先名（必須）
+  zip: text("zip"),                                   // 郵便番号
+  address1: text("address1"),                         // 住所1
+  address2: text("address2"),                         // 住所2
+  phone: text("phone"),                               // 電話番号
+  note: text("note"),                                 // 備考
+  is_active: integer("is_active", { mode: 'boolean' }).default(true), // 有効フラグ
+  created_at: text("created_at").notNull(),
+  updated_at: text("updated_at").notNull(),
+}, (table) => ({
+  nameIdx: index("idx_customers_master_name").on(table.name),
+  codeIdx: index("idx_customers_master_code").on(table.code),
+}));
+
+export const insertCustomerMasterSchema = createInsertSchema(customersMaster).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+}).extend({
+  name: z.string().min(1, "得意先名は必須です"),
+  code: z.string().optional(),
+  zip: z.string().optional(),
+  address1: z.string().optional(),
+  address2: z.string().optional(),
+  phone: z.string().optional(),
+  note: z.string().optional(),
+  is_active: z.boolean().default(true),
+});
+
+export type CustomerMaster = typeof customersMaster.$inferSelect;
+export type InsertCustomerMaster = z.infer<typeof insertCustomerMasterSchema>;
 
 // ========== Vendors Master (外注先マスタ) ==========
 // 外注先（業者）の登録管理
