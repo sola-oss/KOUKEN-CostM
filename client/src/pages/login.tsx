@@ -26,6 +26,7 @@ export default function Login() {
       });
 
       if (signInError || !data.user) {
+        console.error("signInError:", signInError?.message, signInError?.status, signInError?.code);
         setError("メールアドレスまたはパスワードが正しくありません");
         setLoading(false);
         return;
