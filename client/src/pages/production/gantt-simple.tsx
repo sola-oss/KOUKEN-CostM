@@ -15,19 +15,12 @@ const formatDateLocal = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-const parseDateLocal = (dateStr: string): Date => {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(year, month - 1, day);
-};
-
 const getMonthDates = (year: number, month: number) => {
-  // Handle month overflow/underflow
   const normalizedDate = new Date(year, month, 1);
   const normalizedYear = normalizedDate.getFullYear();
   const normalizedMonth = normalizedDate.getMonth();
-  
   const start = new Date(normalizedYear, normalizedMonth, 1);
-  const end = new Date(normalizedYear, normalizedMonth + 1, 0); // Last day of month
+  const end = new Date(normalizedYear, normalizedMonth + 1, 0);
   return {
     start: formatDateLocal(start),
     end: formatDateLocal(end),
@@ -56,87 +49,62 @@ const GanttSimple = () => {
   const [rawProjects, setRawProjects] = useState<ApiProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [projectFilter, setProjectFilter] = useState<string>("");
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  
-  // Track current display month explicitly
+
   const today = new Date();
   const [displayYear, setDisplayYear] = useState(today.getFullYear());
   const [displayMonth, setDisplayMonth] = useState(today.getMonth());
-  
+
   const gridRef = useRef<HTMLDivElement>(null);
-  const taskListRef = useRef<HTMLDivElement>(null);
-  
-  // Compute date range from year/month state
+
   const { start: startDate, end: endDate } = useMemo(() => {
     return getMonthDates(displayYear, displayMonth);
   }, [displayYear, displayMonth]);
 
+  // Re-fetch whenever the display month changes
   useEffect(() => {
-    fetch("/api/production/gantt/hierarchy")
+    setLoading(true);
+    const monthStr = `${displayYear}-${String(displayMonth + 1).padStart(2, '0')}`;
+    fetch(`/api/production/gantt/hierarchy?month=${monthStr}`)
       .then((res) => res.json())
       .then((data: ApiProject[]) => {
         setRawProjects(data);
-        const allOrderIds = new Set(data.map((p) => p.orderId));
-        setExpandedProjects(allOrderIds);
         setLoading(false);
-        
-        // Auto-scroll to today after data loads
-        setTimeout(() => {
-          if (gridRef.current) {
-            const todayColumn = gridRef.current.querySelector(`.gantt-grid-day.today`);
-            if (todayColumn) {
-              const columnRect = todayColumn.getBoundingClientRect();
-              const gridRect = gridRef.current.getBoundingClientRect();
-              const scrollLeft = gridRef.current.scrollLeft + (columnRect.left - gridRect.left) - (gridRect.width / 2);
-              gridRef.current.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+
+        // Auto-scroll to today after data loads (only if showing current month)
+        const now = new Date();
+        if (displayYear === now.getFullYear() && displayMonth === now.getMonth()) {
+          setTimeout(() => {
+            if (gridRef.current) {
+              const todayColumn = gridRef.current.querySelector('.gantt-grid-day.today');
+              if (todayColumn) {
+                const columnRect = todayColumn.getBoundingClientRect();
+                const gridRect = gridRef.current.getBoundingClientRect();
+                const scrollLeft = gridRef.current.scrollLeft + (columnRect.left - gridRect.left) - (gridRect.width / 2);
+                gridRef.current.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+              }
             }
-          }
-        }, 100);
+          }, 100);
+        }
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [displayYear, displayMonth]);
 
+  // Apply keyword filter on client side (fast, no re-fetch needed)
   const filteredProjects = useMemo((): GanttProject[] => {
-    const minYear = 2025;
-    
     return rawProjects
       .filter((project) => {
-        if (projectFilter) {
-          const keyword = projectFilter.toLowerCase();
-          const name = (project.projectName || "").toLowerCase();
-          const orderId = (project.orderId || "").toLowerCase();
-          if (!name.includes(keyword) && !orderId.includes(keyword)) {
-            return false;
-          }
-        }
-        return true;
+        if (!projectFilter) return true;
+        const keyword = projectFilter.toLowerCase();
+        const name = (project.projectName || "").toLowerCase();
+        const orderId = (project.orderId || "").toLowerCase();
+        return name.includes(keyword) || orderId.includes(keyword);
       })
-      .map((project) => {
-        const filteredTasks = project.tasks.filter((task) => {
-          if (!task.startDate || !task.endDate) return false;
-          
-          const taskStart = parseDateLocal(task.startDate.split("T")[0]);
-          const taskEnd = parseDateLocal(task.endDate.split("T")[0]);
-          
-          if (taskEnd.getFullYear() < minYear) return false;
-          
-          if (startDate) {
-            const filterStart = parseDateLocal(startDate);
-            if (taskEnd < filterStart) return false;
-          }
-          
-          if (endDate) {
-            const filterEnd = parseDateLocal(endDate);
-            if (taskStart > filterEnd) return false;
-          }
-          
-          return true;
-        });
-
-        return {
-          orderId: project.orderId,
-          projectName: project.projectName,
-          tasks: filteredTasks.map((t) => ({
+      .map((project) => ({
+        orderId: project.orderId,
+        projectName: project.projectName,
+        tasks: project.tasks
+          .filter((t) => t.startDate && t.endDate)
+          .map((t) => ({
             id: t.id,
             taskName: t.taskName,
             startDate: t.startDate!,
@@ -144,26 +112,12 @@ const GanttSimple = () => {
             progress: t.progress,
             type: t.type,
           })),
-          isExpanded: expandedProjects.has(project.orderId),
-        };
-      })
-      .filter((project) => project.tasks.length > 0);
-  }, [rawProjects, startDate, endDate, projectFilter, expandedProjects]);
-
-  const handleToggleProject = useCallback((orderId: string) => {
-    setExpandedProjects((prev) => {
-      const next = new Set(prev);
-      if (next.has(orderId)) {
-        next.delete(orderId);
-      } else {
-        next.add(orderId);
-      }
-      return next;
-    });
-  }, []);
+        isExpanded: true,
+      }))
+      .filter((p) => p.tasks.length > 0);
+  }, [rawProjects, projectFilter]);
 
   const handleReset = useCallback(() => {
-    // Reset to current month
     const now = new Date();
     setDisplayYear(now.getFullYear());
     setDisplayMonth(now.getMonth());
@@ -171,10 +125,8 @@ const GanttSimple = () => {
   }, []);
 
   const shiftPeriod = useCallback((direction: number) => {
-    // Calculate new month, handling year rollover
     let newMonth = displayMonth + direction;
     let newYear = displayYear;
-    
     if (newMonth < 0) {
       newMonth = 11;
       newYear -= 1;
@@ -182,13 +134,12 @@ const GanttSimple = () => {
       newMonth = 0;
       newYear += 1;
     }
-    
     setDisplayYear(newYear);
     setDisplayMonth(newMonth);
   }, [displayYear, displayMonth]);
 
   const handleTaskClick = useCallback((taskId: string, orderId: string) => {
-    console.log("Task clicked:", taskId, orderId);
+    console.log("Order clicked:", taskId, orderId);
   }, []);
 
   const displayStartDate = startDate || getCurrentMonthDates().start;
@@ -203,13 +154,15 @@ const GanttSimple = () => {
       <header className="gantt-page-header">
         <div className="gantt-page-title">
           <h1>受注別ガントチャート</h1>
-          <p>受注・工程のタイムライン表示</p>
+          <p>受注日〜納期のタイムライン表示（未出荷の受注のみ）</p>
         </div>
 
         <GanttFilters
           onReset={handleReset}
           onShiftPeriod={shiftPeriod}
           currentMonth={currentMonthLabel}
+          projectFilter={projectFilter}
+          onProjectFilterChange={setProjectFilter}
         />
       </header>
 
@@ -223,7 +176,6 @@ const GanttSimple = () => {
         <div className="gantt-content">
           <GanttTaskList
             projects={filteredProjects}
-            onToggleProject={handleToggleProject}
             rowHeight={ROW_HEIGHT}
           />
           <GanttGrid

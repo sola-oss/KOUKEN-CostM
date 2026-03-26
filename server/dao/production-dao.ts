@@ -682,139 +682,57 @@ export class ProductionDAO {
     return results;
   }
 
-  async getGanttHierarchy(): Promise<{
+  async getGanttHierarchy(month?: string): Promise<{
     orderId: string; projectName: string;
     tasks: { id: string; taskName: string; startDate: string; endDate: string; progress: number; type: 'task' | 'procurement' }[];
   }[]> {
-    const projectsMap = new Map<string, any>();
-
-    const [tasksRes, wlTaskRes, wlOrderRes, procsRes] = await Promise.all([
-      supabase.from('tasks').select('*')
-        .not('planned_start', 'is', null).not('planned_end', 'is', null)
-        .order('order_id').order('planned_start', { ascending: true }),
-      supabase.from('work_logs').select('order_id,task_name,duration_hours')
-        .not('order_id', 'is', null).not('task_name', 'is', null),
-      supabase.from('workers_log').select('order_id,qty,act_time_per_unit')
-        .not('order_id', 'is', null),
-      supabase.from('procurements')
-        .select('id,item_name,order_id,eta,status')
-        .not('eta', 'is', null)
-        .order('order_id').order('eta', { ascending: true, nullsFirst: false })
-    ]);
-
-    const tasks = (tasksRes.data || []) as any[];
-    const allOrderIds = [...new Set([
-      ...tasks.map((t: any) => t.order_id),
-      ...(procsRes.data || []).map((p: any) => p.order_id)
-    ].filter(Boolean) as string[])];
-
-    let orderNameMap = new Map<string, string>();
-    if (allOrderIds.length > 0) {
-      const { data: orders } = await supabase
-        .from('orders').select('order_id,project_title,product_name').in('order_id', allOrderIds);
-      for (const o of orders || []) {
-        orderNameMap.set(o.order_id, o.project_title || o.product_name || o.order_id);
-      }
+    // Calculate month range — default to current month
+    let year: number, m: number;
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      [year, m] = month.split('-').map(Number);
+    } else {
+      const now = new Date();
+      year = now.getFullYear();
+      m = now.getMonth() + 1;
     }
 
-    // task別作業実績集計
-    const workLogsByTask = new Map<string, number>();
-    const ordersWithTaskLogs = new Set<string>();
-    for (const log of (wlTaskRes.data || []) as any[]) {
-      if (!log.task_name || !log.task_name.trim()) continue;
-      const key = `${log.order_id}|${log.task_name}`;
-      workLogsByTask.set(key, (workLogsByTask.get(key) || 0) + (log.duration_hours || 0));
-      ordersWithTaskLogs.add(log.order_id);
-    }
+    // Convert JST month boundaries to UTC ISO strings for Supabase comparison
+    // JST midnight on first of month → UTC prev day 15:00
+    // JST 23:59:59 on last of month → UTC same day 14:59:59
+    const monthStartJST = `${year}-${String(m).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, m, 0).getDate();
+    const monthEndJST = `${year}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const monthStartUTC = new Date(`${monthStartJST}T00:00:00+09:00`).toISOString();
+    const monthEndUTC = new Date(`${monthEndJST}T23:59:59+09:00`).toISOString();
 
-    // 受注別実績時間（workers_log）
-    const actualHoursByOrder = new Map<string, number>();
-    for (const log of (wlOrderRes.data || []) as any[]) {
-      const hours = (log.qty || 0) * (log.act_time_per_unit || 0);
-      actualHoursByOrder.set(log.order_id, (actualHoursByOrder.get(log.order_id) || 0) + hours);
-    }
+    // Fetch orders: not delivered, due date overlaps with the display month
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('order_id, order_date, due_date, client_name, project_title, product_name')
+      .not('is_delivered', 'eq', true)
+      .not('due_date', 'is', null)
+      .lte('order_date', monthEndUTC)
+      .gte('due_date', monthStartUTC)
+      .order('due_date', { ascending: true })
+      .order('order_id', { ascending: true });
 
-    // 受注別計画時間
-    const orderPlannedHours = new Map<string, number>();
-    for (const task of tasks) {
-      const plannedHours = (task.std_time_per_unit || 0) * (task.qty || 0);
-      orderPlannedHours.set(task.order_id, (orderPlannedHours.get(task.order_id) || 0) + plannedHours);
-    }
+    if (error) throw new Error(`[getGanttHierarchy] ${error.message}`);
 
-    for (const task of tasks) {
-      const orderId = task.order_id || 'unknown';
-      if (!projectsMap.has(orderId)) {
-        projectsMap.set(orderId, {
-          orderId,
-          projectName: orderNameMap.get(orderId) || orderId,
-          tasks: []
-        });
-      }
-
-      const taskPlannedHours = (task.std_time_per_unit || 0) * (task.qty || 0);
-      let progress = 0;
-      if (task.status === 'completed') {
-        progress = 100;
-      } else {
-        const taskKey = `${orderId}|${task.task_name}`;
-        const taskSpecificHours = workLogsByTask.get(taskKey);
-        if (taskSpecificHours !== undefined && taskPlannedHours > 0) {
-          progress = Math.min(100, Math.round((taskSpecificHours / taskPlannedHours) * 100));
-        } else if (!ordersWithTaskLogs.has(orderId)) {
-          const orderActualHours = actualHoursByOrder.get(orderId) || 0;
-          const totalOrderPlanned = orderPlannedHours.get(orderId) || 0;
-          if (totalOrderPlanned > 0 && orderActualHours > 0) {
-            progress = Math.min(100, Math.round((orderActualHours / totalOrderPlanned) * 100));
-          } else if (task.status === 'in_progress') {
-            progress = 50;
-          }
-        } else if (task.status === 'in_progress') {
-          progress = 50;
-        }
-      }
-
-      projectsMap.get(orderId)!.tasks.push({
-        id: `task-${task.id}`,
-        taskName: task.task_name,
-        startDate: task.planned_start,
-        endDate: task.planned_end,
-        progress,
-        type: 'task'
-      });
-    }
-
-    for (const proc of (procsRes.data || []) as any[]) {
-      const orderId = proc.order_id || 'unknown';
-      const startDate = proc.eta;
-      if (!startDate) continue;
-
-      if (!projectsMap.has(orderId)) {
-        projectsMap.set(orderId, {
-          orderId,
-          projectName: orderNameMap.get(orderId) || orderId,
-          tasks: []
-        });
-      }
-
-      const endDateObj = new Date(startDate);
-      endDateObj.setDate(endDateObj.getDate() + 7);
-      const endDate = endDateObj.toISOString().split('T')[0];
-      const isCompleted = proc.status === '完了';
-
-      projectsMap.get(orderId)!.tasks.push({
-        id: `proc-${proc.id}`,
-        taskName: `${proc.item_name || '発注'} (調達)`,
-        startDate,
-        endDate,
-        progress: isCompleted ? 100 : 0,
-        type: 'procurement'
-      });
-    }
-
-    return Array.from(projectsMap.values()).sort((a, b) => {
-      const aMin = a.tasks.length > 0 ? Math.min(...a.tasks.map((t: any) => new Date(t.startDate).getTime())) : Infinity;
-      const bMin = b.tasks.length > 0 ? Math.min(...b.tasks.map((t: any) => new Date(t.startDate).getTime())) : Infinity;
-      return aMin - bMin;
+    return (orders || []).map(order => {
+      const parts = [order.client_name, order.project_title || order.product_name].filter(Boolean);
+      const projectName = parts.join(' / ') || order.order_id;
+      return {
+        orderId: order.order_id,
+        projectName,
+        tasks: [{
+          id: `order-${order.order_id}`,
+          taskName: order.project_title || order.product_name || order.order_id,
+          startDate: order.order_date || order.due_date,
+          endDate: order.due_date || order.order_date,
+          progress: 0,
+          type: 'task' as const
+        }]
+      };
     });
   }
 

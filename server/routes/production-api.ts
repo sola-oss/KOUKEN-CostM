@@ -189,10 +189,11 @@ router.get('/api/production/orders/gantt', async (req, res) => {
   }
 });
 
-// GET /api/production/gantt/hierarchy - Get hierarchical Gantt data (projects -> tasks)
+// GET /api/production/gantt/hierarchy - Get hierarchical Gantt data (orders as bars)
 router.get('/api/production/gantt/hierarchy', async (req, res) => {
   try {
-    const hierarchyData = await dao.getGanttHierarchy();
+    const { month } = req.query as Record<string, string>;
+    const hierarchyData = await dao.getGanttHierarchy(month || undefined);
     
     const convertedData = hierarchyData.map(project => ({
       orderId: project.orderId,

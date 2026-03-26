@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo } from "react";
 import type { GanttProject, DateColumn } from "../../types/gantt";
 
 interface GanttGridProps {
@@ -11,7 +11,7 @@ interface GanttGridProps {
   gridRef: React.RefObject<HTMLDivElement>;
 }
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
 const getProgressColorClass = (progress: number): string => {
   if (progress >= 100) return 'progress-complete';
@@ -39,24 +39,22 @@ export const GanttGrid = ({
 
   const dateColumns = useMemo((): DateColumn[] => {
     const columns: DateColumn[] = [];
-    
-    // Parse YYYY-MM-DD strings as local time (not UTC)
+
     const parseDateLocal = (dateStr: string): Date => {
       const [year, month, day] = dateStr.split('-').map(Number);
       return new Date(year, month - 1, day);
     };
-    
-    // Format Date to YYYY-MM-DD in local time (not UTC)
+
     const formatDateLocal = (date: Date): string => {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     };
-    
+
     const start = parseDateLocal(startDate);
     const end = parseDateLocal(endDate);
-    
+
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dateStr = formatDateLocal(d);
       const dayOfWeek = d.getDay();
@@ -85,56 +83,47 @@ export const GanttGrid = ({
       if (month === currentMonth && year === currentYear) {
         count++;
       } else {
-        if (count > 0) {
-          groups.push({ month: currentMonth, year: currentYear, count });
-        }
+        if (count > 0) groups.push({ month: currentMonth, year: currentYear, count });
         currentMonth = month;
         currentYear = year;
         count = 1;
       }
     }
-    if (count > 0) {
-      groups.push({ month: currentMonth, year: currentYear, count });
-    }
+    if (count > 0) groups.push({ month: currentMonth, year: currentYear, count });
     return groups;
   }, [dateColumns]);
 
   const totalWidth = dateColumns.length * columnWidth;
 
-  const getBarPosition = (taskStart: string, taskEnd: string) => {
-    const taskStartStr = taskStart.split('T')[0];
-    const taskEndStr = taskEnd.split('T')[0];
-    
-    let startIdx = dateColumns.findIndex((c) => c.dateStr >= taskStartStr);
-    let endIdx = dateColumns.findIndex((c) => c.dateStr >= taskEndStr);
-    
+  const getBarPosition = (barStart: string, barEnd: string) => {
+    const startStr = barStart.split('T')[0];
+    const endStr = barEnd.split('T')[0];
+
+    let startIdx = dateColumns.findIndex((c) => c.dateStr >= startStr);
+    let endIdx = dateColumns.findIndex((c) => c.dateStr >= endStr);
+
     if (startIdx === -1) {
-      startIdx = taskStartStr < dateColumns[0]?.dateStr ? 0 : dateColumns.length - 1;
+      startIdx = startStr < (dateColumns[0]?.dateStr ?? '') ? 0 : dateColumns.length - 1;
     }
-    
     if (endIdx === -1) {
-      endIdx = taskEndStr > dateColumns[dateColumns.length - 1]?.dateStr 
-        ? dateColumns.length - 1 
+      endIdx = endStr > (dateColumns[dateColumns.length - 1]?.dateStr ?? '')
+        ? dateColumns.length - 1
         : 0;
     }
-    
+
     startIdx = Math.max(0, Math.min(startIdx, dateColumns.length - 1));
     endIdx = Math.max(0, Math.min(endIdx, dateColumns.length - 1));
-    
-    if (startIdx > endIdx) {
-      [startIdx, endIdx] = [endIdx, startIdx];
-    }
-    
+    if (startIdx > endIdx) [startIdx, endIdx] = [endIdx, startIdx];
+
     const left = startIdx * columnWidth;
     const width = Math.max((endIdx - startIdx + 1) * columnWidth - 4, columnWidth - 4);
     return { left, width };
   };
 
-  let rowIndex = 0;
-
   return (
     <div className="gantt-grid-wrapper" ref={gridRef}>
       <div className="gantt-grid" style={{ width: `${totalWidth}px` }}>
+        {/* Header */}
         <div className="gantt-grid-header" style={{ height: `${rowHeight * 2}px` }}>
           <div className="gantt-grid-header-months">
             {monthGroups.map((group, idx) => (
@@ -161,7 +150,9 @@ export const GanttGrid = ({
           </div>
         </div>
 
-        <div className="gantt-grid-body">
+        {/* Body — one row per order */}
+        <div className="gantt-grid-body" style={{ height: `${projects.length * rowHeight}px` }}>
+          {/* Background column stripes */}
           {dateColumns.map((col, idx) => (
             <div
               key={idx}
@@ -173,56 +164,42 @@ export const GanttGrid = ({
             />
           ))}
 
-          {projects.map((project) => {
-            const projectRowIdx = rowIndex++;
-            const projectTasks = project.isExpanded ? project.tasks : [];
+          {/* One row per order with its bar */}
+          {projects.map((project, rowIndex) => {
+            const bar = project.tasks[0];
+            if (!bar) return null;
+
+            const pos = getBarPosition(bar.startDate, bar.endDate);
+            const progressClass = getProgressColorClass(bar.progress);
 
             return (
-              <div key={project.orderId} className="gantt-grid-project-group">
+              <div
+                key={project.orderId}
+                className="gantt-grid-row task-row"
+                style={{
+                  top: `${rowIndex * rowHeight}px`,
+                  height: `${rowHeight}px`,
+                }}
+              >
                 <div
-                  className="gantt-grid-row project-row"
+                  className={`gantt-bar-wrapper ${progressClass}`}
                   style={{
-                    top: `${projectRowIdx * rowHeight}px`,
-                    height: `${rowHeight}px`,
+                    left: `${pos.left}px`,
+                    width: `${pos.width}px`,
                   }}
-                />
-                {projectTasks.map((task) => {
-                  const taskRowIdx = rowIndex++;
-                  const pos = getBarPosition(task.startDate, task.endDate);
-                  if (!pos) return null;
-
-                  const progressClass = getProgressColorClass(task.progress);
-                  return (
-                    <div
-                      key={task.id}
-                      className="gantt-grid-row task-row"
-                      style={{
-                        top: `${taskRowIdx * rowHeight}px`,
-                        height: `${rowHeight}px`,
-                      }}
-                    >
-                      <div
-                        className={`gantt-bar-wrapper ${progressClass}`}
-                        style={{
-                          left: `${pos.left}px`,
-                          width: `${pos.width}px`,
-                        }}
-                        onClick={() => onTaskClick?.(task.id, project.orderId)}
-                        title={`${task.taskName} (進捗: ${task.progress}%)`}
-                        data-testid={`gantt-bar-${task.id}`}
-                      >
-                        <div className="gantt-bar-plan" />
-                        <div
-                          className="gantt-bar-progress"
-                          style={{ width: `${task.progress}%` }}
-                        />
-                        <span className="gantt-bar-label">
-                          {task.taskName} {task.progress > 0 && `(${task.progress}%)`}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+                  onClick={() => onTaskClick?.(bar.id, project.orderId)}
+                  title={`${project.projectName}\n受注日: ${bar.startDate?.split('T')[0]} → 納期: ${bar.endDate?.split('T')[0]}`}
+                  data-testid={`gantt-bar-${project.orderId}`}
+                >
+                  <div className="gantt-bar-plan" />
+                  <div
+                    className="gantt-bar-progress"
+                    style={{ width: `${bar.progress}%` }}
+                  />
+                  <span className="gantt-bar-label">
+                    {project.projectName}
+                  </span>
+                </div>
               </div>
             );
           })}
