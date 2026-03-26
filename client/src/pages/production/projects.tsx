@@ -115,6 +115,7 @@ export default function Projects() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [page, setPage] = useState(1);
+  const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
@@ -488,12 +489,28 @@ export default function Projects() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="受注番号・客先名・件名で検索..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setPage(1);
+                setSearchQuery(inputValue);
+              }
+            }}
             className="pl-9"
             data-testid="input-search"
           />
         </div>
+        <Button
+          variant="default"
+          onClick={() => {
+            setPage(1);
+            setSearchQuery(inputValue);
+          }}
+          data-testid="button-search"
+        >
+          検索
+        </Button>
       </div>
 
       {/* Orders Table */}
