@@ -706,12 +706,13 @@ export class ProductionDAO {
     const monthEndUTC = new Date(`${monthEndJST}T23:59:59+09:00`).toISOString();
 
     // Fetch orders: not delivered, due date overlaps with the display month
+    // order_date filter: include null order_date rows (treat as "started before month")
     const { data: orders, error } = await supabase
       .from('orders')
       .select('order_id, order_date, due_date, client_name, project_title, product_name')
       .not('is_delivered', 'eq', true)
       .not('due_date', 'is', null)
-      .lte('order_date', monthEndUTC)
+      .or(`order_date.is.null,order_date.lte.${monthEndUTC}`)
       .gte('due_date', monthStartUTC)
       .order('due_date', { ascending: true })
       .order('order_id', { ascending: true });
@@ -719,7 +720,9 @@ export class ProductionDAO {
     if (error) throw new Error(`[getGanttHierarchy] ${error.message}`);
 
     return (orders || []).map(order => {
-      const parts = [order.client_name, order.project_title || order.product_name].filter(Boolean);
+      // projectName: 「得意先名 / 品名」 — use product_name (品名), fall back to project_title (受注件名)
+      const secondPart = order.product_name || order.project_title;
+      const parts = [order.client_name, secondPart].filter(Boolean);
       const projectName = parts.join(' / ') || order.order_id;
       return {
         orderId: order.order_id,
