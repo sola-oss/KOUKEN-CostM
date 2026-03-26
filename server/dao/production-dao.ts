@@ -107,16 +107,29 @@ export class ProductionDAO {
 
     let orderId = orderData.order_id;
     if (!orderId) {
-      // 数値型order_idを持つ最大値を取得してインクリメント
+      // 決算期対応の自動採番 (ko130XXX 形式)
+      // kouken社の決算期は5月末締め（6月始まり）
+      const baseDate = orderData.order_date ? new Date(orderData.order_date) : new Date();
+      const year = baseDate.getFullYear();
+      const month = baseDate.getMonth() + 1; // 1-indexed
+      const fiscalBaseYear = month >= 6 ? year : year - 1;
+      const prefixNum = 130 + (fiscalBaseYear - 2025) * 10;
+      const prefix = `ko${prefixNum}`;
+
+      // 同プレフィックスの受注番号を全件取得して最大連番を算出
       const { data: rows } = await supabase
         .from('orders')
         .select('order_id')
-        .order('order_id', { ascending: false });
-      const numericIds = (rows || [])
-        .map(r => parseInt(r.order_id, 10))
+        .like('order_id', `${prefix}%`);
+      const serialNums = (rows || [])
+        .map(r => {
+          const suffix = r.order_id.slice(prefix.length);
+          return parseInt(suffix, 10);
+        })
         .filter(n => !isNaN(n));
-      const max = numericIds.length > 0 ? Math.max(...numericIds) : 0;
-      orderId = String(max + 1);
+      const maxSerial = serialNums.length > 0 ? Math.max(...serialNums) : 0;
+      const nextSerial = String(maxSerial + 1).padStart(3, '0');
+      orderId = `${prefix}${nextSerial}`;
     }
 
     const row = {
