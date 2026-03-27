@@ -684,7 +684,7 @@ export class ProductionDAO {
 
   async getGanttHierarchy(month?: string): Promise<{
     orderId: string; projectName: string;
-    tasks: { id: string; taskName: string; startDate: string; endDate: string; progress: number; type: 'task' | 'procurement' }[];
+    tasks: { id: string; taskName: string; startDate: string; endDate: string; progress: number; type: 'task' | 'procurement'; actualHours: number }[];
   }[]> {
     // Calculate month range — default to current month
     let year: number, m: number;
@@ -719,11 +719,29 @@ export class ProductionDAO {
 
     if (error) throw new Error(`[getGanttHierarchy] ${error.message}`);
 
-    return (orders || []).map(order => {
+    const orderList = orders || [];
+    const orderIds = orderList.map(o => o.order_id);
+
+    // Fetch actual hours from workers_log for all orders in this view
+    let actualHoursMap = new Map<string, number>();
+    if (orderIds.length > 0) {
+      const { data: wlData, error: wlError } = await supabase
+        .from('workers_log')
+        .select('order_id, qty, act_time_per_unit')
+        .in('order_id', orderIds);
+      if (wlError) throw new Error(`[getGanttHierarchy:workers_log] ${wlError.message}`);
+      for (const row of wlData || []) {
+        const hours = ((row.qty as number) ?? 0) * ((row.act_time_per_unit as number) ?? 0);
+        actualHoursMap.set(row.order_id, (actualHoursMap.get(row.order_id) ?? 0) + hours);
+      }
+    }
+
+    return orderList.map(order => {
       // projectName: 「得意先名 / 品名」 — use product_name (品名), fall back to project_title (受注件名)
       const secondPart = order.product_name || order.project_title;
       const parts = [order.client_name, secondPart].filter(Boolean);
       const projectName = parts.join(' / ') || order.order_id;
+      const actualHours = actualHoursMap.get(order.order_id) ?? 0;
       return {
         orderId: order.order_id,
         projectName,
@@ -733,7 +751,8 @@ export class ProductionDAO {
           startDate: order.order_date || order.due_date,
           endDate: order.due_date || order.order_date,
           progress: 0,
-          type: 'task' as const
+          type: 'task' as const,
+          actualHours
         }]
       };
     });

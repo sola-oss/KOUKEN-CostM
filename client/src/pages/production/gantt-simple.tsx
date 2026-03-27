@@ -42,6 +42,7 @@ interface ApiProject {
     endDate: string | null;
     progress: number;
     type: 'task' | 'procurement';
+    actualHours: number;
   }[];
 }
 
@@ -111,6 +112,7 @@ const GanttSimple = () => {
             endDate: t.endDate!,
             progress: t.progress,
             type: t.type,
+            actualHours: t.actualHours ?? 0,
           })),
         isExpanded: true,
       }))

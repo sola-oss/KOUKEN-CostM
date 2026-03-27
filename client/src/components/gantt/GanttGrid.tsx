@@ -13,7 +13,8 @@ interface GanttGridProps {
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
-const getProgressColorClass = (progress: number): string => {
+const getProgressColorClass = (progress: number, actualHours: number): string => {
+  if (actualHours > 0) return 'has-actual';
   if (progress >= 100) return 'progress-complete';
   if (progress >= 70) return 'progress-high';
   if (progress >= 30) return 'progress-medium';
@@ -170,7 +171,10 @@ export const GanttGrid = ({
             if (!bar) return null;
 
             const pos = getBarPosition(bar.startDate, bar.endDate);
-            const progressClass = getProgressColorClass(bar.progress);
+            const progressClass = getProgressColorClass(bar.progress, bar.actualHours);
+            const actualHoursLabel = bar.actualHours > 0
+              ? `  ${bar.actualHours % 1 === 0 ? bar.actualHours : bar.actualHours.toFixed(1)}h`
+              : '';
 
             return (
               <div
@@ -188,7 +192,7 @@ export const GanttGrid = ({
                     width: `${pos.width}px`,
                   }}
                   onClick={() => onTaskClick?.(bar.id, project.orderId)}
-                  title={`${project.projectName}\n受注日: ${bar.startDate?.split('T')[0]} → 納期: ${bar.endDate?.split('T')[0]}`}
+                  title={`${project.projectName}\n受注日: ${bar.startDate?.split('T')[0]} → 納期: ${bar.endDate?.split('T')[0]}${bar.actualHours > 0 ? `\n実績: ${bar.actualHours.toFixed(1)}h` : ''}`}
                   data-testid={`gantt-bar-${project.orderId}`}
                 >
                   <div className="gantt-bar-plan" />
@@ -197,7 +201,7 @@ export const GanttGrid = ({
                     style={{ width: `${bar.progress}%` }}
                   />
                   <span className="gantt-bar-label">
-                    {project.projectName}
+                    {project.projectName}{actualHoursLabel}
                   </span>
                 </div>
               </div>

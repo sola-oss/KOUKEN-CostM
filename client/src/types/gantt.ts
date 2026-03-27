@@ -5,6 +5,7 @@ export interface GanttTaskItem {
   endDate: string;
   progress: number;
   type: 'task' | 'procurement';
+  actualHours: number;
 }
 
 export interface GanttProject {

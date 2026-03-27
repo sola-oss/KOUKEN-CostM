@@ -204,7 +204,8 @@ router.get('/api/production/gantt/hierarchy', async (req, res) => {
         startDate: task.startDate ? toJST(task.startDate) : null,
         endDate: task.endDate ? toJST(task.endDate) : null,
         progress: task.progress,
-        type: task.type
+        type: task.type,
+        actualHours: task.actualHours
       }))
     }));
     

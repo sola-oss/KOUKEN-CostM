@@ -16,12 +16,17 @@ export const GanttTaskList = ({
         <div className="gantt-task-list-header-cell">得意先 / 受注件名</div>
         <div className="gantt-task-list-header-cell">受注日</div>
         <div className="gantt-task-list-header-cell">納期</div>
+        <div className="gantt-task-list-header-cell">実績</div>
       </div>
       <div className="gantt-task-list-body">
         {projects.map((project) => {
           const bar = project.tasks[0];
           const startDateStr = bar?.startDate?.split('T')[0] || '-';
           const endDateStr = bar?.endDate?.split('T')[0] || '-';
+          const actualHours = bar?.actualHours ?? 0;
+          const actualHoursStr = actualHours > 0
+            ? `${actualHours % 1 === 0 ? actualHours : actualHours.toFixed(1)}h`
+            : '-';
           return (
             <div
               key={project.orderId}
@@ -37,6 +42,7 @@ export const GanttTaskList = ({
               </div>
               <div className="gantt-task-start">{startDateStr}</div>
               <div className="gantt-task-end">{endDateStr}</div>
+              <div className="gantt-task-actual">{actualHoursStr}</div>
             </div>
           );
         })}
