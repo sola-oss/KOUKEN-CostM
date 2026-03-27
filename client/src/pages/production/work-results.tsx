@@ -19,7 +19,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { 
   Select,
@@ -54,78 +53,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Timer, Save, Plus, Pencil, Trash2, AlertTriangle, Upload, FileText } from "lucide-react";
+import { Timer, Save, Plus, Pencil, Trash2, Upload, FileText } from "lucide-react";
 
-// Form validation schema
+// Form validation schema - 5 fields only
 const workLogSchema = z.object({
-  date: z.string().min(1, "作業日は必須です"),
   order_id: z.string({ required_error: "受注番号は必須です" }).min(1, "受注番号は必須です"),
   task_id: z.coerce.number().min(1, "作業を選択してください"),
   worker: z.string().min(1, "作業者は必須です"),
-  start_time: z.string().min(1, "開始時刻は必須です"),
-  end_time: z.string().min(1, "終了時刻は必須です"),
-  duration_hours: z.coerce.number().gt(0, "実績時間は0より大きい値が必要です"),
-  quantity: z.coerce.number().min(0, "数量は0以上である必要があります").default(0),
-  memo: z.string().optional(),
-  status: z.string().default("下書き"),
+  date: z.string().min(1, "作業日は必須です"),
+  duration_hours: z.coerce.number().gt(0, "実働時間は0より大きい値が必要です"),
 });
 
 type WorkLogFormData = z.infer<typeof workLogSchema>;
 
-// Generate time options for 15-minute intervals
-function generateTimeOptions(): string[] {
-  const options: string[] = [];
-  for (let hour = 0; hour < 24; hour++) {
-    for (let min = 0; min < 60; min += 15) {
-      const h = hour.toString().padStart(2, '0');
-      const m = min.toString().padStart(2, '0');
-      options.push(`${h}:${m}`);
-    }
-  }
-  return options;
-}
-
-// Calculate duration from start and end time
-function calculateDuration(startTime: string, endTime: string): number {
-  if (!startTime || !endTime) return 0;
-  
-  const [startHour, startMin] = startTime.split(':').map(Number);
-  const [endHour, endMin] = endTime.split(':').map(Number);
-  
-  let startMinutes = startHour * 60 + startMin;
-  let endMinutes = endHour * 60 + endMin;
-  
-  // Handle overnight work (end < start means next day)
-  if (endMinutes < startMinutes) {
-    endMinutes += 24 * 60; // Add 24 hours
-  }
-  
-  const durationMinutes = endMinutes - startMinutes;
-  return Math.round((durationMinutes / 60) * 100) / 100; // Round to 2 decimals
-}
-
 export default function WorkResults() {
   const { toast } = useToast();
-  const [useDurationInput, setUseDurationInput] = useState(false);
   const [keepOrderTask, setKeepOrderTask] = useState(false);
   const [editingLog, setEditingLog] = useState<WorkLog | null>(null);
-  const [overlapWarning, setOverlapWarning] = useState<WorkLog[]>([]);
-  const [currentWorker, setCurrentWorker] = useState(""); // Selected from workers master
+  const [currentWorker, setCurrentWorker] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [orderComboOpen, setOrderComboOpen] = useState(false);
   
-  const timeOptions = generateTimeOptions();
   const todayDate = dayjs().format('YYYY-MM-DD');
 
   // Form setup
@@ -135,11 +84,8 @@ export default function WorkResults() {
       date: todayDate,
       worker: "",
       task_id: 0,
-      start_time: "",
-      end_time: "",
-      quantity: 0,
+      order_id: "",
       duration_hours: 0,
-      status: "下書き",
     },
   });
 
@@ -197,32 +143,11 @@ export default function WorkResults() {
     enabled: !!selectedOrderId,
   });
 
-  // Calculate duration when time changes
-  const startTime = form.watch('start_time');
-  const endTime = form.watch('end_time');
-
-  useEffect(() => {
-    if (!useDurationInput && startTime && endTime) {
-      const duration = calculateDuration(startTime, endTime);
-      form.setValue('duration_hours', duration);
-    }
-  }, [startTime, endTime, useDurationInput, form]);
-
   // Create mutation
   const createMutation = useMutation({
     mutationFn: createWorkLog,
-    onSuccess: (response) => {
-      toast({
-        title: "作業実績を保存しました",
-        description: response.hasOverlap ? "⚠️ 時間が重複している実績があります" : undefined,
-      });
-      
-      if (response.hasOverlap) {
-        setOverlapWarning(response.overlappingLogs);
-      } else {
-        setOverlapWarning([]);
-      }
-      
+    onSuccess: () => {
+      toast({ title: "作業実績を保存しました" });
       queryClient.invalidateQueries({ queryKey: ['/api/work-logs'] });
       
       // Reset form but keep order/task if toggle is on
@@ -232,22 +157,15 @@ export default function WorkResults() {
           worker: currentWorker,
           order_id: form.getValues('order_id'),
           task_id: form.getValues('task_id'),
-          start_time: "",
-          end_time: "",
-          quantity: 0,
           duration_hours: 0,
-          status: "下書き",
         });
       } else {
         form.reset({
           date: todayDate,
           worker: currentWorker,
+          order_id: "",
           task_id: 0,
-          start_time: "",
-          end_time: "",
-          quantity: 0,
           duration_hours: 0,
-          status: "下書き",
         });
       }
     },
@@ -311,12 +229,7 @@ export default function WorkResults() {
       order_id: log.order_id,
       task_id: log.task_id || 0,
       worker: log.worker,
-      start_time: log.start_time || "",
-      end_time: log.end_time || "",
       duration_hours: log.duration_hours,
-      quantity: log.quantity,
-      memo: log.memo || undefined,
-      status: log.status,
     });
   };
 
@@ -406,16 +319,6 @@ export default function WorkResults() {
         </p>
       </div>
 
-      {/* Overlap Warning */}
-      {overlapWarning.length > 0 && (
-        <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950" data-testid="alert-overlap-warning">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-          <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-            <strong>時間重複警告:</strong> 同じ作業者・同じ日付で時間が重複している実績が{overlapWarning.length}件あります
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* CSV Upload Section */}
       <Card data-testid="card-csv-upload">
         <CardHeader>
@@ -467,24 +370,10 @@ export default function WorkResults() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* 2-column layout */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Left column */}
                 <div className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="date"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>作業日 *</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} data-testid="input-date" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
+                  {/* 1. 受注番号 */}
                   <FormField
                     control={form.control}
                     name="order_id"
@@ -552,12 +441,13 @@ export default function WorkResults() {
                     )}
                   />
 
+                  {/* 2. 作業名（受注に紐付くDropdown） */}
                   <FormField
                     control={form.control}
                     name="task_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>作業 *</FormLabel>
+                        <FormLabel>作業名 *</FormLabel>
                         <Select
                           onValueChange={(value) => field.onChange(parseInt(value, 10))}
                           value={field.value ? field.value.toString() : ""}
@@ -590,25 +480,25 @@ export default function WorkResults() {
                     )}
                   />
 
+                  {/* 3. 担当者 */}
                   <FormField
                     control={form.control}
                     name="worker"
                     render={({ field }) => {
-                      // Build worker options: active workers + editing log's worker if inactive
                       const activeWorkers = workersData?.filter(w => w.is_active) || [];
                       const editingWorkerName = editingLog?.worker;
                       const showEditingWorker = editingWorkerName && !activeWorkers.some(w => w.name === editingWorkerName);
                       
                       return (
                         <FormItem>
-                          <FormLabel>作業者 *</FormLabel>
+                          <FormLabel>担当者 *</FormLabel>
                           <Select
                             onValueChange={field.onChange}
                             value={field.value}
                           >
                             <FormControl>
                               <SelectTrigger data-testid="select-worker">
-                                <SelectValue placeholder="作業者を選択" />
+                                <SelectValue placeholder="担当者を選択" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -633,103 +523,36 @@ export default function WorkResults() {
 
                 {/* Right column */}
                 <div className="space-y-4">
+                  {/* 4. 日付 */}
                   <FormField
                     control={form.control}
-                    name="start_time"
+                    name="date"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>開始時刻 *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger data-testid="select-start-time">
-                              <SelectValue placeholder="選択" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {timeOptions.map((time) => (
-                              <SelectItem key={time} value={time}>
-                                {time}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="end_time"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>終了時刻 *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger data-testid="select-end-time">
-                              <SelectValue placeholder="選択" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {timeOptions.map((time) => (
-                              <SelectItem key={time} value={time}>
-                                {time}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Time input mode toggle */}
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <Label htmlFor="duration-mode" className="cursor-pointer text-sm">
-                      実績時間を手動調整
-                    </Label>
-                    <Switch
-                      id="duration-mode"
-                      checked={useDurationInput}
-                      onCheckedChange={setUseDurationInput}
-                      data-testid="switch-duration-mode"
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="duration_hours"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>実績時間（h）*</FormLabel>
+                        <FormLabel>日付 *</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            {...field} 
-                            readOnly={!useDurationInput}
-                            data-testid="input-duration"
-                          />
+                          <Input type="date" {...field} data-testid="input-date" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
+                  {/* 5. 実働時間 */}
                   <FormField
                     control={form.control}
-                    name="quantity"
+                    name="duration_hours"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>数量</FormLabel>
+                        <FormLabel>実働時間（h）*</FormLabel>
                         <FormControl>
-                          <Input type="number" step="1" {...field} data-testid="input-quantity" />
+                          <Input 
+                            type="number" 
+                            step="0.01"
+                            min="0.01"
+                            {...field} 
+                            data-testid="input-duration"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -738,34 +561,16 @@ export default function WorkResults() {
                 </div>
               </div>
 
-              {/* Full width memo field */}
-              <FormField
-                control={form.control}
-                name="memo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>メモ</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        {...field} 
-                        placeholder="作業メモ（任意）"
-                        rows={3}
-                        data-testid="input-memo"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               {/* Action buttons */}
               <div className="flex items-center justify-between pt-4 border-t">
                 <div className="flex items-center gap-3">
-                  <Switch
+                  <input
+                    type="checkbox"
                     id="keep-order-task"
                     checked={keepOrderTask}
-                    onCheckedChange={setKeepOrderTask}
+                    onChange={(e) => setKeepOrderTask(e.target.checked)}
                     data-testid="switch-keep-order-task"
+                    className="h-4 w-4"
                   />
                   <Label htmlFor="keep-order-task" className="cursor-pointer text-sm">
                     同じ受注・作業を保持（連続入力）
@@ -782,11 +587,9 @@ export default function WorkResults() {
                         form.reset({
                           date: todayDate,
                           worker: currentWorker,
-                          start_time: "",
-                          end_time: "",
-                          quantity: 0,
+                          order_id: "",
+                          task_id: 0,
                           duration_hours: 0,
-                          status: "下書き",
                         });
                       }}
                       data-testid="button-cancel-edit"
@@ -825,35 +628,28 @@ export default function WorkResults() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>時刻</TableHead>
+                  <TableHead>日付</TableHead>
                   <TableHead>受注</TableHead>
-                  <TableHead>作業</TableHead>
-                  <TableHead>実績時間</TableHead>
-                  <TableHead>数量</TableHead>
-                  <TableHead>メモ</TableHead>
+                  <TableHead>作業名</TableHead>
+                  <TableHead>担当者</TableHead>
+                  <TableHead>実働時間</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {workLogsData?.data.map((log) => (
                   <TableRow key={log.id} data-testid={`row-work-log-${log.id}`}>
-                    <TableCell>
-                      {log.start_time && log.end_time 
-                        ? `${log.start_time} - ${log.end_time}`
-                        : '-'
-                      }
-                    </TableCell>
+                    <TableCell>{log.date || log.work_date || '-'}</TableCell>
                     <TableCell>
                       #{log.order_id} {log.product_name}
                     </TableCell>
                     <TableCell>{log.task_name}</TableCell>
+                    <TableCell>{log.worker}</TableCell>
                     <TableCell>{log.duration_hours}h</TableCell>
-                    <TableCell>{log.quantity}</TableCell>
-                    <TableCell className="max-w-xs truncate">{log.memo || '-'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="ghost"
                           onClick={() => handleEdit(log)}
                           data-testid={`button-edit-${log.id}`}
@@ -861,7 +657,7 @@ export default function WorkResults() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="ghost"
                           onClick={() => handleDelete(log.id)}
                           data-testid={`button-delete-${log.id}`}
