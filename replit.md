@@ -49,6 +49,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Technical Implementations
 - **Cost Management Features**: Mode toggle (Production/Cost), Cost Summary (`/cost-summary`), Budget vs. Actual Comparison (`/cost-comparison`), Unit Price Master (`/unit-prices`).
+- **Material Cost Entry (材料費入力)**: 現場実績セクションに「材料費入力」メニュー追加 (`/material-costs`)。入力項目: 受注番号(Combobox)・明細(テキスト)・合計金額(数値)。`material_costs` テーブルは Replit PostgreSQL (Neon/Drizzle) に作成。`getCostAggregation` が `material_costs` の合計金額を材料費に加算し原価集計ページに反映。
 - **Outsourcing Cost Management (統合済み)**: 外注費入力機能は調達管理(`/procurement`)に統合。Vendors Master (`/vendors-master`) for vendor registration. 調達管理で購買手配時にvendor_id（業者マスタ連携）、total_amount（合計金額）、is_approved（承認フラグ）を入力。承認済み購買手配の合計金額が原価集計に外注費として反映される。
 - **Customer Master (得意先マスタ)**: Normalized customer table (`customers_master`) at `/customers-master`. CRUD UI with active/inactive toggle, combobox in order form for customer selection with auto-fill of code/zip/address fields. 29 existing customers pre-loaded. Data stored in Replit PostgreSQL (Neon) via `@neondatabase/serverless`. Sidebar link in マスタ管理 section (admin-only). Customer selection auto-fills denormalized fields (client_name, customer_code, customer_zip, customer_address1, customer_address2) in orders; no FK stored in orders to avoid cross-database dependency.
 - **Order Management**: 19-field CRUD form with React Hook Form + Zod, TanStack Query for mutations, API at `/api/production/orders/*`. Order ID is restricted from editing after creation.

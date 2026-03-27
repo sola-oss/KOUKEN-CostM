@@ -28,6 +28,7 @@ const CostSummary = lazy(() => import("@/pages/cost/cost-summary"));
 const WorkersMaster = lazy(() => import("@/pages/cost/workers-master"));
 const VendorsMaster = lazy(() => import("@/pages/cost/vendors-master"));
 const CustomersMaster = lazy(() => import("@/pages/production/customers-master"));
+const MaterialCosts = lazy(() => import("@/pages/production/material-costs"));
 const UserManagement = lazy(() => import("@/pages/user-management"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
@@ -108,6 +109,7 @@ function Router() {
             <Route path="/workers-master" component={WorkersMaster} />
             <Route path="/vendors-master" component={VendorsMaster} />
             <Route path="/customers-master" component={CustomersMaster} />
+            <Route path="/material-costs" component={MaterialCosts} />
             <Route path="/user-management" component={UserManagement} />
             <Route component={NotFound} />
           </Switch>

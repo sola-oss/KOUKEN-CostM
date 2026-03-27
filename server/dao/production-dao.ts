@@ -1,5 +1,7 @@
 // Production Management MVP - Data Access Object (Supabase版)
 import { supabase } from '../lib/supabase-client.js';
+import { db } from '../lib/database.js';
+import { material_costs } from '../../shared/schema.js';
 import type { 
   Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
@@ -1188,7 +1190,7 @@ export class ProductionDAO {
     const laborRate = settings.labor_rate_per_hour;
 
     // バッチ取得
-    const [ordersRes, muRes, wlRes, wlogRes, procRes, outRes, workersRes] = await Promise.all([
+    const [ordersRes, muRes, wlRes, wlogRes, procRes, outRes, workersRes, mcRows] = await Promise.all([
       supabase.from('orders').select('order_id,project_title,client_name,estimated_amount'),
       supabase.from('material_usages').select('*'),
       supabase.from('work_logs').select('order_id,worker,employee_name,duration_hours')
@@ -1197,7 +1199,8 @@ export class ProductionDAO {
         .not('order_id', 'is', null),
       supabase.from('procurements').select('order_id,vendor,total_amount'),
       supabase.from('outsourcing_costs').select('project_id,amount'),
-      supabase.from('workers_master').select('name,hourly_rate')
+      supabase.from('workers_master').select('name,hourly_rate'),
+      db.select().from(material_costs)
     ]);
 
     const orders = (ordersRes.data || []) as any[];
@@ -1207,6 +1210,7 @@ export class ProductionDAO {
     const procurementsData = (procRes.data || []) as any[];
     const outsourcingData = (outRes.data || []) as any[];
     const workersMasterData = (workersRes.data || []) as any[];
+    const materialCostRows = mcRows as { id: number; order_id: string; description: string | null; total_amount: string; }[];
 
     // 材料IDから材料情報を取得
     const matIds = [...new Set(materialUsages.map(u => u.material_id).filter(Boolean) as number[])];
@@ -1260,6 +1264,15 @@ export class ProductionDAO {
       const oEntry = materialCostByOrder.get(orderId)!;
       oEntry.cost += cost;
       if (hasMissing) oEntry.hasMissing = true;
+    }
+
+    // 直接材料費（material_costs テーブル）を合算
+    for (const mc of materialCostRows) {
+      const orderId = mc.order_id;
+      if (!orderId) continue;
+      const amount = parseFloat(mc.total_amount) || 0;
+      if (!materialCostByOrder.has(orderId)) materialCostByOrder.set(orderId, { cost: 0, hasMissing: false });
+      materialCostByOrder.get(orderId)!.cost += amount;
     }
 
     // 実績労務費（work_logs）

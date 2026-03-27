@@ -1,6 +1,9 @@
 // Production Management MVP - API Routes
 import { Router } from 'express';
 import { ProductionDAO } from '../dao/production-dao.js';
+import { db } from '../lib/database.js';
+import { material_costs } from '../../shared/schema.js';
+import { eq, desc } from 'drizzle-orm';
 import { 
   insertOrderSchema, 
   insertProcurementSchema, 
@@ -2207,6 +2210,81 @@ router.delete('/api/customers-master/:id', async (req, res) => {
       error: 'Internal server error',
       message: 'Failed to delete customer'
     });
+  }
+});
+
+// ========== Material Costs CRUD (Replit PostgreSQL) ==========
+
+// GET /api/material-costs - 材料費一覧取得
+router.get('/api/material-costs', async (req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(material_costs)
+      .orderBy(desc(material_costs.created_at));
+    res.json({ data: rows });
+  } catch (error: any) {
+    console.error('Get material costs error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to fetch material costs' });
+  }
+});
+
+// POST /api/material-costs - 材料費登録
+router.post('/api/material-costs', async (req, res) => {
+  try {
+    const { order_id, description, total_amount } = req.body;
+    if (!order_id || total_amount == null) {
+      return res.status(400).json({ error: 'Bad request', message: '受注番号と合計金額は必須です' });
+    }
+    const [row] = await db
+      .insert(material_costs)
+      .values({ order_id, description: description || null, total_amount: String(total_amount) })
+      .returning();
+    res.status(201).json({ data: row });
+  } catch (error: any) {
+    console.error('Create material cost error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to create material cost' });
+  }
+});
+
+// PATCH /api/material-costs/:id - 材料費更新
+router.patch('/api/material-costs/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { order_id, description, total_amount } = req.body;
+    const updates: Record<string, any> = {};
+    if (order_id !== undefined) updates.order_id = order_id;
+    if (description !== undefined) updates.description = description;
+    if (total_amount !== undefined) updates.total_amount = String(total_amount);
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Bad request', message: '更新フィールドがありません' });
+    }
+    const [row] = await db
+      .update(material_costs)
+      .set(updates)
+      .where(eq(material_costs.id, id))
+      .returning();
+    if (!row) return res.status(404).json({ error: 'Not found', message: '材料費が見つかりません' });
+    res.json({ data: row });
+  } catch (error: any) {
+    console.error('Update material cost error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to update material cost' });
+  }
+});
+
+// DELETE /api/material-costs/:id - 材料費削除
+router.delete('/api/material-costs/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const [row] = await db
+      .delete(material_costs)
+      .where(eq(material_costs.id, id))
+      .returning();
+    if (!row) return res.status(404).json({ error: 'Not found', message: '材料費が見つかりません' });
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('Delete material cost error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to delete material cost' });
   }
 });
 

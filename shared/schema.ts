@@ -57,6 +57,17 @@ export const workers_log = pgTable("workers_log", {
   orderDateIdx: index("idx_workers_log_order_date").on(table.order_id, table.date),
 }));
 
+// 材料費入力 (Material Costs) - 現場での直接材料費記録
+export const material_costs = pgTable("material_costs", {
+  id: serial("id").primaryKey(),
+  order_id: text("order_id").notNull(),   // 受注番号（文字列型: ko130XXX）
+  description: text("description"),        // 明細
+  total_amount: decimal("total_amount", { precision: 12, scale: 0 }).notNull(), // 合計金額
+  created_at: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  orderIdx: index("idx_material_costs_order_id").on(table.order_id),
+}));
+
 // ========== Insert Schemas ==========
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
@@ -74,18 +85,26 @@ export const insertWorkerLogSchema = createInsertSchema(workers_log).omit({
   created_at: true,
 });
 
+export const insertMaterialCostSchema = createInsertSchema(material_costs).omit({
+  id: true,
+  created_at: true,
+});
+
 // Update schemas
 export const updateOrderSchema = insertOrderSchema.partial();
 export const updateProcurementSchema = insertProcurementSchema.partial();
 export const updateWorkerLogSchema = insertWorkerLogSchema.partial();
+export const updateMaterialCostSchema = insertMaterialCostSchema.partial();
 
 // ========== Type Definitions ==========
 export type Order = typeof orders.$inferSelect;
 export type Procurement = typeof procurements.$inferSelect;
 export type WorkerLog = typeof workers_log.$inferSelect;
+export type MaterialCost = typeof material_costs.$inferSelect;
 export type InsertOrder = typeof insertOrderSchema._type;
 export type InsertProcurement = typeof insertProcurementSchema._type;
 export type InsertWorkerLog = typeof insertWorkerLogSchema._type;
+export type InsertMaterialCost = typeof insertMaterialCostSchema._type;
 
 // KPI Types
 export interface OrderKPI {
