@@ -722,16 +722,16 @@ export class ProductionDAO {
     const orderList = orders || [];
     const orderIds = orderList.map(o => o.order_id);
 
-    // Fetch actual hours from workers_log for all orders in this view
+    // Fetch actual hours from work_logs for all orders in this view
     let actualHoursMap = new Map<string, number>();
     if (orderIds.length > 0) {
       const { data: wlData, error: wlError } = await supabase
-        .from('workers_log')
-        .select('order_id, qty, act_time_per_unit')
+        .from('work_logs')
+        .select('order_id, duration_hours')
         .in('order_id', orderIds);
-      if (wlError) throw new Error(`[getGanttHierarchy:workers_log] ${wlError.message}`);
+      if (wlError) throw new Error(`[getGanttHierarchy:work_logs] ${wlError.message}`);
       for (const row of wlData || []) {
-        const hours = ((row.qty as number) ?? 0) * ((row.act_time_per_unit as number) ?? 0);
+        const hours = (row.duration_hours as number) ?? 0;
         actualHoursMap.set(row.order_id, (actualHoursMap.get(row.order_id) ?? 0) + hours);
       }
     }
