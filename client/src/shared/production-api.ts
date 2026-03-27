@@ -225,7 +225,7 @@ export interface WorkLog {
 
 export interface WorkLogPayload {
   date: string;
-  order_id: string;
+  order_id?: string | null;
   task_id?: number | null;
   task_name?: string;
   worker: string;

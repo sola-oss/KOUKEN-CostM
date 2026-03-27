@@ -6,37 +6,24 @@ import { z } from "zod";
 import dayjs from "dayjs";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  listWorkLogs, 
-  createWorkLog, 
-  updateWorkLog, 
+import {
+  listWorkLogs,
+  createWorkLog,
+  updateWorkLog,
   deleteWorkLog,
-  listTasks,
   type WorkLog,
-  type WorkLogPayload 
 } from "@/shared/production-api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { ChevronsUpDown, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-interface Order {
-  order_id: string;
-  client_name: string | null;
-  project_title: string | null;
-}
 import {
   Form,
   FormControl,
@@ -53,14 +40,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Timer, Save, Plus, Pencil, Trash2, Upload, FileText } from "lucide-react";
+import { Timer, Save, Pencil, Trash2, Upload, FileText } from "lucide-react";
 
-// Form validation schema - 5 fields only
+// フォームスキーマ - 3項目のみ
 const workLogSchema = z.object({
-  order_id: z.string({ required_error: "受注番号は必須です" }).min(1, "受注番号は必須です"),
-  task_id: z.coerce.number().min(1, "作業を選択してください"),
-  worker: z.string().min(1, "作業者は必須です"),
   date: z.string().min(1, "作業日は必須です"),
+  worker: z.string().min(1, "作業者は必須です"),
   duration_hours: z.coerce.number().gt(0, "実働時間は0より大きい値が必要です"),
 });
 
@@ -68,151 +53,86 @@ type WorkLogFormData = z.infer<typeof workLogSchema>;
 
 export default function WorkResults() {
   const { toast } = useToast();
-  const [keepOrderTask, setKeepOrderTask] = useState(false);
   const [editingLog, setEditingLog] = useState<WorkLog | null>(null);
-  const [currentWorker, setCurrentWorker] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [orderComboOpen, setOrderComboOpen] = useState(false);
-  
-  const todayDate = dayjs().format('YYYY-MM-DD');
 
-  // Form setup
+  const todayDate = dayjs().format("YYYY-MM-DD");
+
   const form = useForm<WorkLogFormData>({
     resolver: zodResolver(workLogSchema),
     defaultValues: {
       date: todayDate,
       worker: "",
-      task_id: 0,
-      order_id: "",
       duration_hours: 0,
     },
   });
 
-  // Fetch orders for dropdown (all orders without pagination)
-  const { data: ordersResponse } = useQuery({
-    queryKey: ['/api/orders-dropdown'],
-    queryFn: async () => {
-      const res = await fetch('/api/orders-dropdown');
-      return res.json();
-    }
-  });
-  const orders: Order[] = ordersResponse?.data || [];
-
-  // Fetch workers from workers master
+  // 作業者マスタ取得
   const { data: workersData } = useQuery({
-    queryKey: ['/api/workers-master'],
+    queryKey: ["/api/workers-master"],
     queryFn: async () => {
-      const res = await fetch('/api/workers-master');
-      if (!res.ok) throw new Error('Failed to fetch workers');
+      const res = await fetch("/api/workers-master");
+      if (!res.ok) throw new Error("Failed to fetch workers");
       return res.json() as Promise<{ id: number; name: string; hourly_rate: number; is_active: boolean }[]>;
     },
   });
 
-  // Update currentWorker when form worker changes (for filtering work logs)
-  const workerValue = form.watch('worker');
+  // 最初のアクティブ作業者を自動選択
+  const activeWorkers = workersData?.filter(w => w.is_active) || [];
   useEffect(() => {
-    if (workerValue) {
-      setCurrentWorker(workerValue);
+    if (activeWorkers.length > 0 && !form.getValues("worker")) {
+      form.setValue("worker", activeWorkers[0].name);
     }
-  }, [workerValue]);
+  }, [activeWorkers.length]);
 
-  // Auto-select first active worker when workers load
-  useEffect(() => {
-    if (workersData && workersData.length > 0 && !currentWorker) {
-      const firstActiveWorker = workersData.find(w => w.is_active);
-      if (firstActiveWorker) {
-        form.setValue('worker', firstActiveWorker.name);
-        setCurrentWorker(firstActiveWorker.name);
-      }
-    }
-  }, [workersData, currentWorker, form]);
-
-  // Fetch today's work logs for current worker (only when worker is selected)
+  // 作業実績一覧取得（最新200件）
   const { data: workLogsData, isLoading: logsLoading } = useQuery({
-    queryKey: ['/api/work-logs', todayDate, currentWorker],
-    queryFn: () => listWorkLogs({ date: todayDate, worker: currentWorker }),
-    enabled: !!currentWorker,
+    queryKey: ["/api/work-logs"],
+    queryFn: () => listWorkLogs({ page_size: 200 }),
   });
 
-  // Fetch tasks for selected order
-  const selectedOrderId = form.watch('order_id');
-  const { data: tasksData } = useQuery({
-    queryKey: ['/api/tasks', selectedOrderId],
-    queryFn: () => listTasks({ order_id: selectedOrderId, page_size: 1000 }),
-    enabled: !!selectedOrderId,
-  });
-
-  // Create mutation
+  // 作成
   const createMutation = useMutation({
     mutationFn: createWorkLog,
     onSuccess: () => {
       toast({ title: "作業実績を保存しました" });
-      queryClient.invalidateQueries({ queryKey: ['/api/work-logs'] });
-      
-      // Reset form but keep order/task if toggle is on
-      if (keepOrderTask) {
-        form.reset({
-          date: todayDate,
-          worker: currentWorker,
-          order_id: form.getValues('order_id'),
-          task_id: form.getValues('task_id'),
-          duration_hours: 0,
-        });
-      } else {
-        form.reset({
-          date: todayDate,
-          worker: currentWorker,
-          order_id: "",
-          task_id: 0,
-          duration_hours: 0,
-        });
-      }
+      queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
+      const currentWorker = form.getValues("worker");
+      form.reset({ date: todayDate, worker: currentWorker, duration_hours: 0 });
     },
     onError: (error: any) => {
-      toast({
-        title: "エラー",
-        description: error.message || "作業実績の保存に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: error.message || "保存に失敗しました", variant: "destructive" });
     },
   });
 
-  // Update mutation
+  // 更新
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<WorkLogPayload> }) => 
+    mutationFn: ({ id, data }: { id: number; data: Partial<WorkLogFormData> }) =>
       updateWorkLog(id, data),
     onSuccess: () => {
       toast({ title: "作業実績を更新しました" });
-      queryClient.invalidateQueries({ queryKey: ['/api/work-logs'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
       setEditingLog(null);
+      form.reset({ date: todayDate, worker: form.getValues("worker"), duration_hours: 0 });
     },
     onError: (error: any) => {
-      toast({
-        title: "エラー",
-        description: error.message || "更新に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: error.message || "更新に失敗しました", variant: "destructive" });
     },
   });
 
-  // Delete mutation
+  // 削除
   const deleteMutation = useMutation({
     mutationFn: deleteWorkLog,
     onSuccess: () => {
       toast({ title: "作業実績を削除しました" });
-      queryClient.invalidateQueries({ queryKey: ['/api/work-logs'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "エラー",
-        description: error.message || "削除に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: error.message || "削除に失敗しました", variant: "destructive" });
     },
   });
 
-  // Handle form submission
   const onSubmit = (data: WorkLogFormData) => {
     if (editingLog) {
       updateMutation.mutate({ id: editingLog.id, data });
@@ -221,105 +141,75 @@ export default function WorkResults() {
     }
   };
 
-  // Load editing log into form
   const handleEdit = (log: WorkLog) => {
     setEditingLog(log);
     form.reset({
-      date: dayjs(log.date).format('YYYY-MM-DD'),
-      order_id: log.order_id,
-      task_id: log.task_id || 0,
+      date: dayjs(log.date).format("YYYY-MM-DD"),
       worker: log.worker,
       duration_hours: log.duration_hours,
     });
   };
 
-  // Handle delete
+  const handleCancelEdit = () => {
+    setEditingLog(null);
+    form.reset({ date: todayDate, worker: form.getValues("worker"), duration_hours: 0 });
+  };
+
   const handleDelete = (id: number) => {
     if (confirm("この作業実績を削除してもよろしいですか？")) {
       deleteMutation.mutate(id);
     }
   };
 
-  // Handle CSV file selection
+  // CSV取込
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-        toast({
-          title: "エラー",
-          description: "CSVファイルを選択してください",
-          variant: "destructive",
-        });
+      if (file.type !== "text/csv" && !file.name.endsWith(".csv")) {
+        toast({ title: "エラー", description: "CSVファイルを選択してください", variant: "destructive" });
         return;
       }
       setCsvFile(file);
     }
   };
 
-  // Handle CSV upload
   const handleCsvUpload = async () => {
-    if (!csvFile) {
-      toast({
-        title: "エラー",
-        description: "ファイルが選択されていません",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!csvFile) return;
     setIsUploading(true);
-    
     try {
       const formData = new FormData();
-      formData.append('file', csvFile);
-
-      const response = await fetch('/api/work-logs/upload-csv', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('CSV upload failed');
-      }
-
+      formData.append("file", csvFile);
+      const response = await fetch("/api/work-logs/upload-csv", { method: "POST", body: formData });
+      if (!response.ok) throw new Error("CSV upload failed");
       const result = await response.json();
-
       toast({
         title: "CSVアップロード完了",
-        description: `${result.summary.success}件の作業実績を登録しました（失敗: ${result.summary.failed}件）`,
+        description: `${result.summary.success}件登録しました（失敗: ${result.summary.failed}件）`,
       });
-
-      // Reset file input
       setCsvFile(null);
-      const fileInput = document.getElementById('csv-file-input') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-
-      // Refresh work logs list
-      queryClient.invalidateQueries({ queryKey: ['/api/work-logs'] });
-
+      const fileInput = document.getElementById("csv-file-input") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+      queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
     } catch (error: any) {
-      toast({
-        title: "エラー",
-        description: error.message || "CSVのアップロードに失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: error.message || "アップロードに失敗しました", variant: "destructive" });
     } finally {
       setIsUploading(false);
     }
   };
 
+  const logs: WorkLog[] = workLogsData?.data || [];
+
   return (
     <div className="p-6 space-y-6" data-testid="page-work-results">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
-          作業実績入力（PC）
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2" data-testid="text-page-title">
+          <Timer className="h-8 w-8" />
+          作業実績入力
         </h1>
-        <p className="text-muted-foreground">
-          詳細な作業実績の記録と工数入力
-        </p>
+        <p className="text-muted-foreground">日々の作業時間を記録します</p>
       </div>
 
-      {/* CSV Upload Section */}
+      {/* CSVアップロード */}
       <Card data-testid="card-csv-upload">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -345,11 +235,7 @@ export default function WorkResults() {
                 </p>
               )}
             </div>
-            <Button
-              onClick={handleCsvUpload}
-              disabled={!csvFile || isUploading}
-              data-testid="button-upload-csv"
-            >
+            <Button onClick={handleCsvUpload} disabled={!csvFile || isUploading} data-testid="button-upload-csv">
               {isUploading ? "アップロード中..." : "アップロード"}
             </Button>
           </div>
@@ -359,7 +245,7 @@ export default function WorkResults() {
         </CardContent>
       </Card>
 
-      {/* Input Form */}
+      {/* 入力フォーム */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -369,307 +255,141 @@ export default function WorkResults() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Left column */}
-                <div className="space-y-4">
-                  {/* 1. 受注番号 */}
-                  <FormField
-                    control={form.control}
-                    name="order_id"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>受注番号 *</FormLabel>
-                        <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={orderComboOpen}
-                                className={cn(
-                                  "w-full justify-between",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                                data-testid="select-order"
-                              >
-                                {field.value
-                                  ? (() => {
-                                      const order = orders.find(o => o.order_id === field.value);
-                                      return order ? `#${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
-                                    })()
-                                  : "受注を検索..."}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[400px] p-0" align="start">
-                            <Command>
-                              <CommandInput placeholder="受注番号・顧客名で検索..." />
-                              <CommandList>
-                                <CommandEmpty>該当する受注がありません</CommandEmpty>
-                                <CommandGroup>
-                                  {orders.map((order) => (
-                                    <CommandItem
-                                      key={order.order_id}
-                                      value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
-                                      onSelect={() => {
-                                        field.onChange(order.order_id);
-                                        setOrderComboOpen(false);
-                                      }}
-                                      data-testid={`option-order-${order.order_id}`}
-                                    >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-4 w-4",
-                                          field.value === order.order_id ? "opacity-100" : "opacity-0"
-                                        )}
-                                      />
-                                      <span className="font-medium">#{order.order_id}</span>
-                                      <span className="ml-2 text-muted-foreground truncate">
-                                        {order.client_name || order.project_title || ""}
-                                      </span>
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 作業日 */}
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>作業日 *</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                  {/* 2. 作業名（受注に紐付くDropdown） */}
-                  <FormField
-                    control={form.control}
-                    name="task_id"
-                    render={({ field }) => (
+                {/* 作業者 */}
+                <FormField
+                  control={form.control}
+                  name="worker"
+                  render={({ field }) => {
+                    const editingWorkerName = editingLog?.worker;
+                    const showEditingWorker = editingWorkerName && !activeWorkers.some(w => w.name === editingWorkerName);
+                    return (
                       <FormItem>
-                        <FormLabel>作業名 *</FormLabel>
-                        <Select
-                          onValueChange={(value) => field.onChange(parseInt(value, 10))}
-                          value={field.value ? field.value.toString() : ""}
-                          disabled={!selectedOrderId}
-                        >
+                        <FormLabel>作業者 *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger data-testid="select-task">
-                              <SelectValue placeholder={selectedOrderId ? "作業を選択" : "先に受注を選択"} />
+                            <SelectTrigger data-testid="select-worker">
+                              <SelectValue placeholder="作業者を選択" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {tasksData?.data?.map((task) => (
-                              <SelectItem 
-                                key={task.id} 
-                                value={task.id.toString()}
-                                data-testid={`option-task-${task.id}`}
-                              >
-                                {task.task_name}
-                              </SelectItem>
-                            ))}
-                            {(!tasksData?.data || tasksData.data.length === 0) && selectedOrderId && (
-                              <SelectItem value="no-tasks" disabled>
-                                この受注にはタスクがありません
-                              </SelectItem>
+                            {showEditingWorker && (
+                              <SelectItem value={editingWorkerName}>{editingWorkerName}（非アクティブ）</SelectItem>
                             )}
+                            {activeWorkers.map(w => (
+                              <SelectItem key={w.id} value={w.name}>{w.name}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>
-                    )}
-                  />
+                    );
+                  }}
+                />
 
-                  {/* 3. 担当者 */}
-                  <FormField
-                    control={form.control}
-                    name="worker"
-                    render={({ field }) => {
-                      const activeWorkers = workersData?.filter(w => w.is_active) || [];
-                      const editingWorkerName = editingLog?.worker;
-                      const showEditingWorker = editingWorkerName && !activeWorkers.some(w => w.name === editingWorkerName);
-                      
-                      return (
-                        <FormItem>
-                          <FormLabel>担当者 *</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-worker">
-                                <SelectValue placeholder="担当者を選択" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {showEditingWorker && (
-                                <SelectItem key={`editing-${editingWorkerName}`} value={editingWorkerName}>
-                                  {editingWorkerName} (非アクティブ)
-                                </SelectItem>
-                              )}
-                              {activeWorkers.map((worker) => (
-                                <SelectItem key={worker.id} value={worker.name}>
-                                  {worker.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
-                  />
-                </div>
-
-                {/* Right column */}
-                <div className="space-y-4">
-                  {/* 4. 日付 */}
-                  <FormField
-                    control={form.control}
-                    name="date"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>日付 *</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} data-testid="input-date" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* 5. 実働時間 */}
-                  <FormField
-                    control={form.control}
-                    name="duration_hours"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>実働時間（h）*</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.01"
-                            min="0.01"
-                            {...field} 
-                            data-testid="input-duration"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                {/* 実働時間 */}
+                <FormField
+                  control={form.control}
+                  name="duration_hours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>実働時間（h）*</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.25"
+                          min="0.25"
+                          placeholder="例: 8"
+                          {...field}
+                          value={field.value === 0 ? "" : field.value}
+                          onChange={e => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                          data-testid="input-duration"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
-              {/* Action buttons */}
-              <div className="flex items-center justify-between pt-4 border-t">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="keep-order-task"
-                    checked={keepOrderTask}
-                    onChange={(e) => setKeepOrderTask(e.target.checked)}
-                    data-testid="switch-keep-order-task"
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="keep-order-task" className="cursor-pointer text-sm">
-                    同じ受注・作業を保持（連続入力）
-                  </Label>
-                </div>
-
-                <div className="flex gap-2">
-                  {editingLog && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingLog(null);
-                        form.reset({
-                          date: todayDate,
-                          worker: currentWorker,
-                          order_id: "",
-                          task_id: 0,
-                          duration_hours: 0,
-                        });
-                      }}
-                      data-testid="button-cancel-edit"
-                    >
-                      キャンセル
-                    </Button>
-                  )}
-                  <Button 
-                    type="submit" 
-                    disabled={createMutation.isPending || updateMutation.isPending}
-                    data-testid="button-save"
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    {editingLog ? "更新" : "保存"}
+              <div className="flex justify-end gap-2 pt-2">
+                {editingLog && (
+                  <Button type="button" variant="outline" onClick={handleCancelEdit} data-testid="button-cancel-edit">
+                    キャンセル
                   </Button>
-                </div>
+                )}
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                  data-testid="button-save"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {editingLog ? "更新" : "保存"}
+                </Button>
               </div>
             </form>
           </Form>
         </CardContent>
       </Card>
 
-      {/* Today's Results Table */}
+      {/* 作業実績一覧 */}
       <Card>
         <CardHeader>
-          <CardTitle>本日の作業実績（{currentWorker}）</CardTitle>
+          <CardTitle>作業実績一覧</CardTitle>
         </CardHeader>
         <CardContent>
           {logsLoading ? (
             <div className="text-center py-8 text-muted-foreground">読み込み中...</div>
-          ) : workLogsData?.data.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              本日の作業実績はまだありません
-            </div>
+          ) : logs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">作業実績はまだありません</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>日付</TableHead>
-                  <TableHead>受注</TableHead>
-                  <TableHead>作業名</TableHead>
-                  <TableHead>担当者</TableHead>
-                  <TableHead>実働時間</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {workLogsData?.data.map((log) => (
-                  <TableRow key={log.id} data-testid={`row-work-log-${log.id}`}>
-                    <TableCell>{log.date || log.work_date || '-'}</TableCell>
-                    <TableCell>
-                      #{log.order_id} {log.product_name}
-                    </TableCell>
-                    <TableCell>{log.task_name}</TableCell>
-                    <TableCell>{log.worker}</TableCell>
-                    <TableCell>{log.duration_hours}h</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleEdit(log)}
-                          data-testid={`button-edit-${log.id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleDelete(log.id)}
-                          data-testid={`button-delete-${log.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>作業日</TableHead>
+                    <TableHead>作業者</TableHead>
+                    <TableHead className="text-right">実働時間</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {logs.map(log => (
+                    <TableRow key={log.id} data-testid={`row-work-log-${log.id}`}>
+                      <TableCell>{log.date ? dayjs(log.date).format("YYYY-MM-DD") : "-"}</TableCell>
+                      <TableCell>{log.worker}</TableCell>
+                      <TableCell className="text-right font-medium">{log.duration_hours}h</TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => handleEdit(log)} data-testid={`button-edit-${log.id}`}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => handleDelete(log.id)} data-testid={`button-delete-${log.id}`}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
