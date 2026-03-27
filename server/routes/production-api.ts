@@ -518,20 +518,9 @@ router.post('/api/procurements', async (req, res) => {
 
     const data = validation.data;
 
-    // Content validation: require either material_id or non-empty description
-    if (!data.material_id && (!data.description || data.description.trim() === '')) {
-      return res.status(400).json({
-        error: 'Validation error',
-        message: '内容は材料マスタから選択するか、テキストで入力してください'
-      });
-    }
-
-    const qty = data.quantity ?? 1;
-    const unitPrice = data.unit_price ?? 0;
     const procData = {
       ...data,
-      quantity: qty,
-      amount: qty * unitPrice,
+      amount: data.amount ?? 0,
     };
 
     const procId = await dao.createProcurement(procData);
@@ -575,20 +564,7 @@ router.patch('/api/procurements/:id', async (req, res) => {
       return res.status(400).json({ error: 'No valid updates provided' });
     }
 
-    // Auto-calculate amount when quantity or unit_price is patched
-    // Fetch existing row to fill in the missing side of the calculation
-    let updates: typeof baseUpdates & { amount?: number } = baseUpdates;
-    if (baseUpdates.quantity !== undefined || baseUpdates.unit_price !== undefined) {
-      const existing = await dao.getProcurementById(procId);
-      if (!existing) {
-        return res.status(404).json({ error: 'Not found', message: 'Procurement not found' });
-      }
-      const qty = baseUpdates.quantity !== undefined ? baseUpdates.quantity : (existing.quantity ?? 0);
-      const unitPrice = baseUpdates.unit_price !== undefined ? baseUpdates.unit_price : (existing.unit_price ?? 0);
-      updates = { ...baseUpdates, amount: qty * unitPrice };
-    }
-
-    const success = await dao.updateProcurement(procId, updates);
+    const success = await dao.updateProcurement(procId, baseUpdates);
 
     if (!success) {
       return res.status(404).json({ 
