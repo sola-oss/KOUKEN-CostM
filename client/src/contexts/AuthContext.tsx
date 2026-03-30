@@ -1,36 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { AuthContext, AuthUser } from "./auth-context";
 
 const PROFILE_CACHE_KEY = "auth_profile_cache";
-const PROFILE_CACHE_REFRESH_MS = 60 * 60 * 1000; // 1時間でバックグラウンド再取得
+const PROFILE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24時間
 
 interface ProfileCache {
   user: AuthUser;
   cachedAt: number;
 }
 
-// TTL に関係なく保存済みキャッシュを返す（初回表示用）
-function getAnyCachedProfile(): AuthUser | null {
+function getCachedProfile(): AuthUser | null {
   try {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY);
     if (!raw) return null;
-    return (JSON.parse(raw) as ProfileCache).user;
+    const parsed: ProfileCache = JSON.parse(raw);
+    // 24時間以内なら有効
+    if (Date.now() - parsed.cachedAt < PROFILE_CACHE_TTL_MS) return parsed.user;
+    return null;
   } catch {
     return null;
-  }
-}
-
-// キャッシュが新鮮かどうか確認（バックグラウンド再取得が必要か判断）
-function isCacheFresh(): boolean {
-  try {
-    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
-    if (!raw) return false;
-    const parsed: ProfileCache = JSON.parse(raw);
-    return Date.now() - parsed.cachedAt < PROFILE_CACHE_REFRESH_MS;
-  } catch {
-    return false;
   }
 }
 
@@ -39,8 +29,7 @@ function setCachedProfile(user: AuthUser | null) {
     localStorage.removeItem(PROFILE_CACHE_KEY);
     return;
   }
-  const cache: ProfileCache = { user, cachedAt: Date.now() };
-  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cache));
+  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ user, cachedAt: Date.now() }));
 }
 
 async function loadUserProfile(userId: string, email: string): Promise<AuthUser | null> {
@@ -50,66 +39,56 @@ async function loadUserProfile(userId: string, email: string): Promise<AuthUser 
       .select("id, name, role")
       .eq("id", userId)
       .single();
-
     if (error || !data) return null;
-
-    return {
-      id: data.id,
-      name: data.name,
-      role: data.role as "admin" | "worker",
-      email,
-    };
+    return { id: data.id, name: data.name, role: data.role as "admin" | "worker", email };
   } catch {
     return null;
   }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // キャッシュがあれば TTL 問わず即表示（loading = false にする）
-  const cachedUser = getAnyCachedProfile();
+  const cachedUser = getCachedProfile();
   const [user, setUser] = useState<AuthUser | null>(cachedUser);
+  // キャッシュがあれば最初からローディングなし
   const [loading, setLoading] = useState(cachedUser === null);
   const [, setLocation] = useLocation();
+  const initDone = useRef(false);
 
   useEffect(() => {
     let mounted = true;
 
     async function initAuth() {
       try {
-        // キャッシュが新鮮なら Supabase セッション確認だけ（プロフィール再取得しない）
         const { data: { session } } = await supabase.auth.getSession();
-
-        if (!mounted) return;
+        if (!mounted || initDone.current) return;
+        initDone.current = true;
 
         if (!session?.user) {
-          // セッションなし → キャッシュがあっても、ここで初めてログアウト
-          setUser(null);
-          setCachedProfile(null);
-          setLoading(false);
-          return;
-        }
-
-        // セッションあり → キャッシュが新鮮なら何もしない
-        if (isCacheFresh()) {
-          setLoading(false);
-          return;
-        }
-
-        // キャッシュが古い場合のみバックグラウンドでプロフィール再取得
-        const profile = await loadUserProfile(session.user.id, session.user.email ?? "");
-        if (mounted) {
-          if (profile) {
-            setUser(profile);
-            setCachedProfile(profile);
-          } else {
-            // プロフィール取得失敗でもキャッシュを延命（タイムスタンプを更新）
-            const existing = getAnyCachedProfile();
-            if (existing) setCachedProfile(existing);
+          // セッションなし → ログアウト状態
+          if (mounted) {
+            setUser(null);
+            setCachedProfile(null);
+            setLoading(false);
           }
-          setLoading(false);
+          return;
         }
+
+        // セッションあり → キャッシュが有効ならそのまま使う
+        const cached = getCachedProfile();
+        if (cached) {
+          if (mounted) setLoading(false);
+          return;
+        }
+
+        // キャッシュ切れ → プロフィール再取得
+        const profile = await loadUserProfile(session.user.id, session.user.email ?? "");
+        if (!mounted) return;
+        if (profile) {
+          setUser(profile);
+          setCachedProfile(profile);
+        }
+        setLoading(false);
       } catch {
-        // エラー時はキャッシュを信頼してそのまま表示
         if (mounted) setLoading(false);
       }
     }
@@ -119,7 +98,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      // 明示的なログアウトのみログイン画面へ
       if (event === "SIGNED_OUT") {
         setUser(null);
         setCachedProfile(null);
@@ -128,27 +106,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // 新規ログイン時のみローディング表示してプロフィール取得
       if (event === "SIGNED_IN" && session?.user) {
+        // ログイン直後 → プロフィール取得
         setLoading(true);
-        try {
-          const profile = await loadUserProfile(session.user.id, session.user.email ?? "");
-          if (mounted) {
-            setUser(profile);
-            setCachedProfile(profile);
-            setLoading(false);
-          }
-        } catch {
-          if (mounted) {
-            const cached = getAnyCachedProfile();
-            if (cached) setUser(cached);
-            setLoading(false);
-          }
+        const profile = await loadUserProfile(session.user.id, session.user.email ?? "");
+        if (!mounted) return;
+
+        if (profile) {
+          setUser(profile);
+          setCachedProfile(profile);
+          setLoading(false);
+        } else {
+          // user_profiles にない場合 → セッションは有効なので仮ユーザーで続行
+          const fallback: AuthUser = {
+            id: session.user.id,
+            name: session.user.email ?? "ユーザー",
+            role: "admin",
+            email: session.user.email ?? "",
+          };
+          setUser(fallback);
+          setCachedProfile(fallback);
+          setLoading(false);
         }
         return;
       }
 
-      // TOKEN_REFRESHED などはローディングなしで静かに処理
+      // TOKEN_REFRESHED など → 何もしない（現状維持）
     });
 
     return () => {
@@ -158,9 +141,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function signOut() {
+    setCachedProfile(null);
     await supabase.auth.signOut();
     setUser(null);
-    setCachedProfile(null);
     setLocation("/login");
   }
 
