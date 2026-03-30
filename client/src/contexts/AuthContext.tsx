@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { AuthContext, AuthUser } from "./auth-context";
 
 const PROFILE_CACHE_KEY = "auth_profile_cache";
-const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 const AUTH_TIMEOUT_MS = 5000; // 5 seconds
 
 interface ProfileCache {
@@ -103,9 +103,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
+        // タイムアウト・ネットワークエラー時はキャッシュを維持する
         if (mounted) {
-          setUser(null);
-          setCachedProfile(null);
+          const cached = getCachedProfile();
+          if (cached) {
+            setUser(cached);
+          } else {
+            setUser(null);
+          }
           setLoading(false);
         }
       }
@@ -115,6 +120,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
+
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setCachedProfile(null);
+        setLoading(false);
+        setLocation("/login");
+        return;
+      }
 
       if (session?.user) {
         if (event === "SIGNED_IN") {
@@ -126,22 +139,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             AUTH_TIMEOUT_MS
           );
           if (!mounted) return;
-          setUser(profile);
-          setCachedProfile(profile);
+          if (profile) {
+            setUser(profile);
+            setCachedProfile(profile);
+          }
           setLoading(false);
         } catch {
+          // タイムアウト・ネットワークエラー時はセッションを維持する
+          // キャッシュがあればそれを使い続ける
           if (mounted) {
-            setUser(null);
-            setCachedProfile(null);
             setLoading(false);
           }
-        }
-      } else {
-        setUser(null);
-        setCachedProfile(null);
-        setLoading(false);
-        if (event === "SIGNED_OUT") {
-          setLocation("/login");
         }
       }
     });
