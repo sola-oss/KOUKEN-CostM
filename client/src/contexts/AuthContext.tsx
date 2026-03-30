@@ -4,8 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { AuthContext, AuthUser } from "./auth-context";
 
 const PROFILE_CACHE_KEY = "auth_profile_cache";
-const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const AUTH_TIMEOUT_MS = 5000; // 5 seconds
+const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
+const AUTH_TIMEOUT_MS = 15000; // 15 seconds
 
 interface ProfileCache {
   user: AuthUser;
@@ -86,16 +86,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!mounted) return;
 
         if (session?.user) {
-          const profile = await withTimeout(
-            loadUserProfile(session.user.id, session.user.email ?? ""),
-            AUTH_TIMEOUT_MS
-          );
-          if (mounted) {
-            setUser(profile);
-            setCachedProfile(profile);
-            setLoading(false);
+          try {
+            const profile = await withTimeout(
+              loadUserProfile(session.user.id, session.user.email ?? ""),
+              AUTH_TIMEOUT_MS
+            );
+            if (mounted) {
+              // プロフィール取得成功
+              setUser(profile);
+              setCachedProfile(profile);
+              setLoading(false);
+            }
+          } catch {
+            // プロフィール取得失敗 → セッションは有効なのでキャッシュを使い続ける
+            if (mounted) {
+              const cached = getCachedProfile();
+              setUser(cached);
+              setLoading(false);
+            }
           }
         } else {
+          // セッションなし → 明示的にログアウト
           if (mounted) {
             setUser(null);
             setCachedProfile(null);
@@ -103,9 +114,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
+        // getSession 自体が失敗 → キャッシュがあれば維持、なければログアウト
         if (mounted) {
-          setUser(null);
-          setCachedProfile(null);
+          const cached = getCachedProfile();
+          setUser(cached);
           setLoading(false);
         }
       }
@@ -115,6 +127,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
+
+      // 明示的なログアウトのみログイン画面へ
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setCachedProfile(null);
+        setLoading(false);
+        setLocation("/login");
+        return;
+      }
 
       if (session?.user) {
         if (event === "SIGNED_IN") {
@@ -130,20 +151,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCachedProfile(profile);
           setLoading(false);
         } catch {
+          // プロフィール取得失敗 → セッション有効なのでキャッシュを維持
           if (mounted) {
-            setUser(null);
-            setCachedProfile(null);
+            const cached = getCachedProfile();
+            if (cached) setUser(cached);
             setLoading(false);
           }
         }
-      } else {
-        setUser(null);
-        setCachedProfile(null);
-        setLoading(false);
-        if (event === "SIGNED_OUT") {
-          setLocation("/login");
-        }
       }
+      // TOKEN_REFRESHED など session なしイベントはログアウトしない
     });
 
     return () => {
