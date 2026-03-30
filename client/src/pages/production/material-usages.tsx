@@ -324,7 +324,7 @@ export default function MaterialUsages() {
                               {field.value
                                 ? (() => {
                                     const order = orders.find(o => o.order_id === field.value);
-                                    return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
+                                    return order ? `${order.order_id}${order.client_name ? ` / ${order.client_name}` : ""}${order.project_title ? ` / ${order.project_title}` : ""}` : field.value;
                                   })()
                                 : "受注を検索..."}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -353,9 +353,8 @@ export default function MaterialUsages() {
                                       )}
                                     />
                                     <span className="font-medium">{order.order_id}</span>
-                                    <span className="ml-2 text-muted-foreground truncate">
-                                      {order.client_name || order.project_title || ""}
-                                    </span>
+                                    {order.client_name && <span className="ml-1 text-muted-foreground">{order.client_name}</span>}
+                                    {order.project_title && <span className="ml-1 text-muted-foreground truncate">/ {order.project_title}</span>}
                                   </CommandItem>
                                 ))}
                               </CommandGroup>
@@ -662,7 +661,7 @@ export default function MaterialUsages() {
                               {field.value
                                 ? (() => {
                                     const order = orders.find(o => o.order_id === field.value);
-                                    return order ? `${order.order_id} - ${order.client_name || order.project_title || ""}` : field.value;
+                                    return order ? `${order.order_id}${order.client_name ? ` / ${order.client_name}` : ""}${order.project_title ? ` / ${order.project_title}` : ""}` : field.value;
                                   })()
                                 : "受注を検索..."}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -691,9 +690,8 @@ export default function MaterialUsages() {
                                       )}
                                     />
                                     <span className="font-medium">{order.order_id}</span>
-                                    <span className="ml-2 text-muted-foreground truncate">
-                                      {order.client_name || order.project_title || ""}
-                                    </span>
+                                    {order.client_name && <span className="ml-1 text-muted-foreground">{order.client_name}</span>}
+                                    {order.project_title && <span className="ml-1 text-muted-foreground truncate">/ {order.project_title}</span>}
                                   </CommandItem>
                                 ))}
                               </CommandGroup>
