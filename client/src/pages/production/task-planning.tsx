@@ -311,7 +311,7 @@ export default function TaskPlanning() {
                                 {orders.map((order) => (
                                   <CommandItem
                                     key={order.order_id}
-                                    value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
+                                    value={`${order.order_id} ${order.client_name || ""} ${order.project_title || order.product_name || ""}`}
                                     onSelect={() => {
                                       field.onChange(order.order_id);
                                       setCreateOrderComboOpen(false);
@@ -657,7 +657,7 @@ export default function TaskPlanning() {
                                 {orders.map((order) => (
                                   <CommandItem
                                     key={order.order_id}
-                                    value={`${order.order_id} ${order.client_name || ""} ${order.project_title || ""}`}
+                                    value={`${order.order_id} ${order.client_name || ""} ${order.project_title || order.product_name || ""}`}
                                     onSelect={() => {
                                       field.onChange(order.order_id);
                                       setEditOrderComboOpen(false);
