@@ -605,7 +605,7 @@ export default function Projects() {
 
                   {/* Project Title */}
                   <TableCell data-testid={`cell-project-title-${order.order_id}`}>
-                    {order.project_title || '-'}
+                    {order.project_title || order.product_name || '-'}
                   </TableCell>
 
                   {/* Due Date */}
