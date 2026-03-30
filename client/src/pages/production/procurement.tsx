@@ -33,6 +33,7 @@ interface Order {
   order_id: string;
   client_name: string | null;
   project_title: string | null;
+  product_name: string | null;
 }
 
 const formSchema = z.object({
@@ -96,7 +97,7 @@ function ProcurementForm({
                           ? (() => {
                               const o = orders.find(o => o.order_id === field.value);
                               return o
-                                ? `${o.order_id}${o.client_name ? ` / ${o.client_name}` : ""}${o.project_title ? ` / ${o.project_title}` : ""}`
+                                ? `${o.order_id}${o.client_name ? ` / ${o.client_name}` : ""}${(o.project_title || o.product_name) ? ` / ${o.project_title || o.product_name}` : ""}`
                                 : field.value;
                             })()
                           : "受注番号を選択..."}
@@ -119,7 +120,7 @@ function ProcurementForm({
                               <Check className={cn("mr-2 h-4 w-4", field.value === o.order_id ? "opacity-100" : "opacity-0")} />
                               <span className="font-medium">{o.order_id}</span>
                               {o.client_name && <span className="ml-1 text-muted-foreground">{o.client_name}</span>}
-                              {o.project_title && <span className="ml-1 text-muted-foreground truncate">/ {o.project_title}</span>}
+                              {(o.project_title || o.product_name) && <span className="ml-1 text-muted-foreground truncate">/ {o.project_title || o.product_name}</span>}
                             </CommandItem>
                           ))}
                         </CommandGroup>

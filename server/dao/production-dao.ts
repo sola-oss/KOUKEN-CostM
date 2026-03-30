@@ -600,10 +600,10 @@ export class ProductionDAO {
 
   // ========== Utility Methods ==========
 
-  async getOrdersForDropdown(): Promise<{ order_id: string; client_name: string | null; project_title: string | null }[]> {
+  async getOrdersForDropdown(): Promise<{ order_id: string; client_name: string | null; project_title: string | null; product_name: string | null }[]> {
     const { data, error } = await supabase
       .from('orders')
-      .select('order_id,client_name,project_title')
+      .select('order_id,client_name,project_title,product_name')
       .order('order_id', { ascending: true });
     if (error) throw new Error(`[getOrdersForDropdown] ${error.message}`);
     return (data || []) as any[];

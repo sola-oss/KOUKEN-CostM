@@ -47,6 +47,7 @@ interface Order {
   order_id: string;
   client_name: string | null;
   project_title: string | null;
+  product_name: string | null;
 }
 
 interface Worker {
@@ -209,7 +210,8 @@ export default function TaskManagement() {
   function orderLabel(orderId: string) {
     const o = orders.find((x) => x.order_id === orderId);
     if (!o) return orderId;
-    return `${o.order_id}${o.client_name ? ` / ${o.client_name}` : ""}${o.project_title ? ` / ${o.project_title}` : ""}`;
+    const title = o.project_title || o.product_name;
+    return `${o.order_id}${o.client_name ? ` / ${o.client_name}` : ""}${title ? ` / ${title}` : ""}`;
   }
 
   const onSubmit = (data: WorkLogFormData) => {
@@ -295,13 +297,13 @@ export default function TaskManagement() {
                                 {orders.map((o) => (
                                   <CommandItem
                                     key={o.order_id}
-                                    value={`${o.order_id} ${o.client_name ?? ""} ${o.project_title ?? ""}`}
+                                    value={`${o.order_id} ${o.client_name ?? ""} ${o.project_title || o.product_name ?? ""}`}
                                     onSelect={() => { field.onChange(o.order_id); setOrderComboOpen(false); }}
                                   >
                                     <Check className={cn("mr-2 h-4 w-4", field.value === o.order_id ? "opacity-100" : "opacity-0")} />
                                     <span className="font-medium">{o.order_id}</span>
                                     {o.client_name && <span className="ml-1 text-muted-foreground">{o.client_name}</span>}
-                                    {o.project_title && <span className="ml-1 text-muted-foreground truncate">/ {o.project_title}</span>}
+                                    {(o.project_title || o.product_name) && <span className="ml-1 text-muted-foreground truncate">/ {o.project_title || o.product_name}</span>}
                                   </CommandItem>
                                 ))}
                               </CommandGroup>

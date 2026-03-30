@@ -34,6 +34,7 @@ interface Order {
   order_id: string;
   client_name: string | null;
   project_title: string | null;
+  product_name: string | null;
 }
 
 interface MaterialCost {
@@ -201,7 +202,7 @@ export default function MaterialCostsPage() {
                               className={cn("justify-between font-normal", !field.value && "text-muted-foreground")}
                             >
                               {field.value
-                                ? `${field.value}${selectedOrder?.client_name ? ` / ${selectedOrder.client_name}` : ""}${selectedOrder?.project_title ? ` / ${selectedOrder.project_title}` : ""}`
+                                ? `${field.value}${selectedOrder?.client_name ? ` / ${selectedOrder.client_name}` : ""}${(selectedOrder?.project_title || selectedOrder?.product_name) ? ` / ${selectedOrder?.project_title || selectedOrder?.product_name}` : ""}`
                                 : "受注番号を選択"}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
@@ -229,8 +230,8 @@ export default function MaterialCostsPage() {
                                     {order.client_name && (
                                       <span className="ml-1 text-muted-foreground text-sm">{order.client_name}</span>
                                     )}
-                                    {order.project_title && (
-                                      <span className="ml-1 text-muted-foreground text-sm truncate">/ {order.project_title}</span>
+                                    {(order.project_title || order.product_name) && (
+                                      <span className="ml-1 text-muted-foreground text-sm truncate">/ {order.project_title || order.product_name}</span>
                                     )}
                                   </CommandItem>
                                 ))}
