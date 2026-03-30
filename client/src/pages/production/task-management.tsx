@@ -297,7 +297,7 @@ export default function TaskManagement() {
                                 {orders.map((o) => (
                                   <CommandItem
                                     key={o.order_id}
-                                    value={`${o.order_id} ${o.client_name ?? ""} ${o.project_title || o.product_name ?? ""}`}
+                                    value={`${o.order_id} ${o.client_name || ""} ${o.project_title || o.product_name || ""}`}
                                     onSelect={() => { field.onChange(o.order_id); setOrderComboOpen(false); }}
                                   >
                                     <Check className={cn("mr-2 h-4 w-4", field.value === o.order_id ? "opacity-100" : "opacity-0")} />
