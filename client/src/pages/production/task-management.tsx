@@ -92,6 +92,7 @@ const TODAY = dayjs().format("YYYY-MM-DD");
 const workLogFormSchema = z.object({
   date: z.string().min(1, "作業日は必須です"),
   order_id: z.string().min(1, "受注番号は必須です"),
+  task_name: z.string().min(1, "作業名は必須です"),
   worker: z.string().min(1, "作業者は必須です"),
   start_time: z.string().min(1, "開始時刻は必須です"),
   end_time: z.string().min(1, "終了時刻は必須です"),
@@ -148,6 +149,7 @@ export default function TaskManagement() {
     defaultValues: {
       date: TODAY,
       order_id: "",
+      task_name: "",
       worker: "",
       start_time: "",
       end_time: "",
@@ -176,6 +178,7 @@ export default function TaskManagement() {
       form.reset({
         date: form.getValues("date"),
         order_id: form.getValues("order_id"),
+        task_name: "",
         worker: form.getValues("worker"),
         start_time: "",
         end_time: "",
@@ -213,6 +216,7 @@ export default function TaskManagement() {
     createMutation.mutate({
       date: data.date,
       order_id: data.order_id,
+      task_name: data.task_name,
       worker: data.worker,
       start_time: data.start_time,
       end_time: data.end_time,
@@ -305,6 +309,25 @@ export default function TaskManagement() {
                           </Command>
                         </PopoverContent>
                       </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* 作業名 */}
+                <FormField
+                  control={form.control}
+                  name="task_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>作業名 *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="例: 溶接、切断、組立"
+                          data-testid="input-task-name"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -449,6 +472,7 @@ export default function TaskManagement() {
                 <TableRow>
                   <TableHead>作業日</TableHead>
                   <TableHead>受注番号</TableHead>
+                  <TableHead>作業名</TableHead>
                   <TableHead>作業者</TableHead>
                   <TableHead>開始</TableHead>
                   <TableHead>終了</TableHead>
@@ -462,6 +486,7 @@ export default function TaskManagement() {
                   <TableRow key={log.id}>
                     <TableCell className="whitespace-nowrap">{log.date}</TableCell>
                     <TableCell className="font-mono text-sm whitespace-nowrap">{log.order_id || "-"}</TableCell>
+                    <TableCell className="text-sm">{log.task_name || "-"}</TableCell>
                     <TableCell>{log.worker}</TableCell>
                     <TableCell className="text-sm">{log.start_time || "-"}</TableCell>
                     <TableCell className="text-sm">{log.end_time || "-"}</TableCell>
