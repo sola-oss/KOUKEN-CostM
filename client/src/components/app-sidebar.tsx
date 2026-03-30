@@ -30,7 +30,7 @@ import { useAuth } from "@/contexts/auth-context";
 // Section 1: 受注と計画
 const orderPlanningItems = [
   { title: "受注管理", url: "/projects", icon: Package },
-  { title: "作業管理", url: "/task-management", icon: CheckSquare },
+  { title: "日報", url: "/task-management", icon: CheckSquare },
   { title: "ガントチャート", url: "/gantt", icon: GanttChart }
 ];
 
@@ -57,7 +57,7 @@ const masterItems = [
 
 // Worker-only items
 const workerItems = [
-  { title: "作業管理", url: "/task-management", icon: CheckSquare },
+  { title: "日報", url: "/task-management", icon: CheckSquare },
   { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
 ];
 

@@ -530,7 +530,7 @@ export default function TaskManagement() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <CheckSquare className="h-8 w-8" />
-          作業管理
+          日報
         </h1>
         <p className="text-muted-foreground">作業計画の登録と実績入力</p>
       </div>
