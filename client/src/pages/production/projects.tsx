@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronLeft, ChevronRight, ChevronsUpDown } from "lucide-react";
+import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { listOrders, type Order } from "@/shared/production-api";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -114,7 +114,6 @@ interface SortConfig {
 export default function Projects() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [page, setPage] = useState(1);
   const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
@@ -168,10 +167,10 @@ export default function Projects() {
 
   // Fetch orders (with server-side search)
   const { data: ordersResponse, isLoading, error } = useQuery({
-    queryKey: ['orders', page, searchQuery],
+    queryKey: ['orders', searchQuery],
     queryFn: () => listOrders({ 
-      page, 
-      page_size: 30,
+      page: 1, 
+      page_size: 9999,
       search: searchQuery.trim() || undefined
     }),
   });
@@ -259,20 +258,12 @@ export default function Projects() {
     return sorted;
   }, [orders, sortConfig]);
 
-  // Clear highlight and reset page when search query changes
+  // Clear highlight when search query changes
   useEffect(() => {
     if (searchQuery.trim()) {
       setNewlyCreatedOrderId(null);
     }
-    setPage(1); // Reset to page 1 when search changes
   }, [searchQuery]);
-
-  // Sync local page state with server page when data changes
-  useEffect(() => {
-    if (ordersResponse?.meta?.page && ordersResponse.meta.page !== page) {
-      setPage(ordersResponse.meta.page);
-    }
-  }, [ordersResponse?.meta?.page]);
 
   // Delete order mutation
   const deleteOrderMutation = useMutation({
@@ -497,7 +488,6 @@ export default function Projects() {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                setPage(1);
                 setSearchQuery(inputValue);
               }
             }}
@@ -508,7 +498,6 @@ export default function Projects() {
         <Button
           variant="default"
           onClick={() => {
-            setPage(1);
             setSearchQuery(inputValue);
           }}
           data-testid="button-search"
@@ -657,47 +646,10 @@ export default function Projects() {
         </Table>
       </Card>
 
-      {/* Pagination Controls */}
+      {/* Total count */}
       {ordersResponse?.meta && ordersResponse.meta.total > 0 && (
-        <div className="flex items-center justify-between px-2 py-4">
-          {/* Left: Showing X-Y of Z items */}
-          <div className="text-sm text-muted-foreground">
-            {(() => {
-              const { total, page: currentPage, page_size } = ordersResponse.meta;
-              const startItem = (currentPage - 1) * page_size + 1;
-              const endItem = Math.min(currentPage * page_size, total);
-              return `全${total}件中 ${startItem}-${endItem}件を表示`;
-            })()}
-          </div>
-
-          {/* Right: Page navigation */}
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-muted-foreground">
-              ページ {ordersResponse.meta.page} / {ordersResponse.meta.total_pages}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(ordersResponse.meta.page - 1)}
-                disabled={ordersResponse.meta.page === 1}
-                data-testid="button-previous-page"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                前へ
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(ordersResponse.meta.page + 1)}
-                disabled={ordersResponse.meta.page >= ordersResponse.meta.total_pages}
-                data-testid="button-next-page"
-              >
-                次へ
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+        <div className="px-2 py-2 text-sm text-muted-foreground">
+          全{ordersResponse.meta.total}件
         </div>
       )}
 
