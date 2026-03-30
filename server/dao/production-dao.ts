@@ -181,9 +181,8 @@ export class ProductionDAO {
     search?: string;
     page?: number;
     pageSize?: number;
-    skipKPI?: boolean;
   } = {}): Promise<{ orders: Array<Order & { kpi: OrderKPI | null }>, total: number }> {
-    const { from, to, search, page = 1, pageSize = 20, skipKPI = false } = options;
+    const { from, to, search, page = 1, pageSize = 20 } = options;
     const offset = (page - 1) * pageSize;
 
     let query = supabase.from('orders').select('*', { count: 'exact' });
@@ -203,15 +202,6 @@ export class ProductionDAO {
     if (error) throw new Error(`[getOrders] ${error.message}`);
 
     const orderList = (orders || []) as Order[];
-
-    // KPI不要な場合はそのまま返す（一覧表示など）
-    if (skipKPI) {
-      return {
-        orders: orderList.map(o => ({ ...o, kpi: null })),
-        total: count ?? 0
-      };
-    }
-
     const orderIds = orderList.map(o => o.order_id);
 
     // KPI計算用バッチ取得

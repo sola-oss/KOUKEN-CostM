@@ -11,13 +11,7 @@ const supabaseAnonKey =
 // HMR でモジュールが再インポートされても同一インスタンスを使い続けるためのシングルトン
 const g = globalThis as typeof globalThis & { __supabaseClient?: SupabaseClient };
 if (!g.__supabaseClient) {
-  g.__supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: false,
-    },
-  });
+  g.__supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 }
 
 export const supabase = g.__supabaseClient;

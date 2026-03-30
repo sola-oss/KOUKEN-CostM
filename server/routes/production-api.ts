@@ -113,8 +113,7 @@ router.get('/api/production/orders', async (req, res) => {
       to: to ? toUTC(to) : undefined,
       search,
       page: parseInt(page),
-      pageSize: parseInt(page_size),
-      skipKPI: true  // 一覧では KPI 不要
+      pageSize: parseInt(page_size)
     };
 
     const result = await dao.getOrders(options);
