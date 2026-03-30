@@ -95,7 +95,9 @@ function ProcurementForm({
                         {field.value
                           ? (() => {
                               const o = orders.find(o => o.order_id === field.value);
-                              return o ? `${o.order_id}${o.client_name ? ` (${o.client_name})` : ""}` : field.value;
+                              return o
+                                ? `${o.order_id}${o.client_name ? ` / ${o.client_name}` : ""}${o.project_title ? ` / ${o.project_title}` : ""}`
+                                : field.value;
                             })()
                           : "受注番号を選択..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -116,7 +118,8 @@ function ProcurementForm({
                             >
                               <Check className={cn("mr-2 h-4 w-4", field.value === o.order_id ? "opacity-100" : "opacity-0")} />
                               <span className="font-medium">{o.order_id}</span>
-                              {o.client_name && <span className="ml-2 text-muted-foreground truncate">{o.client_name}</span>}
+                              {o.client_name && <span className="ml-1 text-muted-foreground">{o.client_name}</span>}
+                              {o.project_title && <span className="ml-1 text-muted-foreground truncate">/ {o.project_title}</span>}
                             </CommandItem>
                           ))}
                         </CommandGroup>

@@ -1,24 +1,40 @@
+import { useRef } from "react";
 import type { GanttProject } from "../../types/gantt";
+import { ArrowUpDown } from "lucide-react";
 
 interface GanttTaskListProps {
   projects: GanttProject[];
   rowHeight: number;
+  sortOrderId: 'asc' | 'desc' | null;
+  onSortOrderId: () => void;
+  listBodyRef: React.RefObject<HTMLDivElement>;
+  onScroll: () => void;
 }
 
 export const GanttTaskList = ({
   projects,
   rowHeight,
+  sortOrderId,
+  onSortOrderId,
+  listBodyRef,
+  onScroll,
 }: GanttTaskListProps) => {
   return (
     <div className="gantt-task-list" data-testid="gantt-task-list">
       <div className="gantt-task-list-header" style={{ height: `${rowHeight * 2}px` }}>
-        <div className="gantt-task-list-header-cell">受注番号</div>
+        <div className="gantt-task-list-header-cell" style={{ display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer', userSelect: 'none' }} onClick={onSortOrderId} title="受注番号でソート">
+          受注番号
+          <ArrowUpDown
+            size={11}
+            style={{ opacity: sortOrderId ? 1 : 0.4, color: sortOrderId ? 'hsl(var(--primary))' : undefined }}
+          />
+        </div>
         <div className="gantt-task-list-header-cell">得意先 / 受注件名</div>
         <div className="gantt-task-list-header-cell">受注日</div>
         <div className="gantt-task-list-header-cell">納期</div>
         <div className="gantt-task-list-header-cell">実績</div>
       </div>
-      <div className="gantt-task-list-body">
+      <div className="gantt-task-list-body" ref={listBodyRef} onScroll={onScroll}>
         {projects.map((project) => {
           const bar = project.tasks[0];
           const startDateStr = bar?.startDate?.split('T')[0] || '-';

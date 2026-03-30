@@ -50,12 +50,18 @@ const GanttSimple = () => {
   const [rawProjects, setRawProjects] = useState<ApiProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [projectFilter, setProjectFilter] = useState<string>("");
+  const [sortOrderId, setSortOrderId] = useState<'asc' | 'desc' | null>(null);
 
   const today = new Date();
   const [displayYear, setDisplayYear] = useState(today.getFullYear());
   const [displayMonth, setDisplayMonth] = useState(today.getMonth());
 
   const gridRef = useRef<HTMLDivElement>(null);
+  const listBodyRef = useRef<HTMLDivElement>(null);
+
+  // Prevent scroll sync re-entrancy
+  const isSyncingList = useRef(false);
+  const isSyncingGrid = useRef(false);
 
   const { start: startDate, end: endDate } = useMemo(() => {
     return getMonthDates(displayYear, displayMonth);
@@ -92,7 +98,7 @@ const GanttSimple = () => {
 
   // Apply keyword filter on client side (fast, no re-fetch needed)
   const filteredProjects = useMemo((): GanttProject[] => {
-    return rawProjects
+    const filtered = rawProjects
       .filter((project) => {
         if (!projectFilter) return true;
         const keyword = projectFilter.toLowerCase();
@@ -117,13 +123,50 @@ const GanttSimple = () => {
         isExpanded: true,
       }))
       .filter((p) => p.tasks.length > 0);
-  }, [rawProjects, projectFilter]);
+
+    if (sortOrderId) {
+      return [...filtered].sort((a, b) => {
+        const cmp = a.orderId.localeCompare(b.orderId, 'ja');
+        return sortOrderId === 'asc' ? cmp : -cmp;
+      });
+    }
+    return filtered;
+  }, [rawProjects, projectFilter, sortOrderId]);
+
+  const handleSortOrderId = useCallback(() => {
+    setSortOrderId((prev) => {
+      if (prev === null) return 'asc';
+      if (prev === 'asc') return 'desc';
+      return null;
+    });
+  }, []);
+
+  // Scroll sync: list → grid
+  const handleListScroll = useCallback(() => {
+    if (isSyncingGrid.current) return;
+    isSyncingList.current = true;
+    if (gridRef.current && listBodyRef.current) {
+      gridRef.current.scrollTop = listBodyRef.current.scrollTop;
+    }
+    isSyncingList.current = false;
+  }, []);
+
+  // Scroll sync: grid → list
+  const handleGridScroll = useCallback(() => {
+    if (isSyncingList.current) return;
+    isSyncingGrid.current = true;
+    if (listBodyRef.current && gridRef.current) {
+      listBodyRef.current.scrollTop = gridRef.current.scrollTop;
+    }
+    isSyncingGrid.current = false;
+  }, []);
 
   const handleReset = useCallback(() => {
     const now = new Date();
     setDisplayYear(now.getFullYear());
     setDisplayMonth(now.getMonth());
     setProjectFilter("");
+    setSortOrderId(null);
   }, []);
 
   const shiftPeriod = useCallback((direction: number) => {
@@ -179,6 +222,10 @@ const GanttSimple = () => {
           <GanttTaskList
             projects={filteredProjects}
             rowHeight={ROW_HEIGHT}
+            sortOrderId={sortOrderId}
+            onSortOrderId={handleSortOrderId}
+            listBodyRef={listBodyRef}
+            onScroll={handleListScroll}
           />
           <GanttGrid
             projects={filteredProjects}
@@ -188,6 +235,7 @@ const GanttSimple = () => {
             columnWidth={COLUMN_WIDTH}
             onTaskClick={handleTaskClick}
             gridRef={gridRef}
+            onScroll={handleGridScroll}
           />
         </div>
       )}

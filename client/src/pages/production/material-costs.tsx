@@ -201,7 +201,7 @@ export default function MaterialCostsPage() {
                               className={cn("justify-between font-normal", !field.value && "text-muted-foreground")}
                             >
                               {field.value
-                                ? `${field.value}${selectedOrder?.client_name ? ` (${selectedOrder.client_name})` : ""}`
+                                ? `${field.value}${selectedOrder?.client_name ? ` / ${selectedOrder.client_name}` : ""}${selectedOrder?.project_title ? ` / ${selectedOrder.project_title}` : ""}`
                                 : "受注番号を選択"}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
@@ -227,7 +227,10 @@ export default function MaterialCostsPage() {
                                     />
                                     <span className="font-medium">{order.order_id}</span>
                                     {order.client_name && (
-                                      <span className="ml-2 text-muted-foreground text-sm">{order.client_name}</span>
+                                      <span className="ml-1 text-muted-foreground text-sm">{order.client_name}</span>
+                                    )}
+                                    {order.project_title && (
+                                      <span className="ml-1 text-muted-foreground text-sm truncate">/ {order.project_title}</span>
                                     )}
                                   </CommandItem>
                                 ))}

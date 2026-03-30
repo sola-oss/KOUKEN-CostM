@@ -103,7 +103,7 @@ function StatusIconCluster({ is_delivered, has_shipping_fee, is_amount_confirmed
 
 // ========== MAIN COMPONENT ==========
 
-type SortField = 'due_date' | 'estimated_amount';
+type SortField = 'order_id' | 'due_date' | 'estimated_amount';
 type SortOrder = 'asc' | 'desc';
 
 interface SortConfig {
@@ -239,7 +239,11 @@ export default function Projects() {
       // This ensures nulls sink to bottom regardless of sort direction
       const nullSentinel = sortConfig.order === 'asc' ? Infinity : -Infinity;
       
-      if (sortConfig.field === 'due_date') {
+      if (sortConfig.field === 'order_id') {
+        const aId = a.order_id ?? '';
+        const bId = b.order_id ?? '';
+        compareValue = aId.localeCompare(bId, 'ja');
+      } else if (sortConfig.field === 'due_date') {
         const aDate = a.due_date ? new Date(a.due_date).getTime() : nullSentinel;
         const bDate = b.due_date ? new Date(b.due_date).getTime() : nullSentinel;
         compareValue = aDate - bDate;
@@ -518,7 +522,18 @@ export default function Projects() {
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead className="w-[100px]">受注番号</TableHead>
+              <TableHead className="w-[120px]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSort('order_id')}
+                  className="hover-elevate -ml-3 h-8"
+                  data-testid="button-sort-order-id"
+                >
+                  受注番号
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
               <TableHead>受注日</TableHead>
               <TableHead>得意先</TableHead>
               <TableHead>担当者</TableHead>
@@ -842,104 +857,6 @@ export default function Projects() {
 
                     <FormField
                       control={form.control}
-                      name="customer_code"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>得意先コード</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="得意先コード" 
-                              readOnly={!!selectedCustomerId}
-                              className={selectedCustomerId ? "bg-muted text-muted-foreground" : ""}
-                              data-testid="input-customer-code"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="customer_zip"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>得意先郵便番号</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="例: 123-4567" 
-                              readOnly={!!selectedCustomerId}
-                              className={selectedCustomerId ? "bg-muted text-muted-foreground" : ""}
-                              data-testid="input-customer-zip"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="customer_address1"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel>得意先住所1</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="都道府県・市区町村" 
-                              readOnly={!!selectedCustomerId}
-                              className={selectedCustomerId ? "bg-muted text-muted-foreground" : ""}
-                              data-testid="input-customer-address1"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="customer_address2"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel>得意先住所2</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="番地・建物名など" 
-                              readOnly={!!selectedCustomerId}
-                              className={selectedCustomerId ? "bg-muted text-muted-foreground" : ""}
-                              data-testid="input-customer-address2"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="manager"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>担当者</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              placeholder="担当者名を入力" 
-                              data-testid="input-manager"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
                       name="project_title"
                       render={({ field }) => (
                         <FormItem>
@@ -955,13 +872,7 @@ export default function Projects() {
                         </FormItem>
                       )}
                     />
-                  </div>
-                </div>
 
-                {/* Section 2: Schedule */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">スケジュール</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="due_date"
@@ -982,33 +893,15 @@ export default function Projects() {
 
                     <FormField
                       control={form.control}
-                      name="delivery_date"
+                      name="manager"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>納品日</FormLabel>
+                          <FormLabel>担当者</FormLabel>
                           <FormControl>
                             <Input 
                               {...field} 
-                              type="date" 
-                              data-testid="input-delivery-date"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="confirmed_date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>確定日</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              type="date" 
-                              data-testid="input-confirmed-date"
+                              placeholder="担当者名を入力" 
+                              data-testid="input-manager"
                             />
                           </FormControl>
                           <FormMessage />

@@ -9,6 +9,7 @@ interface GanttGridProps {
   columnWidth: number;
   onTaskClick?: (taskId: string, orderId: string) => void;
   gridRef: React.RefObject<HTMLDivElement>;
+  onScroll?: () => void;
 }
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -29,6 +30,7 @@ export const GanttGrid = ({
   columnWidth,
   onTaskClick,
   gridRef,
+  onScroll,
 }: GanttGridProps) => {
   const todayStr = useMemo(() => {
     const today = new Date();
@@ -122,7 +124,7 @@ export const GanttGrid = ({
   };
 
   return (
-    <div className="gantt-grid-wrapper" ref={gridRef}>
+    <div className="gantt-grid-wrapper" ref={gridRef} onScroll={onScroll}>
       <div className="gantt-grid" style={{ width: `${totalWidth}px` }}>
         {/* Header */}
         <div className="gantt-grid-header" style={{ height: `${rowHeight * 2}px` }}>
