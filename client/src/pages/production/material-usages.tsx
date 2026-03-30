@@ -406,50 +406,6 @@ export default function MaterialUsages() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="area"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>エリア</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="例: 2F" 
-                            {...field} 
-                            data-testid="input-area"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="zone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>工区</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
-                          value={field.value || ""}
-                        >
-                          <FormControl>
-                            <SelectTrigger data-testid="select-zone">
-                              <SelectValue placeholder="選択" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="N工区">N工区</SelectItem>
-                            <SelectItem value="S工区">S工区</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
                 <FormField
                   control={form.control}
@@ -584,8 +540,6 @@ export default function MaterialUsages() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>受注番号</TableHead>
-                      <TableHead>エリア</TableHead>
-                      <TableHead>工区</TableHead>
                       <TableHead>図面番号</TableHead>
                       <TableHead>材料種別</TableHead>
                       <TableHead>材料名</TableHead>
@@ -605,8 +559,6 @@ export default function MaterialUsages() {
                         onClick={() => handleRowClick(usage)}
                       >
                         <TableCell className="font-medium">{usage.project_id}</TableCell>
-                        <TableCell>{usage.area || "-"}</TableCell>
-                        <TableCell>{usage.zone || "-"}</TableCell>
                         <TableCell>{usage.drawing_no || "-"}</TableCell>
                         <TableCell>{usage.material_type}</TableCell>
                         <TableCell>{usage.material_name}</TableCell>
@@ -743,50 +695,6 @@ export default function MaterialUsages() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={editForm.control}
-                    name="area"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>エリア</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="例: 2F" 
-                            {...field} 
-                            data-testid="edit-input-area"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={editForm.control}
-                    name="zone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>工区</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
-                          value={field.value || ""}
-                        >
-                          <FormControl>
-                            <SelectTrigger data-testid="edit-select-zone">
-                              <SelectValue placeholder="選択" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="N工区">N工区</SelectItem>
-                            <SelectItem value="S工区">S工区</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
                 <FormField
                   control={editForm.control}
