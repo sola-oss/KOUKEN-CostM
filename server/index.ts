@@ -52,6 +52,7 @@ app.use('/api', apiRateLimitConfig);
     console.warn('⚠ Could not verify Supabase procurements schema:', error);
   }
 
+
   // Initialize Sales Orders SQLite database
   try {
     const { sqliteInitializer } = await import('./lib/sqlite-init.js');

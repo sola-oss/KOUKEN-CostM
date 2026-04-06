@@ -330,6 +330,15 @@
   background: hsl(217 91% 45%);
 }
 
+/* Factory-colored bars: use inline style for color, hide default plan/progress overlays */
+.gantt-bar-wrapper.factory-colored .gantt-bar-plan {
+  background: transparent;
+}
+
+.gantt-bar-wrapper.factory-colored .gantt-bar-progress {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .gantt-bar-label {
   position: absolute;
   top: 50%;

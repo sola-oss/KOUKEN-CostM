@@ -201,6 +201,7 @@ router.get('/api/production/gantt/hierarchy', async (req, res) => {
     const convertedData = hierarchyData.map(project => ({
       orderId: project.orderId,
       projectName: project.projectName,
+      factory: project.factory ?? null,
       tasks: project.tasks.map(task => ({
         id: task.id,
         taskName: task.taskName,

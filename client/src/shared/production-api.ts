@@ -71,6 +71,8 @@ export interface Order {
   customer_zip: string | null;
   customer_address1: string | null;
   customer_address2: string | null;
+  // 工事区分
+  factory: string | null;
   // システム管理フィールド
   created_at: string;
   updated_at: string;

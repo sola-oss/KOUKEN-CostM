@@ -1,6 +1,21 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+
+export const FACTORY_OPTIONS = [
+  { value: 'laser', label: 'レーザー工場' },
+  { value: 'factory1', label: '1工場' },
+  { value: 'factory2', label: '2工場' },
+  { value: 'machine', label: '機械加工場' },
+];
+
+export const FACTORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  laser:    { bg: 'bg-violet-500',  text: 'text-white', border: 'border-violet-600' },
+  factory1: { bg: 'bg-sky-500',     text: 'text-white', border: 'border-sky-600' },
+  factory2: { bg: 'bg-emerald-500', text: 'text-white', border: 'border-emerald-600' },
+  machine:  { bg: 'bg-amber-500',   text: 'text-white', border: 'border-amber-600' },
+};
 
 interface GanttFiltersProps {
   onReset: () => void;
@@ -8,6 +23,8 @@ interface GanttFiltersProps {
   currentMonth?: string;
   projectFilter?: string;
   onProjectFilterChange?: (value: string) => void;
+  factoryFilter?: string;
+  onFactoryFilterChange?: (value: string) => void;
 }
 
 export const GanttFilters = ({
@@ -16,6 +33,8 @@ export const GanttFilters = ({
   currentMonth,
   projectFilter = "",
   onProjectFilterChange,
+  factoryFilter = "all",
+  onFactoryFilterChange,
 }: GanttFiltersProps) => {
   return (
     <div className="gantt-filters mt-[3px] mb-[3px]" data-testid="gantt-filters">
@@ -64,6 +83,35 @@ export const GanttFilters = ({
             data-testid="input-gantt-filter"
           />
         )}
+
+        {onFactoryFilterChange && (
+          <Select value={factoryFilter} onValueChange={onFactoryFilterChange}>
+            <SelectTrigger className="w-36 h-8 text-sm" data-testid="select-gantt-factory">
+              <SelectValue placeholder="工事で絞り込み" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">すべての工事</SelectItem>
+              {FACTORY_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className="flex items-center gap-2">
+                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${FACTORY_COLORS[opt.value].bg}`} />
+                    {opt.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Factory legend */}
+        <div className="flex items-center gap-3 ml-2" data-testid="gantt-factory-legend">
+          {FACTORY_OPTIONS.map((opt) => (
+            <div key={opt.value} className="flex items-center gap-1">
+              <span className={`inline-block w-3 h-3 rounded-sm ${FACTORY_COLORS[opt.value].bg}`} />
+              <span className="text-xs text-muted-foreground">{opt.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

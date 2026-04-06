@@ -53,6 +53,8 @@ export const orders = sqliteTable("orders", {
   customer_zip: text("customer_zip"),            // 得意先郵便番号
   customer_address1: text("customer_address1"),  // 得意先住所1
   customer_address2: text("customer_address2"),  // 得意先住所2
+  // 工事区分
+  factory: text("factory"),                      // レーザー工場/1工場/2工場/機械加工場
   // システム管理
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),

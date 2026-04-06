@@ -9,13 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { getSalesOrder, confirmSalesOrder, type SalesOrder } from "@/shared/api";
+import { getSalesOrder, confirmSalesOrder, type SalesOrder, FACTORY_LABELS } from "@/shared/api";
 
 // Status colors and labels
 const statusColors = {
   draft: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
   confirmed: 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100',
   closed: 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100'
+};
+
+const factoryColors: Record<string, string> = {
+  laser:    'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100',
+  factory1: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100',
+  factory2: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
+  machine:  'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
 };
 
 const statusLabels = {
@@ -227,6 +234,24 @@ export default function SalesOrderDetail() {
                         : <span className="text-muted-foreground">未設定</span>
                       }
                     </p>
+                  </div>
+                </div>
+
+                {/* Factory */}
+                <div className="space-y-2">
+                  <Label>工事</Label>
+                  <div className="p-3 bg-muted/50 rounded-md">
+                    {order.factory ? (
+                      <Badge
+                        className={factoryColors[order.factory] || 'bg-gray-100 text-gray-800'}
+                        variant="secondary"
+                        data-testid="badge-factory"
+                      >
+                        {FACTORY_LABELS[order.factory] || order.factory}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">未設定</span>
+                    )}
                   </div>
                 </div>
 

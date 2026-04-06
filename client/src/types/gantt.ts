@@ -11,6 +11,7 @@ export interface GanttTaskItem {
 export interface GanttProject {
   orderId: string;
   projectName: string;
+  factory?: string | null;
   tasks: GanttTaskItem[];
   isExpanded: boolean;
 }

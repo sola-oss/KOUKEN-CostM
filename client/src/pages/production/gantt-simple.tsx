@@ -35,6 +35,7 @@ const getCurrentMonthDates = () => {
 interface ApiProject {
   orderId: string;
   projectName: string;
+  factory?: string | null;
   tasks: {
     id: string;
     taskName: string;
@@ -50,6 +51,7 @@ const GanttSimple = () => {
   const [rawProjects, setRawProjects] = useState<ApiProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [projectFilter, setProjectFilter] = useState<string>("");
+  const [factoryFilter, setFactoryFilter] = useState<string>("all");
   const [sortOrderId, setSortOrderId] = useState<'asc' | 'desc' | null>(null);
 
   const today = new Date();
@@ -100,15 +102,21 @@ const GanttSimple = () => {
   const filteredProjects = useMemo((): GanttProject[] => {
     const filtered = rawProjects
       .filter((project) => {
-        if (!projectFilter) return true;
-        const keyword = projectFilter.toLowerCase();
-        const name = (project.projectName || "").toLowerCase();
-        const orderId = (project.orderId || "").toLowerCase();
-        return name.includes(keyword) || orderId.includes(keyword);
+        if (projectFilter) {
+          const keyword = projectFilter.toLowerCase();
+          const name = (project.projectName || "").toLowerCase();
+          const orderId = (project.orderId || "").toLowerCase();
+          if (!name.includes(keyword) && !orderId.includes(keyword)) return false;
+        }
+        if (factoryFilter && factoryFilter !== 'all') {
+          return project.factory === factoryFilter;
+        }
+        return true;
       })
       .map((project) => ({
         orderId: project.orderId,
         projectName: project.projectName,
+        factory: project.factory ?? null,
         tasks: project.tasks
           .filter((t) => t.startDate && t.endDate)
           .map((t) => ({
@@ -131,7 +139,7 @@ const GanttSimple = () => {
       });
     }
     return filtered;
-  }, [rawProjects, projectFilter, sortOrderId]);
+  }, [rawProjects, projectFilter, sortOrderId, factoryFilter]);
 
   const handleSortOrderId = useCallback(() => {
     setSortOrderId((prev) => {
@@ -166,6 +174,7 @@ const GanttSimple = () => {
     setDisplayYear(now.getFullYear());
     setDisplayMonth(now.getMonth());
     setProjectFilter("");
+    setFactoryFilter("all");
     setSortOrderId(null);
   }, []);
 
@@ -208,6 +217,8 @@ const GanttSimple = () => {
           currentMonth={currentMonthLabel}
           projectFilter={projectFilter}
           onProjectFilterChange={setProjectFilter}
+          factoryFilter={factoryFilter}
+          onFactoryFilterChange={setFactoryFilter}
         />
       </header>
 

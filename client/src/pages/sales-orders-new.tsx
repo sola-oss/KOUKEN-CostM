@@ -8,8 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { createSalesOrder, type SalesOrderPayload } from "@/shared/api";
+import { createSalesOrder, type SalesOrderPayload, type FactoryType } from "@/shared/api";
 
 export default function NewSalesOrder() {
   const [, setLocation] = useLocation();
@@ -20,6 +27,7 @@ export default function NewSalesOrder() {
   const [customerName, setCustomerName] = useState("");
   const [orderDate, setOrderDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dueDate, setDueDate] = useState("");
+  const [factory, setFactory] = useState<FactoryType>(null);
   const [note, setNote] = useState("");
 
   // Validation errors
@@ -79,6 +87,7 @@ export default function NewSalesOrder() {
       customer_name: customerName.trim(),
       order_date: orderDate,
       due_date: dueDate || undefined,
+      factory: factory || undefined,
       note: note.trim() || undefined,
     };
 
@@ -167,6 +176,26 @@ export default function NewSalesOrder() {
                 {errors.due_date && (
                   <p className="text-sm text-destructive">{errors.due_date}</p>
                 )}
+              </div>
+
+              {/* Factory */}
+              <div className="space-y-2">
+                <Label htmlFor="factory">工事</Label>
+                <Select
+                  value={factory || "none"}
+                  onValueChange={(v) => setFactory(v === "none" ? null : v as FactoryType)}
+                >
+                  <SelectTrigger id="factory" data-testid="select-factory">
+                    <SelectValue placeholder="工事を選択（任意）" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">未設定</SelectItem>
+                    <SelectItem value="laser">レーザー工場</SelectItem>
+                    <SelectItem value="factory1">1工場</SelectItem>
+                    <SelectItem value="factory2">2工場</SelectItem>
+                    <SelectItem value="machine">機械加工場</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

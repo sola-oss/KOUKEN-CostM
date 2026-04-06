@@ -170,8 +170,17 @@ export class ProductionDAO {
       updated_at: now
     };
 
-    const { error } = await supabase.from('orders').insert(row);
-    if (error) throw new Error(`[createOrder] ${error.message}`);
+    // Try inserting with factory; fall back without it if the column doesn't exist yet
+    const rowWithFactory = { ...row, factory: (orderData as { factory?: string | null }).factory ?? null };
+    const { error: errWithFactory } = await supabase.from('orders').insert(rowWithFactory);
+    if (errWithFactory) {
+      if (errWithFactory.message.includes('factory')) {
+        const { error } = await supabase.from('orders').insert(row);
+        if (error) throw new Error(`[createOrder] ${error.message}`);
+      } else {
+        throw new Error(`[createOrder] ${errWithFactory.message}`);
+      }
+    }
     return orderId;
   }
 
@@ -260,7 +269,7 @@ export class ProductionDAO {
       'subcontractor', 'processing_hours', 'note',
       'product_name', 'qty', 'start_date', 'sales', 'estimated_material_cost',
       'std_time_per_unit', 'status', 'customer_name', 'customer_code',
-      'customer_zip', 'customer_address1', 'customer_address2'
+      'customer_zip', 'customer_address1', 'customer_address2', 'factory'
     ];
 
     const filtered: Record<string, any> = {};
@@ -272,8 +281,18 @@ export class ProductionDAO {
     if (Object.keys(filtered).length === 0) return false;
 
     filtered.updated_at = new Date().toISOString();
-    const { error } = await supabase.from('orders').update(filtered).eq('order_id', orderId);
-    if (error) throw new Error(`[updateOrder] ${error.message}`);
+
+    // Try updating with factory; if the column doesn't exist yet, retry without it
+    const { error: errWithFactory } = await supabase.from('orders').update(filtered).eq('order_id', orderId);
+    if (errWithFactory) {
+      if (errWithFactory.message.includes('factory')) {
+        const { factory: _factory, ...filteredWithoutFactory } = filtered;
+        const { error } = await supabase.from('orders').update(filteredWithoutFactory).eq('order_id', orderId);
+        if (error) throw new Error(`[updateOrder] ${error.message}`);
+      } else {
+        throw new Error(`[updateOrder] ${errWithFactory.message}`);
+      }
+    }
     return true;
   }
 
@@ -685,7 +704,7 @@ export class ProductionDAO {
   }
 
   async getGanttHierarchy(month?: string): Promise<{
-    orderId: string; projectName: string;
+    orderId: string; projectName: string; factory?: string | null;
     tasks: { id: string; taskName: string; startDate: string; endDate: string; progress: number; type: 'task' | 'procurement'; actualHours: number }[];
   }[]> {
     // Calculate month range — default to current month
@@ -709,9 +728,23 @@ export class ProductionDAO {
 
     // Fetch orders: not delivered, due date overlaps with the display month
     // order_date filter: include null order_date rows (treat as "started before month")
-    const { data: orders, error } = await supabase
+    // Try to select factory column; fall back without it if column doesn't exist
+    type OrderRowWithFactory = {
+      order_id: string;
+      order_date: string | null;
+      due_date: string | null;
+      client_name: string | null;
+      project_title: string | null;
+      product_name: string | null;
+      factory: string | null;
+    };
+    type OrderRowBase = Omit<OrderRowWithFactory, 'factory'>;
+
+    let orderList: OrderRowWithFactory[] = [];
+
+    const withFactory = await supabase
       .from('orders')
-      .select('order_id, order_date, due_date, client_name, project_title, product_name')
+      .select('order_id, order_date, due_date, client_name, project_title, product_name, factory')
       .not('is_delivered', 'eq', true)
       .not('due_date', 'is', null)
       .or(`order_date.is.null,order_date.lte.${monthEndUTC}`)
@@ -719,9 +752,24 @@ export class ProductionDAO {
       .order('due_date', { ascending: true })
       .order('order_id', { ascending: true });
 
-    if (error) throw new Error(`[getGanttHierarchy] ${error.message}`);
+    if (withFactory.error && withFactory.error.message.includes('factory')) {
+      // factory column doesn't exist yet — query without it
+      const withoutFactory = await supabase
+        .from('orders')
+        .select('order_id, order_date, due_date, client_name, project_title, product_name')
+        .not('is_delivered', 'eq', true)
+        .not('due_date', 'is', null)
+        .or(`order_date.is.null,order_date.lte.${monthEndUTC}`)
+        .gte('due_date', monthStartUTC)
+        .order('due_date', { ascending: true })
+        .order('order_id', { ascending: true });
+      if (withoutFactory.error) throw new Error(`[getGanttHierarchy] ${withoutFactory.error.message}`);
+      orderList = (withoutFactory.data as OrderRowBase[] ?? []).map((r) => ({ ...r, factory: null }));
+    } else {
+      if (withFactory.error) throw new Error(`[getGanttHierarchy] ${withFactory.error.message}`);
+      orderList = (withFactory.data as OrderRowWithFactory[]) ?? [];
+    }
 
-    const orderList = orders || [];
     const orderIds = orderList.map(o => o.order_id);
 
     // Fetch actual hours from work_logs for all orders in this view
@@ -747,6 +795,7 @@ export class ProductionDAO {
       return {
         orderId: order.order_id,
         projectName,
+        factory: order.factory ?? null,
         tasks: [{
           id: `order-${order.order_id}`,
           taskName: order.project_title || order.product_name || order.order_id,

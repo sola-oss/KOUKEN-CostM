@@ -30,12 +30,23 @@ interface CustomersResponse {
   };
 }
 
+// Factory type for color-coding orders by factory
+export type FactoryType = 'laser' | 'factory1' | 'factory2' | 'machine' | null;
+
+export const FACTORY_LABELS: Record<string, string> = {
+  laser: 'レーザー工場',
+  factory1: '1工場',
+  factory2: '2工場',
+  machine: '機械加工場',
+};
+
 // Type definitions matching the simplified specification
 interface SalesOrderParams {
   from?: string;
   to?: string;
   q?: string;
   status?: string;
+  factory?: string;
   page?: number;
   page_size?: number;
 }
@@ -69,6 +80,7 @@ interface SalesOrder {
   tags?: string | string[];
   note?: string;
   status: 'draft' | 'confirmed' | 'closed';
+  factory?: FactoryType;
   created_at: string;
   updated_at: string;
   lines?: SalesOrderLine[];
@@ -86,6 +98,7 @@ interface SalesOrderPayload {
   customer_email?: string;
   tags?: string[];
   note?: string;
+  factory?: FactoryType;
   lines?: SalesOrderLine[];
 }
 
@@ -109,6 +122,7 @@ export async function listSalesOrders(params: SalesOrderParams = {}): Promise<Sa
   if (params.to) searchParams.append('to', params.to);
   if (params.q) searchParams.append('q', params.q);
   if (params.status) searchParams.append('status', params.status);
+  if (params.factory) searchParams.append('factory', params.factory);
   if (params.page) searchParams.append('page', params.page.toString());
   if (params.page_size) searchParams.append('page_size', params.page_size.toString());
   

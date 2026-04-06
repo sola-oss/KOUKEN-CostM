@@ -19,7 +19,8 @@ router.get('/sales-orders', validateAccessCode, async (req, res) => {
       status = 'all',
       from,
       to,
-      q
+      q,
+      factory
     } = req.query;
 
     const limit = Math.min(parseInt(page_size as string), 100);
@@ -48,6 +49,11 @@ router.get('/sales-orders', validateAccessCode, async (req, res) => {
       params.push(searchTerm, searchTerm, searchTerm);
     }
 
+    if (factory && factory !== 'all') {
+      whereConditions.push('factory = ?');
+      params.push(factory);
+    }
+
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
     // Count total records
@@ -59,7 +65,7 @@ router.get('/sales-orders', validateAccessCode, async (req, res) => {
     const dataQuery = `
       SELECT 
         id, so_no, customer_name, order_date, due_date, 
-        order_type, sales_rep, status, created_at, updated_at
+        order_type, sales_rep, status, factory, created_at, updated_at
       FROM sales_orders 
       ${whereClause}
       ORDER BY order_date DESC, created_at DESC
@@ -100,7 +106,7 @@ router.get('/sales-orders/:id', validateAccessCode, async (req, res) => {
       SELECT 
         id, so_no, customer_name, order_date, due_date,
         order_type, sales_rep, ship_to_name, ship_to_address,
-        customer_contact, customer_email, tags, note, status,
+        customer_contact, customer_email, tags, note, status, factory,
         created_at, updated_at
       FROM sales_orders 
       WHERE id = ?
@@ -194,6 +200,7 @@ router.post('/sales-orders', validateAccessCode, async (req, res) => {
       customer_email,
       tags,
       note,
+      factory = null,
       status = 'draft',
       lines = []
     } = req.body;
@@ -230,14 +237,14 @@ router.post('/sales-orders', validateAccessCode, async (req, res) => {
       INSERT INTO sales_orders (
         customer_name, order_date, due_date, order_type, sales_rep,
         ship_to_name, ship_to_address, customer_contact, customer_email,
-        tags, note, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        tags, note, factory, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const orderResult = insertOrder.run(
       customer_name, order_date, due_date, order_type, sales_rep,
       ship_to_name, ship_to_address, customer_contact, customer_email,
-      tags, note, status, now, now
+      tags, note, factory, status, now, now
     );
 
     const salesOrderId = orderResult.lastInsertRowid;

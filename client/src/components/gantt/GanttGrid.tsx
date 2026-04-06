@@ -22,6 +22,16 @@ const getProgressColorClass = (progress: number, actualHours: number): string =>
   return 'progress-low';
 };
 
+const getFactoryBarStyle = (factory: string | null | undefined): React.CSSProperties => {
+  switch (factory) {
+    case 'laser':    return { backgroundColor: '#8b5cf6' };
+    case 'factory1': return { backgroundColor: '#0ea5e9' };
+    case 'factory2': return { backgroundColor: '#10b981' };
+    case 'machine':  return { backgroundColor: '#f59e0b' };
+    default:         return {};
+  }
+};
+
 export const GanttGrid = ({
   projects,
   startDate,
@@ -174,6 +184,8 @@ export const GanttGrid = ({
 
             const pos = getBarPosition(bar.startDate, bar.endDate);
             const progressClass = getProgressColorClass(bar.progress, bar.actualHours);
+            const factoryStyle = getFactoryBarStyle(project.factory);
+            const hasFactoryColor = !!project.factory;
             const actualHoursLabel = bar.actualHours > 0
               ? `  ${bar.actualHours % 1 === 0 ? bar.actualHours : bar.actualHours.toFixed(1)}h`
               : '';
@@ -188,10 +200,11 @@ export const GanttGrid = ({
                 }}
               >
                 <div
-                  className={`gantt-bar-wrapper ${progressClass}`}
+                  className={`gantt-bar-wrapper ${hasFactoryColor ? 'factory-colored' : progressClass}`}
                   style={{
                     left: `${pos.left}px`,
                     width: `${pos.width}px`,
+                    ...(hasFactoryColor ? factoryStyle : {}),
                   }}
                   onClick={() => onTaskClick?.(bar.id, project.orderId)}
                   title={`${project.projectName}\n受注日: ${bar.startDate?.split('T')[0]} → 納期: ${bar.endDate?.split('T')[0]}${bar.actualHours > 0 ? `\n実績: ${bar.actualHours.toFixed(1)}h` : ''}`}

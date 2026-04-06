@@ -21,7 +21,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { listOrders, type Order } from "@/shared/production-api";
+import { FACTORY_LABELS } from "@/shared/api";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -53,6 +55,7 @@ const orderFormSchema = z.object({
   has_shipping_fee: z.boolean().optional(),
   is_amount_confirmed: z.boolean().optional(),
   is_invoiced: z.boolean().optional(),
+  factory: z.string().optional(),
 });
 
 type OrderFormValues = z.infer<typeof orderFormSchema>;
@@ -116,6 +119,7 @@ export default function Projects() {
   const [, setLocation] = useLocation();
   const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [factoryFilter, setFactoryFilter] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
@@ -230,9 +234,13 @@ export default function Projects() {
 
   // Sort orders (search is handled server-side)
   const filteredAndSortedOrders = useMemo(() => {
-    // No client-side filtering needed - server handles search
+    // Apply factory filter client-side
+    const factoryFiltered = factoryFilter === "all"
+      ? orders
+      : orders.filter(o => (o.factory ?? null) === (factoryFilter === "none" ? null : factoryFilter));
+
     // Apply sorting with null-safe comparators (nulls always sort to bottom)
-    const sorted = [...orders].sort((a, b) => {
+    const sorted = [...factoryFiltered].sort((a, b) => {
       let compareValue = 0;
       
       // Determine null sentinel: +Infinity for asc, -Infinity for desc
@@ -257,7 +265,7 @@ export default function Projects() {
     });
 
     return sorted;
-  }, [orders, sortConfig]);
+  }, [orders, sortConfig, factoryFilter]);
 
   // Clear highlight when search query changes
   useEffect(() => {
@@ -361,6 +369,7 @@ export default function Projects() {
       has_shipping_fee: false,
       is_amount_confirmed: false,
       is_invoiced: false,
+      factory: "",
     });
     setIsFormOpen(true);
   };
@@ -392,6 +401,7 @@ export default function Projects() {
       has_shipping_fee: !!order.has_shipping_fee,
       is_amount_confirmed: !!order.is_amount_confirmed,
       is_invoiced: !!order.is_invoiced,
+      factory: order.factory || "",
     });
     setIsFormOpen(true);
   };
@@ -420,7 +430,8 @@ export default function Projects() {
       has_shipping_fee: values.has_shipping_fee === true,
       is_amount_confirmed: values.is_amount_confirmed === true,
       is_invoiced: values.is_invoiced === true,
-    };
+      factory: values.factory || null,
+    } as Partial<Order> & { customer_id?: number | null; factory?: string | null };
 
     if (editingOrder) {
       // Update existing order
@@ -501,7 +512,7 @@ export default function Projects() {
       </div>
 
       {/* Search Bar */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -526,6 +537,19 @@ export default function Projects() {
         >
           検索
         </Button>
+        <Select value={factoryFilter} onValueChange={setFactoryFilter}>
+          <SelectTrigger className="w-[140px]" data-testid="select-factory-filter">
+            <SelectValue placeholder="工事" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">すべての工事</SelectItem>
+            <SelectItem value="laser">レーザー工場</SelectItem>
+            <SelectItem value="factory1">1工場</SelectItem>
+            <SelectItem value="factory2">2工場</SelectItem>
+            <SelectItem value="machine">機械加工場</SelectItem>
+            <SelectItem value="none">未設定</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Orders Table */}
@@ -573,6 +597,7 @@ export default function Projects() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
+              <TableHead>工事</TableHead>
               <TableHead className="text-center w-[80px]">納品</TableHead>
               <TableHead className="text-center">ステータス</TableHead>
               <TableHead className="text-right w-[100px]">操作</TableHead>
@@ -581,7 +606,7 @@ export default function Projects() {
           <TableBody>
             {filteredAndSortedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-32 text-center">
+                <TableCell colSpan={11} className="h-32 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <Package className="h-8 w-8 mb-2" />
                     <p>該当する受注がありません</p>
@@ -592,7 +617,13 @@ export default function Projects() {
               filteredAndSortedOrders.map((order) => (
                 <TableRow 
                   key={order.order_id}
-                  className={`${order.order_id === newlyCreatedOrderId ? 'bg-green-50 dark:bg-green-950/20' : ''}`}
+                  className={[
+                    order.order_id === newlyCreatedOrderId ? 'bg-green-50 dark:bg-green-950/20' : '',
+                    order.factory === 'laser' ? 'bg-violet-50 dark:bg-violet-950/30' : '',
+                    order.factory === 'factory1' ? 'bg-sky-50 dark:bg-sky-950/30' : '',
+                    order.factory === 'factory2' ? 'bg-emerald-50 dark:bg-emerald-950/30' : '',
+                    order.factory === 'machine' ? 'bg-amber-50 dark:bg-amber-950/30' : '',
+                  ].filter(Boolean).join(' ')}
                   data-testid={`row-order-${order.order_id}`}
                 >
                   {/* Order ID */}
@@ -628,6 +659,26 @@ export default function Projects() {
                   {/* Estimated Amount */}
                   <TableCell className="text-right font-medium" data-testid={`cell-estimated-amount-${order.order_id}`}>
                     {formatCurrency(order.estimated_amount)}
+                  </TableCell>
+
+                  {/* Factory */}
+                  <TableCell data-testid={`cell-factory-${order.order_id}`}>
+                    {order.factory ? (
+                      <Badge
+                        variant="secondary"
+                        className={
+                          order.factory === 'laser' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100' :
+                          order.factory === 'factory1' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100' :
+                          order.factory === 'factory2' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100' :
+                          order.factory === 'machine' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100' :
+                          'bg-gray-100 text-gray-800'
+                        }
+                      >
+                        {FACTORY_LABELS[order.factory] || order.factory}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
                   </TableCell>
 
                   {/* Delivered Checkbox */}
@@ -895,6 +946,34 @@ export default function Projects() {
                               data-testid="input-manager"
                             />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="factory"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>工事</FormLabel>
+                          <Select
+                            value={field.value || "none"}
+                            onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-factory">
+                                <SelectValue placeholder="工事を選択（任意）" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">未設定</SelectItem>
+                              <SelectItem value="laser">レーザー工場</SelectItem>
+                              <SelectItem value="factory1">1工場</SelectItem>
+                              <SelectItem value="factory2">2工場</SelectItem>
+                              <SelectItem value="machine">機械加工場</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}

@@ -31,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listSalesOrders, type SalesOrder } from "@/shared/api";
+import { listSalesOrders, type SalesOrder, FACTORY_LABELS } from "@/shared/api";
 
 // Status colors and labels for the simplified sales order system
 const statusColors = {
@@ -46,9 +46,35 @@ const statusLabels = {
   closed: '完了'
 };
 
+const factoryColors: Record<string, string> = {
+  laser:    'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100',
+  factory1: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100',
+  factory2: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
+  machine:  'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+};
+
+const factoryRowColors: Record<string, string> = {
+  laser:    'bg-violet-50 dark:bg-violet-950/30',
+  factory1: 'bg-sky-50 dark:bg-sky-950/30',
+  factory2: 'bg-emerald-50 dark:bg-emerald-950/30',
+  machine:  'bg-amber-50 dark:bg-amber-950/30',
+};
+
+function FactoryBadge({ factory }: { factory?: string | null }) {
+  if (!factory) return null;
+  const label = FACTORY_LABELS[factory] || factory;
+  const colorClass = factoryColors[factory] || 'bg-gray-100 text-gray-800';
+  return (
+    <Badge className={colorClass} variant="secondary">
+      {label}
+    </Badge>
+  );
+}
+
 export default function SalesOrders() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [factoryFilter, setFactoryFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -57,12 +83,14 @@ export default function SalesOrders() {
     queryKey: ['sales-orders', { 
       q: searchTerm || undefined,
       status: statusFilter !== 'all' ? statusFilter : undefined,
+      factory: factoryFilter !== 'all' ? factoryFilter : undefined,
       from: dateFrom || undefined,
       to: dateTo || undefined 
     }],
     queryFn: () => listSalesOrders({ 
       q: searchTerm || undefined,
       status: statusFilter !== 'all' ? statusFilter : undefined,
+      factory: factoryFilter !== 'all' ? factoryFilter : undefined,
       from: dateFrom || undefined,
       to: dateTo || undefined 
     }),
@@ -113,7 +141,7 @@ export default function SalesOrders() {
           <CardTitle className="text-lg">検索・フィルター</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Search by Customer Name */}
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -161,12 +189,27 @@ export default function SalesOrders() {
               </SelectContent>
             </Select>
 
+            {/* Factory Filter */}
+            <Select value={factoryFilter} onValueChange={setFactoryFilter}>
+              <SelectTrigger data-testid="select-factory-filter">
+                <SelectValue placeholder="工事" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべての工事</SelectItem>
+                <SelectItem value="laser">レーザー工場</SelectItem>
+                <SelectItem value="factory1">1工場</SelectItem>
+                <SelectItem value="factory2">2工場</SelectItem>
+                <SelectItem value="machine">機械加工場</SelectItem>
+              </SelectContent>
+            </Select>
+
             {/* Clear Filters */}
             <Button 
               variant="outline" 
               onClick={() => {
                 setSearchTerm("");
                 setStatusFilter("all");
+                setFactoryFilter("all");
                 setDateFrom("");
                 setDateTo("");
               }}
@@ -250,13 +293,18 @@ export default function SalesOrders() {
                   <TableHead>顧客名</TableHead>
                   <TableHead>受注番号</TableHead>
                   <TableHead>納期</TableHead>
+                  <TableHead>工事</TableHead>
                   <TableHead>ステータス</TableHead>
                   <TableHead className="w-20">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orders.map((order) => (
-                  <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
+                  <TableRow
+                    key={order.id}
+                    data-testid={`row-order-${order.id}`}
+                    className={order.factory ? factoryRowColors[order.factory] ?? '' : ''}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
@@ -276,6 +324,10 @@ export default function SalesOrders() {
                       ) : (
                         <span className="text-muted-foreground">未設定</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <FactoryBadge factory={order.factory} />
+                      {!order.factory && <span className="text-muted-foreground text-sm">未設定</span>}
                     </TableCell>
                     <TableCell>
                       <Badge className={statusColors[order.status]} variant="secondary">
