@@ -126,6 +126,7 @@ export default function Projects() {
   
   const [customerComboOpen, setCustomerComboOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [togglingDeliveredId, setTogglingDeliveredId] = useState<string | null>(null);
 
   // Fetch customers master for combobox
   const { data: customers = [] } = useQuery<CustomerMaster[]>({
@@ -264,6 +265,27 @@ export default function Projects() {
       setNewlyCreatedOrderId(null);
     }
   }, [searchQuery]);
+
+  // Toggle is_delivered mutation (inline checkbox in list)
+  const toggleDeliveredMutation = useMutation({
+    mutationFn: async ({ orderId, is_delivered }: { orderId: string; is_delivered: boolean }) => {
+      setTogglingDeliveredId(orderId);
+      const response = await apiRequest('PATCH', `/api/production/orders/${orderId}`, { is_delivered });
+      return await response.json() as Order;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setTogglingDeliveredId(null);
+    },
+    onError: (error: any) => {
+      setTogglingDeliveredId(null);
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error.message || "納品完了の更新に失敗しました",
+      });
+    }
+  });
 
   // Delete order mutation
   const deleteOrderMutation = useMutation({
@@ -551,6 +573,7 @@ export default function Projects() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
+              <TableHead className="text-center w-[80px]">納品完了</TableHead>
               <TableHead className="text-center">ステータス</TableHead>
               <TableHead className="text-right w-[100px]">操作</TableHead>
             </TableRow>
@@ -558,7 +581,7 @@ export default function Projects() {
           <TableBody>
             {filteredAndSortedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-32 text-center">
+                <TableCell colSpan={10} className="h-32 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <Package className="h-8 w-8 mb-2" />
                     <p>該当する受注がありません</p>
@@ -605,6 +628,22 @@ export default function Projects() {
                   {/* Estimated Amount */}
                   <TableCell className="text-right font-medium" data-testid={`cell-estimated-amount-${order.order_id}`}>
                     {formatCurrency(order.estimated_amount)}
+                  </TableCell>
+
+                  {/* Delivered Checkbox */}
+                  <TableCell className="text-center" data-testid={`cell-delivered-${order.order_id}`}>
+                    <Checkbox
+                      checked={!!order.is_delivered}
+                      disabled={togglingDeliveredId === order.order_id}
+                      onCheckedChange={(checked) => {
+                        toggleDeliveredMutation.mutate({
+                          orderId: order.order_id,
+                          is_delivered: checked === true,
+                        });
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid={`checkbox-delivered-${order.order_id}`}
+                    />
                   </TableCell>
 
                   {/* Status Icon Cluster */}
