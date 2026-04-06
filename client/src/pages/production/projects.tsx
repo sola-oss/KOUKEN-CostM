@@ -282,7 +282,7 @@ export default function Projects() {
       toast({
         variant: "destructive",
         title: "エラー",
-        description: error.message || "納品完了の更新に失敗しました",
+        description: error.message || "納品の更新に失敗しました",
       });
     }
   });
@@ -573,7 +573,7 @@ export default function Projects() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
-              <TableHead className="text-center w-[80px]">納品完了</TableHead>
+              <TableHead className="text-center w-[80px]">納品</TableHead>
               <TableHead className="text-center">ステータス</TableHead>
               <TableHead className="text-right w-[100px]">操作</TableHead>
             </TableRow>
@@ -1021,7 +1021,7 @@ export default function Projects() {
                               data-testid="checkbox-is-delivered"
                             />
                           </FormControl>
-                          <FormLabel className="!mt-0 cursor-pointer">納品完了 (*)</FormLabel>
+                          <FormLabel className="!mt-0 cursor-pointer">納品 (*)</FormLabel>
                         </FormItem>
                       )}
                     />
