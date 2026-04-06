@@ -388,7 +388,7 @@ export default function Projects() {
       customer_address1: order.customer_address1 || "",
       customer_address2: order.customer_address2 || "",
       manager: order.manager || "",
-      project_title: order.project_title || "",
+      project_title: order.project_title || order.product_name || "",
       due_date: order.due_date || "",
       delivery_date: order.delivery_date || "",
       confirmed_date: order.confirmed_date || "",
