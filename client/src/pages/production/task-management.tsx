@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -61,29 +61,6 @@ interface Worker {
 // Helpers
 // ─────────────────────────────────────────
 
-function generateTimeOptions(): string[] {
-  const options: string[] = [];
-  for (let hour = 0; hour < 24; hour++) {
-    for (let min = 0; min < 60; min += 15) {
-      const h = hour.toString().padStart(2, "0");
-      const m = min.toString().padStart(2, "0");
-      options.push(`${h}:${m}`);
-    }
-  }
-  return options;
-}
-
-function calculateDuration(startTime: string, endTime: string): number {
-  if (!startTime || !endTime) return 0;
-  const [sh, sm] = startTime.split(":").map(Number);
-  const [eh, em] = endTime.split(":").map(Number);
-  let startMin = sh * 60 + sm;
-  let endMin = eh * 60 + em;
-  if (endMin < startMin) endMin += 24 * 60;
-  return Math.round(((endMin - startMin) / 60) * 100) / 100;
-}
-
-const timeOptions = generateTimeOptions();
 const TODAY = dayjs().format("YYYY-MM-DD");
 
 // ─────────────────────────────────────────
@@ -93,10 +70,8 @@ const TODAY = dayjs().format("YYYY-MM-DD");
 const workLogFormSchema = z.object({
   date: z.string().min(1, "作業日は必須です"),
   order_id: z.string().min(1, "受注番号は必須です"),
-  task_name: z.string().min(1, "作業名は必須です"),
+  task_name: z.string().optional(),
   worker: z.string().min(1, "作業者は必須です"),
-  start_time: z.string().min(1, "開始時刻は必須です"),
-  end_time: z.string().min(1, "終了時刻は必須です"),
   duration_hours: z.coerce.number().gt(0, "実績時間は0より大きい値が必要です"),
   memo: z.string().optional(),
 });
@@ -152,22 +127,10 @@ export default function TaskManagement() {
       order_id: "",
       task_name: "",
       worker: "",
-      start_time: "",
-      end_time: "",
       duration_hours: 0,
       memo: "",
     },
   });
-
-  const startTime = form.watch("start_time");
-  const endTime = form.watch("end_time");
-
-  useEffect(() => {
-    if (startTime && endTime) {
-      const dur = calculateDuration(startTime, endTime);
-      form.setValue("duration_hours", dur);
-    }
-  }, [startTime, endTime, form]);
 
   // ─── Mutations ───────────────────────
 
@@ -181,8 +144,6 @@ export default function TaskManagement() {
         order_id: form.getValues("order_id"),
         task_name: "",
         worker: form.getValues("worker"),
-        start_time: "",
-        end_time: "",
         duration_hours: 0,
         memo: "",
       });
@@ -220,8 +181,6 @@ export default function TaskManagement() {
       order_id: data.order_id,
       task_name: data.task_name,
       worker: data.worker,
-      start_time: data.start_time,
-      end_time: data.end_time,
       duration_hours: data.duration_hours,
       memo: data.memo,
     });
@@ -322,7 +281,7 @@ export default function TaskManagement() {
                   name="task_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>作業名 *</FormLabel>
+                      <FormLabel>作業名</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -350,54 +309,6 @@ export default function TaskManagement() {
                           <SelectContent>
                             {workers.filter((w) => w.is_active).map((w) => (
                               <SelectItem key={w.id} value={w.name}>{w.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* 開始時刻 */}
-                <FormField
-                  control={form.control}
-                  name="start_time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>開始時刻 *</FormLabel>
-                      <FormControl>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="--:--" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {timeOptions.map((t) => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* 終了時刻 */}
-                <FormField
-                  control={form.control}
-                  name="end_time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>終了時刻 *</FormLabel>
-                      <FormControl>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="--:--" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {timeOptions.map((t) => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -476,8 +387,6 @@ export default function TaskManagement() {
                   <TableHead>受注番号</TableHead>
                   <TableHead>作業名</TableHead>
                   <TableHead>作業者</TableHead>
-                  <TableHead>開始</TableHead>
-                  <TableHead>終了</TableHead>
                   <TableHead className="text-right">実績時間</TableHead>
                   <TableHead>メモ</TableHead>
                   <TableHead className="w-12"></TableHead>
@@ -490,8 +399,6 @@ export default function TaskManagement() {
                     <TableCell className="font-mono text-sm whitespace-nowrap">{log.order_id || "-"}</TableCell>
                     <TableCell className="text-sm">{log.task_name || "-"}</TableCell>
                     <TableCell>{log.worker}</TableCell>
-                    <TableCell className="text-sm">{log.start_time || "-"}</TableCell>
-                    <TableCell className="text-sm">{log.end_time || "-"}</TableCell>
                     <TableCell className="text-right font-medium">
                       {log.duration_hours > 0
                         ? `${log.duration_hours % 1 === 0 ? log.duration_hours : log.duration_hours.toFixed(2)}h`
