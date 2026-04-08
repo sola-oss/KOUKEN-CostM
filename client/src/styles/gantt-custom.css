@@ -93,8 +93,8 @@
 }
 
 .gantt-task-list {
-  width: 472px;
-  min-width: 360px;
+  width: 760px;
+  min-width: 600px;
   flex-shrink: 0;
   border-right: 1px solid hsl(var(--border));
   display: flex;
@@ -104,7 +104,7 @@
 
 .gantt-task-list-header {
   display: grid;
-  grid-template-columns: 88px 1fr 72px 72px 52px;
+  grid-template-columns: 88px 420px 96px 96px 52px;
   background: hsl(var(--muted));
   border-bottom: 1px solid hsl(var(--border));
   font-size: 0.72rem;
@@ -128,7 +128,7 @@
 
 .gantt-project-row {
   display: grid;
-  grid-template-columns: 88px 1fr 72px 72px 52px;
+  grid-template-columns: 88px 420px 96px 96px 52px;
   align-items: center;
   border-bottom: 1px solid hsl(var(--border) / 0.4);
   font-size: 0.78rem;
@@ -163,6 +163,9 @@
   font-size: 0.68rem;
   color: hsl(var(--muted-foreground));
   padding: 0 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gantt-task-actual {
