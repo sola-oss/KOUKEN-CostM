@@ -640,7 +640,9 @@ export default function QuotesEdit() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px] text-center">整番</TableHead>
                   <TableHead className="w-[240px]">品名（材料マスタから選択）</TableHead>
+                  <TableHead className="w-[130px]">型番</TableHead>
                   <TableHead className="w-[70px]">単位</TableHead>
                   <TableHead className="w-[120px] text-right">単価</TableHead>
                   <TableHead className="w-[90px] text-right">数量</TableHead>
@@ -657,6 +659,11 @@ export default function QuotesEdit() {
 
                   return (
                     <TableRow key={index}>
+                      {/* 整番 - row number */}
+                      <TableCell className="text-center text-sm text-muted-foreground font-mono">
+                        {index + 1}
+                      </TableCell>
+
                       {/* 品名 - material picker */}
                       <TableCell>
                         {isConverted ? (
@@ -734,6 +741,21 @@ export default function QuotesEdit() {
                               </Command>
                             </PopoverContent>
                           </Popover>
+                        )}
+                      </TableCell>
+
+                      {/* 型番 - free input */}
+                      <TableCell>
+                        {isConverted ? (
+                          <span className="text-sm">{item.model_number || "—"}</span>
+                        ) : (
+                          <Input
+                            value={item.model_number}
+                            onChange={(e) => handleItemChange(index, "model_number", e.target.value)}
+                            placeholder="型番・品番"
+                            disabled={isConverted}
+                            className="h-8 text-sm"
+                          />
                         )}
                       </TableCell>
 

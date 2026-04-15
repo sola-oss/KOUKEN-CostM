@@ -185,12 +185,13 @@ export default function QuotesPrint() {
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", fontSize: "10px" }}>
           <thead>
             <tr style={{ background: "#333", color: "#fff" }}>
-              <th style={{ padding: "6px 8px", textAlign: "left", width: "30%", border: "1px solid #333" }}>品名</th>
-              <th style={{ padding: "6px 8px", textAlign: "left", width: "22%", border: "1px solid #333" }}>型番</th>
+              <th style={{ padding: "6px 8px", textAlign: "center", width: "5%", border: "1px solid #333" }}>整番</th>
+              <th style={{ padding: "6px 8px", textAlign: "left", width: "27%", border: "1px solid #333" }}>品名</th>
+              <th style={{ padding: "6px 8px", textAlign: "left", width: "20%", border: "1px solid #333" }}>型番</th>
               <th style={{ padding: "6px 8px", textAlign: "right", width: "8%", border: "1px solid #333" }}>数量</th>
               <th style={{ padding: "6px 8px", textAlign: "center", width: "6%", border: "1px solid #333" }}>単位</th>
-              <th style={{ padding: "6px 8px", textAlign: "right", width: "14%", border: "1px solid #333" }}>単価</th>
-              <th style={{ padding: "6px 8px", textAlign: "right", width: "14%", border: "1px solid #333" }}>金額</th>
+              <th style={{ padding: "6px 8px", textAlign: "right", width: "13%", border: "1px solid #333" }}>単価</th>
+              <th style={{ padding: "6px 8px", textAlign: "right", width: "13%", border: "1px solid #333" }}>金額</th>
               <th style={{ padding: "6px 8px", textAlign: "left", border: "1px solid #333" }}>備考</th>
             </tr>
           </thead>
@@ -199,6 +200,7 @@ export default function QuotesPrint() {
               const amount = (item.quantity || 0) * (item.unit_price || 0);
               return (
                 <tr key={idx} style={{ background: idx % 2 === 0 ? "#fff" : "#f9f9f9" }}>
+                  <td style={{ padding: "5px 8px", textAlign: "center", border: "1px solid #ccc", fontWeight: "bold" }}>{idx + 1}</td>
                   <td style={{ padding: "5px 8px", border: "1px solid #ccc" }}>{item.product_name || ""}</td>
                   <td style={{ padding: "5px 8px", border: "1px solid #ccc" }}>{item.model_number || ""}</td>
                   <td style={{ padding: "5px 8px", textAlign: "right", border: "1px solid #ccc" }}>
@@ -217,6 +219,7 @@ export default function QuotesPrint() {
             })}
             {Array.from({ length: Math.max(0, 10 - (quote.items?.length || 0)) }).map((_, i) => (
               <tr key={`empty-${i}`}>
+                <td style={{ padding: "5px 8px", textAlign: "center", border: "1px solid #ccc", color: "#aaa" }}>{(quote.items?.length || 0) + i + 1}</td>
                 <td style={{ padding: "5px 8px", border: "1px solid #ccc" }}>&nbsp;</td>
                 <td style={{ padding: "5px 8px", border: "1px solid #ccc" }}></td>
                 <td style={{ padding: "5px 8px", border: "1px solid #ccc" }}></td>
