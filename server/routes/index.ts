@@ -4,8 +4,12 @@ import { Router } from 'express';
 import productionApiRouter from './production-api.js';
 import salesOrdersRouter from './sales-orders-sqlite.js';
 import authRouter from './auth.js';
+import quotesRouter from './quotes-api.js';
 
 const router = Router();
+
+// Quotes API - mounted explicitly at /api/quotes for reliable routing
+router.use('/api/quotes', quotesRouter);
 
 // Use all production management API routes
 router.use(productionApiRouter);
