@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Package, DollarSign, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, Package, DollarSign, Calendar, Clock, FileText, ExternalLink } from "lucide-react";
 
 export default function ProjectDetail() {
   const params = useParams();
@@ -15,7 +15,7 @@ export default function ProjectDetail() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['order', orderId],
     queryFn: async () => {
-      const response = await fetch(`/api/orders/${orderId}`);
+      const response = await fetch(`/api/production/orders/${orderId}`);
       if (!response.ok) throw new Error('Failed to fetch order');
       return response.json();
     },
@@ -77,6 +77,8 @@ export default function ProjectDetail() {
   }
 
   const order = data.order;
+
+  const sourceQuote = data?.source_quote;
 
   return (
     <div className="p-6 space-y-6" data-testid="page-project-detail">
@@ -193,6 +195,49 @@ export default function ProjectDetail() {
                 <p className="text-xl font-semibold" data-testid="text-gross-profit">
                   {formatCurrency(data.kpi.gross_profit)}
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Source Quote Card */}
+        {sourceQuote && (
+          <Card data-testid="card-source-quote">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                元見積書
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">見積番号</p>
+                  <p className="font-mono font-semibold" data-testid="text-source-quote-number">
+                    {sourceQuote.quote_number}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">客先名</p>
+                  <p className="font-medium">{sourceQuote.client_name}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">発行日</p>
+                  <p className="font-medium">
+                    {sourceQuote.issue_date ? formatDate(sourceQuote.issue_date) : "—"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocation(`/quotes/${sourceQuote.id}/edit`)}
+                  data-testid="button-view-source-quote"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  見積書を表示
+                </Button>
               </div>
             </CardContent>
           </Card>

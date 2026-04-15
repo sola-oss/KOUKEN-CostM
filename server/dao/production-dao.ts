@@ -7,7 +7,8 @@ import type {
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
   OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse, ZoneCostSummary,
   WorkerMaster, InsertWorkerMaster, VendorMaster, InsertVendorMaster, OutsourcingCost, InsertOutsourcingCost, OutsourcingCostWithVendor,
-  CustomerMaster, InsertCustomerMaster
+  CustomerMaster, InsertCustomerMaster,
+  Quote, QuoteItem, QuoteWithItems, InsertQuote, InsertQuoteItem
 } from '../../shared/production-schema.js';
 
 // ============================================================
@@ -1821,6 +1822,299 @@ export class ProductionDAO {
     const { sql } = await import('../lib/database.js');
     await sql`DELETE FROM customers_master WHERE id = ${id}`;
     return true;
+  }
+
+  // ========== Quotes (見積書) CRUD (Replit PostgreSQL) ==========
+
+  async ensureQuotesTablesCreated(): Promise<void> {
+    const { sql } = await import('../lib/database.js');
+    await sql`
+      CREATE TABLE IF NOT EXISTS quotes (
+        id SERIAL PRIMARY KEY,
+        quote_number TEXT NOT NULL UNIQUE,
+        issue_date TEXT,
+        client_name TEXT NOT NULL,
+        contact_person TEXT,
+        client_request_no TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        converted_order_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_name)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_quotes_converted ON quotes(converted_order_id)`;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS quote_items (
+        id SERIAL PRIMARY KEY,
+        quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        product_name TEXT,
+        model_number TEXT,
+        quantity REAL,
+        unit TEXT,
+        unit_price REAL,
+        notes TEXT
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id)`;
+
+    // Add material_id column if it doesn't exist (migration for existing tables)
+    try {
+      await sql`ALTER TABLE quote_items ADD COLUMN material_id INTEGER`;
+    } catch {
+      // Column already exists — ignore
+    }
+  }
+
+  private async _generateQuoteNumber(): Promise<string> {
+    const { sql } = await import('../lib/database.js');
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const prefix = `QT-${y}${m}-`;
+    const rows = await sql`
+      SELECT quote_number FROM quotes
+      WHERE quote_number LIKE ${prefix + '%'}
+      ORDER BY quote_number DESC
+      LIMIT 1
+    `;
+    let seq = 1;
+    if (rows.length > 0) {
+      const last = rows[0].quote_number as string;
+      const num = parseInt(last.slice(prefix.length), 10);
+      if (!isNaN(num)) seq = num + 1;
+    }
+    return `${prefix}${String(seq).padStart(3, '0')}`;
+  }
+
+  async createQuote(data: InsertQuote, items: Omit<InsertQuoteItem, 'quote_id'>[]): Promise<number> {
+    const { sql } = await import('../lib/database.js');
+    const now = new Date().toISOString();
+    const quoteNumber = data.quote_number || await this._generateQuoteNumber();
+
+    const rows = await sql`
+      INSERT INTO quotes (quote_number, issue_date, client_name, contact_person, client_request_no, status, converted_order_id, created_at, updated_at)
+      VALUES (
+        ${quoteNumber},
+        ${data.issue_date || null},
+        ${data.client_name},
+        ${data.contact_person || null},
+        ${data.client_request_no || null},
+        ${data.status || 'draft'},
+        ${data.converted_order_id || null},
+        ${now},
+        ${now}
+      )
+      RETURNING id
+    `;
+    const quoteId = rows[0].id as number;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      await sql`
+        INSERT INTO quote_items (quote_id, sort_order, material_id, product_name, model_number, quantity, unit, unit_price, notes)
+        VALUES (
+          ${quoteId},
+          ${item.sort_order ?? i},
+          ${(item as { material_id?: number | null }).material_id ?? null},
+          ${item.product_name || null},
+          ${item.model_number || null},
+          ${item.quantity ?? null},
+          ${item.unit || null},
+          ${item.unit_price ?? null},
+          ${item.notes || null}
+        )
+      `;
+    }
+
+    return quoteId;
+  }
+
+  async getQuotes(): Promise<(Quote & { total_amount: number })[]> {
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`
+      SELECT q.*,
+        COALESCE(SUM(qi.quantity * qi.unit_price), 0) AS total_amount
+      FROM quotes q
+      LEFT JOIN quote_items qi ON qi.quote_id = q.id
+      GROUP BY q.id
+      ORDER BY q.created_at DESC
+    `;
+    return rows as (Quote & { total_amount: number })[];
+  }
+
+  async getQuoteById(id: number): Promise<QuoteWithItems | null> {
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`SELECT * FROM quotes WHERE id = ${id} LIMIT 1`;
+    if (rows.length === 0) return null;
+    const quote = rows[0] as Quote;
+    const items = await sql`
+      SELECT * FROM quote_items WHERE quote_id = ${id} ORDER BY sort_order, id
+    `;
+    return { ...quote, items: items as QuoteItem[] };
+  }
+
+  async getQuoteByOrderId(orderId: string): Promise<Quote | null> {
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`
+      SELECT * FROM quotes WHERE converted_order_id = ${orderId} LIMIT 1
+    `;
+    return rows.length > 0 ? (rows[0] as Quote) : null;
+  }
+
+  async updateQuote(id: number, data: Partial<InsertQuote>, items?: Omit<InsertQuoteItem, 'quote_id'>[]): Promise<boolean> {
+    const { sql } = await import('../lib/database.js');
+    const now = new Date().toISOString();
+
+    if (data.quote_number !== undefined) {
+      await sql`UPDATE quotes SET quote_number = ${data.quote_number} WHERE id = ${id}`;
+    }
+    if (data.issue_date !== undefined) {
+      await sql`UPDATE quotes SET issue_date = ${data.issue_date || null} WHERE id = ${id}`;
+    }
+    if (data.client_name !== undefined) {
+      await sql`UPDATE quotes SET client_name = ${data.client_name} WHERE id = ${id}`;
+    }
+    if (data.contact_person !== undefined) {
+      await sql`UPDATE quotes SET contact_person = ${data.contact_person || null} WHERE id = ${id}`;
+    }
+    if (data.client_request_no !== undefined) {
+      await sql`UPDATE quotes SET client_request_no = ${data.client_request_no || null} WHERE id = ${id}`;
+    }
+    if (data.status !== undefined) {
+      await sql`UPDATE quotes SET status = ${data.status} WHERE id = ${id}`;
+    }
+    if (data.converted_order_id !== undefined) {
+      await sql`UPDATE quotes SET converted_order_id = ${data.converted_order_id || null} WHERE id = ${id}`;
+    }
+    await sql`UPDATE quotes SET updated_at = ${now} WHERE id = ${id}`;
+
+    if (items !== undefined) {
+      await sql`DELETE FROM quote_items WHERE quote_id = ${id}`;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        await sql`
+          INSERT INTO quote_items (quote_id, sort_order, material_id, product_name, model_number, quantity, unit, unit_price, notes)
+          VALUES (
+            ${id},
+            ${item.sort_order ?? i},
+            ${(item as { material_id?: number | null }).material_id ?? null},
+            ${item.product_name || null},
+            ${item.model_number || null},
+            ${item.quantity ?? null},
+            ${item.unit || null},
+            ${item.unit_price ?? null},
+            ${item.notes || null}
+          )
+        `;
+      }
+    }
+
+    return true;
+  }
+
+  async deleteQuote(id: number): Promise<boolean> {
+    const { sql } = await import('../lib/database.js');
+    await sql`DELETE FROM quotes WHERE id = ${id}`;
+    return true;
+  }
+
+  async getQuoteItems(quoteId: number): Promise<QuoteItem[]> {
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`
+      SELECT * FROM quote_items WHERE quote_id = ${quoteId} ORDER BY sort_order, id
+    `;
+    return rows as QuoteItem[];
+  }
+
+  async addQuoteItem(quoteId: number, item: Omit<InsertQuoteItem, 'quote_id'>): Promise<QuoteItem> {
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`
+      INSERT INTO quote_items (quote_id, sort_order, material_id, product_name, model_number, quantity, unit, unit_price, notes)
+      VALUES (
+        ${quoteId},
+        ${item.sort_order ?? 0},
+        ${(item as { material_id?: number | null }).material_id ?? null},
+        ${item.product_name || null},
+        ${item.model_number || null},
+        ${item.quantity ?? null},
+        ${item.unit || null},
+        ${item.unit_price ?? null},
+        ${item.notes || null}
+      )
+      RETURNING *
+    `;
+    return rows[0] as QuoteItem;
+  }
+
+  async updateQuoteItem(itemId: number, item: Partial<Omit<InsertQuoteItem, 'quote_id'>>): Promise<QuoteItem | null> {
+    const { sql } = await import('../lib/database.js');
+    if ((item as { material_id?: number | null }).material_id !== undefined) {
+      await sql`UPDATE quote_items SET material_id = ${(item as { material_id?: number | null }).material_id ?? null} WHERE id = ${itemId}`;
+    }
+    if (item.sort_order !== undefined) {
+      await sql`UPDATE quote_items SET sort_order = ${item.sort_order} WHERE id = ${itemId}`;
+    }
+    if (item.product_name !== undefined) {
+      await sql`UPDATE quote_items SET product_name = ${item.product_name || null} WHERE id = ${itemId}`;
+    }
+    if (item.model_number !== undefined) {
+      await sql`UPDATE quote_items SET model_number = ${item.model_number || null} WHERE id = ${itemId}`;
+    }
+    if (item.quantity !== undefined) {
+      await sql`UPDATE quote_items SET quantity = ${item.quantity ?? null} WHERE id = ${itemId}`;
+    }
+    if (item.unit !== undefined) {
+      await sql`UPDATE quote_items SET unit = ${item.unit || null} WHERE id = ${itemId}`;
+    }
+    if (item.unit_price !== undefined) {
+      await sql`UPDATE quote_items SET unit_price = ${item.unit_price ?? null} WHERE id = ${itemId}`;
+    }
+    if (item.notes !== undefined) {
+      await sql`UPDATE quote_items SET notes = ${item.notes || null} WHERE id = ${itemId}`;
+    }
+    const rows = await sql`SELECT * FROM quote_items WHERE id = ${itemId} LIMIT 1`;
+    return rows.length > 0 ? (rows[0] as QuoteItem) : null;
+  }
+
+  async deleteQuoteItem(itemId: number): Promise<boolean> {
+    const { sql } = await import('../lib/database.js');
+    await sql`DELETE FROM quote_items WHERE id = ${itemId}`;
+    return true;
+  }
+
+  async convertQuoteToOrder(quoteId: number): Promise<string> {
+    const quote = await this.getQuoteById(quoteId);
+    if (!quote) throw new Error('見積書が見つかりません');
+    if (quote.status === 'converted') throw new Error('この見積書はすでに受注済みです');
+
+    const totalAmount = quote.items.reduce((sum, item) => {
+      return sum + ((item.quantity || 0) * (item.unit_price || 0));
+    }, 0);
+
+    const orderData: InsertOrder = {
+      order_date: quote.issue_date || new Date().toISOString().slice(0, 10),
+      client_name: quote.client_name,
+      project_title: quote.client_name + ' 見積 ' + quote.quote_number,
+      estimated_amount: totalAmount > 0 ? totalAmount : undefined,
+      status: 'pending',
+      is_delivered: false,
+      has_shipping_fee: false,
+      is_amount_confirmed: false,
+      is_invoiced: false,
+    };
+
+    const orderId = await this.createOrder(orderData);
+
+    await this.updateQuote(quoteId, {
+      status: 'converted',
+      converted_order_id: orderId
+    });
+
+    return orderId;
   }
 
   close(): void {

@@ -30,6 +30,9 @@ const VendorsMaster = lazy(() => import("@/pages/cost/vendors-master"));
 const CustomersMaster = lazy(() => import("@/pages/production/customers-master"));
 const MaterialCosts = lazy(() => import("@/pages/production/material-costs"));
 const UserManagement = lazy(() => import("@/pages/user-management"));
+const QuotesList = lazy(() => import("@/pages/production/quotes"));
+const QuotesEdit = lazy(() => import("@/pages/production/quotes-edit"));
+const QuotesPrint = lazy(() => import("@/pages/production/quotes-print"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function PageFallback() {
@@ -89,6 +92,18 @@ function Router() {
     );
   }
 
+  if (location.match(/^\/quotes\/\d+\/print$/)) {
+    return (
+      <ProtectedRoute>
+        <Suspense fallback={<PageFallback />}>
+          <Switch>
+            <Route path="/quotes/:id/print" component={QuotesPrint} />
+          </Switch>
+        </Suspense>
+      </ProtectedRoute>
+    );
+  }
+
   return (
     <AppLayout>
       <ProtectedRoute>
@@ -111,6 +126,9 @@ function Router() {
             <Route path="/customers-master" component={CustomersMaster} />
             <Route path="/material-costs" component={MaterialCosts} />
             <Route path="/user-management" component={UserManagement} />
+            <Route path="/quotes" component={QuotesList} />
+            <Route path="/quotes/new" component={QuotesEdit} />
+            <Route path="/quotes/:id/edit" component={QuotesEdit} />
             <Route component={NotFound} />
           </Switch>
         </Suspense>

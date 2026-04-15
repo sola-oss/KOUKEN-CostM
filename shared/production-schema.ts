@@ -611,6 +611,75 @@ export interface OutsourcingCostWithVendor extends OutsourcingCost {
   vendor_name: string;
 }
 
+// ========== Quotes (見積書) ==========
+// 見積書テーブル（Replit PostgreSQL に保存）
+
+export const quotes = sqliteTable("quotes", {
+  id: integer("id").primaryKey(),
+  quote_number: text("quote_number").notNull(),         // 見積番号
+  issue_date: text("issue_date"),                       // 発行日（YYYY-MM-DD）
+  client_name: text("client_name").notNull(),           // 客先会社名
+  contact_person: text("contact_person"),               // 担当者名
+  client_request_no: text("client_request_no"),         // 貴見積依頼番号
+  status: text("status").notNull().default("draft"),    // draft/issued/accepted/converted
+  converted_order_id: text("converted_order_id"),       // 変換済み受注番号
+  created_at: text("created_at").notNull(),
+  updated_at: text("updated_at").notNull(),
+});
+
+export const quoteItems = sqliteTable("quote_items", {
+  id: integer("id").primaryKey(),
+  quote_id: integer("quote_id").notNull().references(() => quotes.id, { onDelete: "cascade" }),
+  sort_order: integer("sort_order").notNull().default(0),
+  material_id: integer("material_id"),                  // 材料マスタID（任意）
+  product_name: text("product_name"),                   // 品名
+  model_number: text("model_number"),                   // 型番
+  quantity: real("quantity"),                           // 数量
+  unit: text("unit"),                                   // 単位
+  unit_price: real("unit_price"),                       // 単価
+  notes: text("notes"),                                 // 備考
+});
+
+export const insertQuoteSchema = createInsertSchema(quotes).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+}).extend({
+  quote_number: z.string().optional(),
+  issue_date: z.string().optional(),
+  client_name: z.string().min(1, "客先会社名は必須です"),
+  contact_person: z.string().optional(),
+  client_request_no: z.string().optional(),
+  status: z.enum(["draft", "issued", "accepted", "converted"]).default("draft"),
+  converted_order_id: z.string().optional().nullable(),
+});
+
+export const insertQuoteItemSchema = createInsertSchema(quoteItems).omit({
+  id: true,
+}).extend({
+  quote_id: z.coerce.number().int().positive(),
+  sort_order: z.coerce.number().int().default(0),
+  material_id: z.coerce.number().int().positive().optional().nullable(),
+  product_name: z.string().optional(),
+  model_number: z.string().optional(),
+  quantity: z.coerce.number().optional().nullable(),
+  unit: z.string().optional(),
+  unit_price: z.coerce.number().optional().nullable(),
+  notes: z.string().optional(),
+});
+
+export const updateQuoteSchema = insertQuoteSchema.partial();
+export const updateQuoteItemSchema = insertQuoteItemSchema.partial();
+
+export type Quote = typeof quotes.$inferSelect;
+export type QuoteItem = typeof quoteItems.$inferSelect;
+export type InsertQuote = z.infer<typeof insertQuoteSchema>;
+export type InsertQuoteItem = z.infer<typeof insertQuoteItemSchema>;
+
+export interface QuoteWithItems extends Quote {
+  items: QuoteItem[];
+}
+
 // ========== Cost Aggregation Types (原価集計) ==========
 
 // 工区別コスト集計（材料費のみ - 労務費は案件単位でのみ取得可能）
