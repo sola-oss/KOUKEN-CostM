@@ -5,6 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, Timer, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { FACTORY_LABELS } from "@/shared/api";
+
+const factoryColors: Record<string, string> = {
+  laser:     'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100',
+  factory1:  'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100',
+  factory2:  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
+  machine:   'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+  outsource: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+};
+const factoryRowColors: Record<string, string> = {
+  laser:     'bg-violet-50 dark:bg-violet-950/30',
+  factory1:  'bg-sky-50 dark:bg-sky-950/30',
+  factory2:  'bg-emerald-50 dark:bg-emerald-950/30',
+  machine:   'bg-amber-50 dark:bg-amber-950/30',
+  outsource: 'bg-gray-50 dark:bg-gray-900/30',
+};
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -22,15 +38,23 @@ function OrderRow({
   formatCurrency: (value: number | null) => string;
   formatPercent: (value: number | null) => string;
 }) {
+  const rowColorClass = order.factory ? (factoryRowColors[order.factory] ?? '') : '';
+
   return (
     <>
       <TableRow 
         key={order.order_id} 
         data-testid={`row-order-${order.order_id}`}
+        className={rowColorClass}
       >
         <TableCell className="font-medium">
           <div className="flex items-center gap-2">
             <span>{order.order_id}</span>
+            {order.factory && (
+              <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${factoryColors[order.factory] || 'bg-gray-100 text-gray-600'}`}>
+                {FACTORY_LABELS[order.factory] || order.factory}
+              </span>
+            )}
             {order.has_missing_prices && (
               <Badge variant="outline" className="text-amber-600 border-amber-600">
                 <AlertTriangle className="h-3 w-3 mr-1" />

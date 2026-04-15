@@ -624,6 +624,7 @@ export interface ZoneCostSummary {
 // 案件別コスト集計（工区別内訳を含む）
 export interface OrderCostSummary {
   order_id: string;
+  factory: string | null;
   project_title: string | null;
   client_name: string | null;
   material_cost: number;        // 材料費

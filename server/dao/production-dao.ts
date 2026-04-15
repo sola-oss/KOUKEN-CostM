@@ -1403,6 +1403,7 @@ export class ProductionDAO {
       if (materialData.cost > 0 || laborCost > 0 || outsourcingCost > 0) {
         orderSummaries.push({
           order_id: order.order_id,
+          factory: order.factory ?? null,
           project_title: order.project_title,
           client_name: order.client_name,
           material_cost: Math.round(materialData.cost),
