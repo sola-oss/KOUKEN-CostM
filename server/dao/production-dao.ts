@@ -1240,7 +1240,7 @@ export class ProductionDAO {
 
     // バッチ取得
     const [ordersRes, muRes, wlRes, wlogRes, procRes, outRes, workersRes, mcRows] = await Promise.all([
-      supabase.from('orders').select('order_id,project_title,client_name,estimated_amount'),
+      supabase.from('orders').select('order_id,factory,project_title,client_name,estimated_amount'),
       supabase.from('material_usages').select('*'),
       supabase.from('work_logs').select('order_id,worker,employee_name,duration_hours')
         .not('order_id', 'is', null).not('duration_hours', 'is', null).gt('duration_hours', 0),
