@@ -47,17 +47,19 @@ const statusLabels = {
 };
 
 const factoryColors: Record<string, string> = {
-  laser:    'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100',
-  factory1: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100',
-  factory2: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
-  machine:  'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+  laser:     'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100',
+  factory1:  'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100',
+  factory2:  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
+  machine:   'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+  outsource: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
 };
 
 const factoryRowColors: Record<string, string> = {
-  laser:    'bg-violet-50 dark:bg-violet-950/30',
-  factory1: 'bg-sky-50 dark:bg-sky-950/30',
-  factory2: 'bg-emerald-50 dark:bg-emerald-950/30',
-  machine:  'bg-amber-50 dark:bg-amber-950/30',
+  laser:     'bg-violet-50 dark:bg-violet-950/30',
+  factory1:  'bg-sky-50 dark:bg-sky-950/30',
+  factory2:  'bg-emerald-50 dark:bg-emerald-950/30',
+  machine:   'bg-amber-50 dark:bg-amber-950/30',
+  outsource: 'bg-gray-50 dark:bg-gray-900/30',
 };
 
 function FactoryBadge({ factory }: { factory?: string | null }) {
@@ -200,6 +202,7 @@ export default function SalesOrders() {
                 <SelectItem value="factory1">1工場</SelectItem>
                 <SelectItem value="factory2">2工場</SelectItem>
                 <SelectItem value="machine">機械加工場</SelectItem>
+                <SelectItem value="outsource">外注製作</SelectItem>
               </SelectContent>
             </Select>
 

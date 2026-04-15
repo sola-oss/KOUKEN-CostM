@@ -19,10 +19,11 @@ const statusColors = {
 };
 
 const factoryColors: Record<string, string> = {
-  laser:    'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100',
-  factory1: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100',
-  factory2: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
-  machine:  'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+  laser:     'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100',
+  factory1:  'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100',
+  factory2:  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
+  machine:   'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+  outsource: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
 };
 
 const statusLabels = {

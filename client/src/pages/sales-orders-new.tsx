@@ -194,6 +194,7 @@ export default function NewSalesOrder() {
                     <SelectItem value="factory1">1工場</SelectItem>
                     <SelectItem value="factory2">2工場</SelectItem>
                     <SelectItem value="machine">機械加工場</SelectItem>
+                    <SelectItem value="outsource">外注製作</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, Timer } from "lucide-react";
+import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, Timer, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -100,10 +100,33 @@ function OrderRow({
   );
 }
 
+type SortKey = 'order_id' | 'client_name' | 'estimated_amount' | 'profit';
+type SortDir = 'asc' | 'desc' | null;
+
+function SortIcon({ sortKey, currentKey, currentDir }: { sortKey: SortKey; currentKey: SortKey | null; currentDir: SortDir }) {
+  if (currentKey !== sortKey || currentDir === null) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />;
+  if (currentDir === 'asc') return <ArrowUp className="h-3 w-3 ml-1" />;
+  return <ArrowDown className="h-3 w-3 ml-1" />;
+}
+
 export default function CostSummaryPage() {
   const { toast } = useToast();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [laborRate, setLaborRate] = useState<string>("");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>(null);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir('asc');
+    } else if (sortDir === 'asc') {
+      setSortDir('desc');
+    } else {
+      setSortKey(null);
+      setSortDir(null);
+    }
+  };
 
   const { data, isLoading, error } = useQuery<CostAggregationResponse>({
     queryKey: ['/api/cost-aggregation'],
@@ -152,6 +175,31 @@ export default function CostSummaryPage() {
     if (value === null) return "-";
     return `${value.toFixed(1)}%`;
   };
+
+  const sortedOrders = (() => {
+    const orders = data?.orders ?? [];
+    if (!sortKey || !sortDir) return orders;
+    return [...orders].sort((a, b) => {
+      let aVal: string | number | null;
+      let bVal: string | number | null;
+      if (sortKey === 'order_id') {
+        aVal = String(a.order_id ?? '');
+        bVal = String(b.order_id ?? '');
+        return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      } else if (sortKey === 'client_name') {
+        aVal = a.client_name ?? '';
+        bVal = b.client_name ?? '';
+        return sortDir === 'asc' ? (aVal as string).localeCompare(bVal as string) : (bVal as string).localeCompare(aVal as string);
+      } else if (sortKey === 'estimated_amount') {
+        aVal = a.estimated_amount ?? 0;
+        bVal = b.estimated_amount ?? 0;
+      } else {
+        aVal = a.profit ?? 0;
+        bVal = b.profit ?? 0;
+      }
+      return sortDir === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+    });
+  })();
 
   if (isLoading) {
     return (
@@ -300,24 +348,60 @@ export default function CostSummaryPage() {
           <CardTitle>受注別原価集計</CardTitle>
         </CardHeader>
         <CardContent>
-          {data?.orders && data.orders.length > 0 ? (
+          {sortedOrders.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>受注番号</TableHead>
+                  <TableHead>
+                    <button
+                      className="flex items-center hover:text-foreground transition-colors"
+                      onClick={() => handleSort('order_id')}
+                      data-testid="sort-order-id"
+                    >
+                      受注番号
+                      <SortIcon sortKey="order_id" currentKey={sortKey} currentDir={sortDir} />
+                    </button>
+                  </TableHead>
                   <TableHead>受注名</TableHead>
-                  <TableHead>顧客</TableHead>
+                  <TableHead>
+                    <button
+                      className="flex items-center hover:text-foreground transition-colors"
+                      onClick={() => handleSort('client_name')}
+                      data-testid="sort-client-name"
+                    >
+                      顧客
+                      <SortIcon sortKey="client_name" currentKey={sortKey} currentDir={sortDir} />
+                    </button>
+                  </TableHead>
                   <TableHead className="text-right">材料費</TableHead>
                   <TableHead className="text-right">労務費</TableHead>
                   <TableHead className="text-right">外注費</TableHead>
                   <TableHead className="text-right">総原価</TableHead>
-                  <TableHead className="text-right">見積金額</TableHead>
-                  <TableHead className="text-right">利益</TableHead>
+                  <TableHead className="text-right">
+                    <button
+                      className="flex items-center justify-end w-full hover:text-foreground transition-colors"
+                      onClick={() => handleSort('estimated_amount')}
+                      data-testid="sort-estimated-amount"
+                    >
+                      見積金額
+                      <SortIcon sortKey="estimated_amount" currentKey={sortKey} currentDir={sortDir} />
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <button
+                      className="flex items-center justify-end w-full hover:text-foreground transition-colors"
+                      onClick={() => handleSort('profit')}
+                      data-testid="sort-profit"
+                    >
+                      利益
+                      <SortIcon sortKey="profit" currentKey={sortKey} currentDir={sortDir} />
+                    </button>
+                  </TableHead>
                   <TableHead className="text-right">利益率</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.orders.map((order) => (
+                {sortedOrders.map((order) => (
                   <OrderRow 
                     key={order.order_id}
                     order={order}

@@ -31,13 +31,14 @@ interface CustomersResponse {
 }
 
 // Factory type for color-coding orders by factory
-export type FactoryType = 'laser' | 'factory1' | 'factory2' | 'machine' | null;
+export type FactoryType = 'laser' | 'factory1' | 'factory2' | 'machine' | 'outsource' | null;
 
 export const FACTORY_LABELS: Record<string, string> = {
   laser: 'レーザー工場',
   factory1: '1工場',
   factory2: '2工場',
   machine: '機械加工場',
+  outsource: '外注製作',
 };
 
 // Type definitions matching the simplified specification

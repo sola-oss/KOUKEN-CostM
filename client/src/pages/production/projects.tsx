@@ -547,6 +547,7 @@ export default function Projects() {
             <SelectItem value="factory1">1工場</SelectItem>
             <SelectItem value="factory2">2工場</SelectItem>
             <SelectItem value="machine">機械加工場</SelectItem>
+            <SelectItem value="outsource">外注製作</SelectItem>
             <SelectItem value="none">未設定</SelectItem>
           </SelectContent>
         </Select>
@@ -623,6 +624,7 @@ export default function Projects() {
                     order.factory === 'factory1' ? 'bg-sky-50 dark:bg-sky-950/30' : '',
                     order.factory === 'factory2' ? 'bg-emerald-50 dark:bg-emerald-950/30' : '',
                     order.factory === 'machine' ? 'bg-amber-50 dark:bg-amber-950/30' : '',
+                    order.factory === 'outsource' ? 'bg-gray-50 dark:bg-gray-900/30' : '',
                   ].filter(Boolean).join(' ')}
                   data-testid={`row-order-${order.order_id}`}
                 >
@@ -972,6 +974,7 @@ export default function Projects() {
                               <SelectItem value="factory1">1工場</SelectItem>
                               <SelectItem value="factory2">2工場</SelectItem>
                               <SelectItem value="machine">機械加工場</SelectItem>
+                              <SelectItem value="outsource">外注製作</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />

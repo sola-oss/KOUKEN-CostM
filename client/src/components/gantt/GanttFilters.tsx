@@ -4,17 +4,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export const FACTORY_OPTIONS = [
-  { value: 'laser', label: 'レーザー工場' },
-  { value: 'factory1', label: '1工場' },
-  { value: 'factory2', label: '2工場' },
-  { value: 'machine', label: '機械加工場' },
+  { value: 'laser',     label: 'レーザー工場' },
+  { value: 'factory1',  label: '1工場' },
+  { value: 'factory2',  label: '2工場' },
+  { value: 'machine',   label: '機械加工場' },
+  { value: 'outsource', label: '外注製作' },
 ];
 
 export const FACTORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  laser:    { bg: 'bg-violet-500',  text: 'text-white', border: 'border-violet-600' },
-  factory1: { bg: 'bg-sky-500',     text: 'text-white', border: 'border-sky-600' },
-  factory2: { bg: 'bg-emerald-500', text: 'text-white', border: 'border-emerald-600' },
-  machine:  { bg: 'bg-amber-500',   text: 'text-white', border: 'border-amber-600' },
+  laser:     { bg: 'bg-violet-500',  text: 'text-white', border: 'border-violet-600' },
+  factory1:  { bg: 'bg-sky-500',     text: 'text-white', border: 'border-sky-600' },
+  factory2:  { bg: 'bg-emerald-500', text: 'text-white', border: 'border-emerald-600' },
+  machine:   { bg: 'bg-amber-500',   text: 'text-white', border: 'border-amber-600' },
+  outsource: { bg: 'bg-gray-400',    text: 'text-white', border: 'border-gray-500' },
 };
 
 interface GanttFiltersProps {

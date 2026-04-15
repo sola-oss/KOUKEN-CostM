@@ -24,11 +24,12 @@ const getProgressColorClass = (progress: number, actualHours: number): string =>
 
 const getFactoryBarStyle = (factory: string | null | undefined): React.CSSProperties => {
   switch (factory) {
-    case 'laser':    return { backgroundColor: '#8b5cf6' };
-    case 'factory1': return { backgroundColor: '#0ea5e9' };
-    case 'factory2': return { backgroundColor: '#10b981' };
-    case 'machine':  return { backgroundColor: '#f59e0b' };
-    default:         return {};
+    case 'laser':     return { backgroundColor: '#8b5cf6' };
+    case 'factory1':  return { backgroundColor: '#0ea5e9' };
+    case 'factory2':  return { backgroundColor: '#10b981' };
+    case 'machine':   return { backgroundColor: '#f59e0b' };
+    case 'outsource': return { backgroundColor: '#9ca3af' };
+    default:          return {};
   }
 };
 
