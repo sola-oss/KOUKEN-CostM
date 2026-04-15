@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, FileText, Printer, ArrowRight } from "lucide-react";
+import { Plus, FileText, Printer, ArrowRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,8 +42,9 @@ export default function QuotesList() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery<{ data: Quote[] }>({
+  const { data, isLoading, isError } = useQuery<{ data: Quote[] }>({
     queryKey: ["/api/quotes"],
+    staleTime: 0,
   });
 
   const deleteMutation = useMutation({
@@ -107,6 +108,14 @@ export default function QuotesList() {
                   ))}
                 </TableRow>
               ))
+            ) : isError ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>データの取得に失敗しました</p>
+                  <p className="text-sm">ページを再読み込みしてください</p>
+                </TableCell>
+              </TableRow>
             ) : quotes.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
@@ -161,6 +170,20 @@ export default function QuotesList() {
                           }}
                         >
                           <ArrowRight className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="削除"
+                          disabled={deleteMutation.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`「${quote.quote_number}」を削除しますか？`)) {
+                              deleteMutation.mutate(quote.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
