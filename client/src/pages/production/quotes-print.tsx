@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import sealImage from "@assets/image_1777272205185.png";
 
 interface QuoteItem {
   id?: number;
@@ -151,7 +152,7 @@ export default function QuotesPrint() {
             )}
           </div>
 
-          <div style={{ textAlign: "right", minWidth: "200px" }}>
+          <div style={{ textAlign: "right", minWidth: "220px", position: "relative" }}>
             <div style={{ fontSize: "10px", color: "#555", marginBottom: "2px" }}>
               登録番号　{COMPANY_INFO.registration_no}
             </div>
@@ -161,16 +162,32 @@ export default function QuotesPrint() {
             <div style={{ fontSize: "11px", marginBottom: "2px" }}>
               見積番号　{quote.quote_number}
             </div>
-            <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "6px" }}>
-              {COMPANY_INFO.name}
-            </div>
-            <div style={{ fontSize: "11px" }}>{COMPANY_INFO.representative}</div>
-            <div style={{ fontSize: "10px", color: "#555", marginTop: "4px" }}>
-              {COMPANY_INFO.zip}
-            </div>
-            <div style={{ fontSize: "10px", color: "#555" }}>{COMPANY_INFO.address}</div>
-            <div style={{ fontSize: "10px", color: "#555" }}>
-              TEL {COMPANY_INFO.tel}　FAX {COMPANY_INFO.fax}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "flex-end", gap: "6px", marginTop: "6px" }}>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "12px", fontWeight: "bold" }}>
+                  {COMPANY_INFO.name}
+                </div>
+                <div style={{ fontSize: "11px" }}>{COMPANY_INFO.representative}</div>
+                <div style={{ fontSize: "10px", color: "#555", marginTop: "4px" }}>
+                  {COMPANY_INFO.zip}
+                </div>
+                <div style={{ fontSize: "10px", color: "#555" }}>{COMPANY_INFO.address}</div>
+                <div style={{ fontSize: "10px", color: "#555" }}>
+                  TEL {COMPANY_INFO.tel}　FAX {COMPANY_INFO.fax}
+                </div>
+              </div>
+              <img
+                src={sealImage}
+                alt="印鑑"
+                style={{
+                  width: "72px",
+                  height: "72px",
+                  objectFit: "contain",
+                  opacity: 0.85,
+                  flexShrink: 0,
+                  marginTop: "2px",
+                }}
+              />
             </div>
           </div>
         </div>
