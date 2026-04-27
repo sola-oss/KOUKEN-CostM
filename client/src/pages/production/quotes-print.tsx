@@ -166,8 +166,7 @@ export default function QuotesPrint() {
             )}
           </div>
 
-          {/* 印鑑の幅(80px) + gap(12px) = 92px を右側に確保してテキストが被らないようにする */}
-          <div style={{ textAlign: "right", paddingRight: "92px" }}>
+          <div style={{ textAlign: "right", marginTop: "88px" }}>
             <div style={{ fontSize: "10px", color: "#555", marginBottom: "2px" }}>
               登録番号　{COMPANY_INFO.registration_no}
             </div>
