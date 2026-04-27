@@ -40,6 +40,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -73,6 +77,7 @@ interface ConvertResponse {
 interface ProspectFormData {
   deal_name: string;
   customer_id: string;
+  customer_name: string;
   rank: "A" | "B" | "C";
   expected_amount: string;
   expected_order_date: string;
@@ -84,6 +89,7 @@ interface ProspectFormData {
 const defaultForm: ProspectFormData = {
   deal_name: "",
   customer_id: "",
+  customer_name: "",
   rank: "C",
   expected_amount: "",
   expected_order_date: "",
@@ -120,6 +126,7 @@ export default function ProspectsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [convertingId, setConvertingId] = useState<number | null>(null);
   const [form, setForm] = useState<ProspectFormData>(defaultForm);
+  const [customerComboOpen, setCustomerComboOpen] = useState(false);
 
   const queryParams = new URLSearchParams();
   if (rankFilter !== "all") queryParams.set("rank", rankFilter);
@@ -227,6 +234,7 @@ export default function ProspectsPage() {
     setForm({
       deal_name: p.deal_name,
       customer_id: p.customer_id ? String(p.customer_id) : "",
+      customer_name: p.customer_name ?? "",
       rank: p.rank,
       expected_amount: p.expected_amount != null ? String(p.expected_amount) : "",
       expected_order_date: p.expected_order_date ?? "",
@@ -243,6 +251,7 @@ export default function ProspectsPage() {
       rank: form.rank,
       status: form.status,
       customer_id: form.customer_id ? parseInt(form.customer_id, 10) : null,
+      customer_name: form.customer_name || null,
       expected_amount: form.expected_amount ? parseFloat(form.expected_amount) : null,
       expected_order_date: form.rank === "A" && form.expected_order_date ? form.expected_order_date : null,
       manager: form.manager || null,
@@ -436,23 +445,76 @@ export default function ProspectsPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="customer_id">顧客</Label>
-              <Select
-                value={form.customer_id || "none"}
-                onValueChange={(v) => setForm({ ...form, customer_id: v === "none" ? "" : v })}
-              >
-                <SelectTrigger id="customer_id">
-                  <SelectValue placeholder="顧客を選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">未選択</SelectItem>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.code ? `[${c.code}] ` : ""}{c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>顧客</Label>
+              <Popover open={customerComboOpen} onOpenChange={setCustomerComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate text-left">
+                      {form.customer_name || form.customer_id
+                        ? (form.customer_name || customers.find(c => String(c.id) === form.customer_id)?.name || "")
+                        : <span className="text-muted-foreground">顧客を選択または入力</span>}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="顧客名を入力..."
+                      onValueChange={(value) => {
+                        setForm({ ...form, customer_name: value, customer_id: "" });
+                      }}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        <p className="text-sm text-muted-foreground py-2 px-4">
+                          入力した名前で登録されます
+                        </p>
+                      </CommandEmpty>
+                      {form.customer_name || form.customer_id ? (
+                        <CommandGroup heading="選択解除">
+                          <CommandItem
+                            value="__clear__"
+                            onSelect={() => {
+                              setForm({ ...form, customer_id: "", customer_name: "" });
+                              setCustomerComboOpen(false);
+                            }}
+                          >
+                            <span className="text-muted-foreground">クリア</span>
+                          </CommandItem>
+                        </CommandGroup>
+                      ) : null}
+                      <CommandGroup heading="得意先マスタ">
+                        {customers.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={`${c.code ?? ""} ${c.name}`}
+                            onSelect={() => {
+                              setForm({ ...form, customer_id: String(c.id), customer_name: c.name });
+                              setCustomerComboOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                form.customer_id === String(c.id) ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {c.code ? `[${c.code}] ` : ""}{c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {form.customer_id === "" && form.customer_name && (
+                <p className="text-xs text-muted-foreground">新規顧客として登録されます</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
