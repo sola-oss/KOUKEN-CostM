@@ -159,6 +159,8 @@ export default function QuotesPrint() {
                 src={sealImage}
                 alt="印鑑"
                 style={{
+                  display: "block",
+                  marginLeft: "auto",
                   width: "76px",
                   height: "76px",
                   objectFit: "contain",
