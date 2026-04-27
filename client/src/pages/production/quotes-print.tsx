@@ -128,7 +128,21 @@ export default function QuotesPrint() {
         </button>
       </div>
 
-      <div style={{ maxWidth: "210mm", margin: "0 auto", padding: "20px 20px", background: "#fff" }}>
+      <div style={{ maxWidth: "210mm", margin: "0 auto", padding: "20px 20px", background: "#fff", position: "relative" }}>
+        {/* 印鑑 — 用紙の右上に固定。登録番号テキストと被らないよう右列に paddingRight を設定 */}
+        <img
+          src={sealImage}
+          alt="印鑑"
+          style={{
+            position: "absolute",
+            top: "20px",
+            right: "20px",
+            width: "80px",
+            height: "80px",
+            objectFit: "contain",
+            opacity: 0.85,
+          }}
+        />
         <div style={{ textAlign: "center", marginBottom: "12px" }}>
           <h1 style={{ fontSize: "20px", fontWeight: "bold", letterSpacing: "4px", margin: 0 }}>
             御　見　積　書
@@ -152,43 +166,28 @@ export default function QuotesPrint() {
             )}
           </div>
 
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-            {/* 会社情報テキスト */}
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "10px", color: "#555", marginBottom: "2px" }}>
-                登録番号　{COMPANY_INFO.registration_no}
-              </div>
-              <div style={{ fontSize: "11px", marginBottom: "2px" }}>
-                発行年月日　{formatDate(quote.issue_date)}
-              </div>
-              <div style={{ fontSize: "11px", marginBottom: "2px" }}>
-                見積番号　{quote.quote_number}
-              </div>
-              <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "6px" }}>
-                {COMPANY_INFO.name}
-              </div>
-              <div style={{ fontSize: "11px" }}>{COMPANY_INFO.representative}</div>
-              <div style={{ fontSize: "10px", color: "#555", marginTop: "4px" }}>
-                {COMPANY_INFO.zip}
-              </div>
-              <div style={{ fontSize: "10px", color: "#555" }}>{COMPANY_INFO.address}</div>
-              <div style={{ fontSize: "10px", color: "#555" }}>
-                TEL {COMPANY_INFO.tel}　FAX {COMPANY_INFO.fax}
-              </div>
+          {/* 印鑑の幅(80px) + gap(12px) = 92px を右側に確保してテキストが被らないようにする */}
+          <div style={{ textAlign: "right", paddingRight: "92px" }}>
+            <div style={{ fontSize: "10px", color: "#555", marginBottom: "2px" }}>
+              登録番号　{COMPANY_INFO.registration_no}
             </div>
-            {/* 印鑑 — 会社名・代表者名の右隣 */}
-            <img
-              src={sealImage}
-              alt="印鑑"
-              style={{
-                width: "76px",
-                height: "76px",
-                objectFit: "contain",
-                opacity: 0.85,
-                flexShrink: 0,
-                marginTop: "52px",   /* 登録番号・発行日・見積番号の3行分を空ける */
-              }}
-            />
+            <div style={{ fontSize: "11px", marginBottom: "2px" }}>
+              発行年月日　{formatDate(quote.issue_date)}
+            </div>
+            <div style={{ fontSize: "11px", marginBottom: "2px" }}>
+              見積番号　{quote.quote_number}
+            </div>
+            <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "6px" }}>
+              {COMPANY_INFO.name}
+            </div>
+            <div style={{ fontSize: "11px" }}>{COMPANY_INFO.representative}</div>
+            <div style={{ fontSize: "10px", color: "#555", marginTop: "4px" }}>
+              {COMPANY_INFO.zip}
+            </div>
+            <div style={{ fontSize: "10px", color: "#555" }}>{COMPANY_INFO.address}</div>
+            <div style={{ fontSize: "10px", color: "#555" }}>
+              TEL {COMPANY_INFO.tel}　FAX {COMPANY_INFO.fax}
+            </div>
           </div>
         </div>
 
