@@ -4,7 +4,7 @@ import {
   ChevronRight, ChevronDown,
   CheckSquare, ClipboardList, GanttChart, Database, FileSpreadsheet,
   Calculator, Users, Settings, Building2, Hammer, TrendingUp,
-  UserCog, LogOut, Contact, Receipt, FileText
+  UserCog, LogOut, Contact, Receipt, FileText, Target
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -30,6 +30,7 @@ import { useAuth } from "@/contexts/auth-context";
 // Section 1: 受注と計画
 const orderPlanningItems = [
   { title: "受注管理", url: "/projects", icon: Package },
+  { title: "受注状況管理", url: "/prospects", icon: Target },
   { title: "見積書", url: "/quotes", icon: FileText },
   { title: "日報", url: "/task-management", icon: CheckSquare },
   { title: "ガントチャート", url: "/gantt", icon: GanttChart }

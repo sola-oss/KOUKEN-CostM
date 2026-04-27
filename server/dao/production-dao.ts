@@ -1824,6 +1824,233 @@ export class ProductionDAO {
     return true;
   }
 
+  // ========== Prospects (見込み案件) CRUD ==========
+
+  async ensureProspectsTableCreated(): Promise<void> {
+    const { sql } = await import('../lib/database.js');
+    await sql`
+      CREATE TABLE IF NOT EXISTS prospects (
+        id SERIAL PRIMARY KEY,
+        deal_name TEXT NOT NULL,
+        customer_id INTEGER REFERENCES customers_master(id) ON DELETE SET NULL,
+        rank TEXT NOT NULL DEFAULT 'C' CHECK (rank IN ('A', 'B', 'C')),
+        expected_amount REAL,
+        expected_order_date TEXT,
+        manager TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'won', 'lost')),
+        created_at TEXT NOT NULL
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_prospects_rank ON prospects(rank)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_prospects_status ON prospects(status)`;
+  }
+
+  async getProspects(options?: { rank?: string; status?: string }): Promise<any[]> {
+    const { sql } = await import('../lib/database.js');
+    let rows: any[];
+    if (options?.rank && options?.status) {
+      rows = await sql`
+        SELECT p.*, c.name AS customer_name
+        FROM prospects p
+        LEFT JOIN customers_master c ON c.id = p.customer_id
+        WHERE p.rank = ${options.rank} AND p.status = ${options.status}
+        ORDER BY p.created_at DESC
+      `;
+    } else if (options?.rank) {
+      rows = await sql`
+        SELECT p.*, c.name AS customer_name
+        FROM prospects p
+        LEFT JOIN customers_master c ON c.id = p.customer_id
+        WHERE p.rank = ${options.rank}
+        ORDER BY p.created_at DESC
+      `;
+    } else if (options?.status) {
+      rows = await sql`
+        SELECT p.*, c.name AS customer_name
+        FROM prospects p
+        LEFT JOIN customers_master c ON c.id = p.customer_id
+        WHERE p.status = ${options.status}
+        ORDER BY p.created_at DESC
+      `;
+    } else {
+      rows = await sql`
+        SELECT p.*, c.name AS customer_name
+        FROM prospects p
+        LEFT JOIN customers_master c ON c.id = p.customer_id
+        ORDER BY p.created_at DESC
+      `;
+    }
+    return rows;
+  }
+
+  async getProspectById(id: number): Promise<any | null> {
+    const { sql } = await import('../lib/database.js');
+    const rows = await sql`
+      SELECT p.*, c.name AS customer_name
+      FROM prospects p
+      LEFT JOIN customers_master c ON c.id = p.customer_id
+      WHERE p.id = ${id}
+      LIMIT 1
+    `;
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async createProspect(data: {
+    deal_name: string;
+    customer_id?: number | null;
+    rank: string;
+    expected_amount?: number | null;
+    expected_order_date?: string | null;
+    manager?: string;
+    notes?: string;
+    status?: string;
+  }): Promise<number> {
+    const { sql } = await import('../lib/database.js');
+    const now = new Date().toISOString();
+    const rank = data.rank || 'C';
+    const expectedOrderDate = rank === 'A' ? (data.expected_order_date ?? null) : null;
+    const rows = await sql`
+      INSERT INTO prospects (deal_name, customer_id, rank, expected_amount, expected_order_date, manager, notes, status, created_at)
+      VALUES (
+        ${data.deal_name},
+        ${data.customer_id ?? null},
+        ${rank},
+        ${data.expected_amount ?? null},
+        ${expectedOrderDate},
+        ${data.manager || null},
+        ${data.notes || null},
+        ${data.status || 'active'},
+        ${now}
+      )
+      RETURNING id
+    `;
+    return rows[0].id as number;
+  }
+
+  async updateProspect(id: number, data: Partial<{
+    deal_name: string;
+    customer_id: number | null;
+    rank: string;
+    expected_amount: number | null;
+    expected_order_date: string | null;
+    manager: string | null;
+    notes: string | null;
+    status: string;
+  }>): Promise<boolean> {
+    const { sql } = await import('../lib/database.js');
+
+    // Fetch current row to merge with partial updates in one atomic statement
+    const rows = await sql`SELECT * FROM prospects WHERE id = ${id} LIMIT 1`;
+    if (rows.length === 0) return false;
+    const cur = rows[0] as {
+      deal_name: string; customer_id: number | null; rank: string;
+      expected_amount: number | null; expected_order_date: string | null;
+      manager: string | null; notes: string | null; status: string;
+    };
+
+    const newRank = data.rank !== undefined ? data.rank : cur.rank;
+    // expected_order_date is only meaningful for rank A; clear it otherwise
+    const rawDate = data.expected_order_date !== undefined ? data.expected_order_date : cur.expected_order_date;
+    const newExpectedOrderDate = newRank === 'A' ? rawDate : null;
+
+    await sql`
+      UPDATE prospects SET
+        deal_name            = ${data.deal_name !== undefined ? data.deal_name : cur.deal_name},
+        customer_id          = ${data.customer_id !== undefined ? data.customer_id : cur.customer_id},
+        rank                 = ${newRank},
+        expected_amount      = ${data.expected_amount !== undefined ? data.expected_amount : cur.expected_amount},
+        expected_order_date  = ${newExpectedOrderDate},
+        manager              = ${data.manager !== undefined ? data.manager : cur.manager},
+        notes                = ${data.notes !== undefined ? data.notes : cur.notes},
+        status               = ${data.status !== undefined ? data.status : cur.status}
+      WHERE id = ${id}
+    `;
+    return true;
+  }
+
+  async deleteProspect(id: number): Promise<boolean> {
+    const { sql } = await import('../lib/database.js');
+    await sql`DELETE FROM prospects WHERE id = ${id}`;
+    return true;
+  }
+
+  async convertProspectToOrder(prospectId: number): Promise<string> {
+    const { sql } = await import('../lib/database.js');
+
+    // Atomically claim the prospect by changing status active→won in a single UPDATE.
+    // This prevents duplicate conversions in concurrent requests.
+    const locked = await sql`
+      UPDATE prospects
+      SET status = 'won'
+      WHERE id = ${prospectId} AND status = 'active' AND rank = 'A'
+      RETURNING id, deal_name, customer_id, rank, expected_amount,
+                expected_order_date, manager, notes
+    `;
+
+    if (locked.length === 0) {
+      // Check why the update failed to give a meaningful error
+      const rows = await sql`SELECT status, rank FROM prospects WHERE id = ${prospectId} LIMIT 1`;
+      if (rows.length === 0) throw new Error('見込み案件が見つかりません');
+      const p = rows[0] as { status: string; rank: string };
+      if (p.status === 'won') throw new Error('この案件はすでに受注済みです');
+      if (p.rank !== 'A') throw new Error('受注転換はAランクの案件のみ可能です');
+      throw new Error('受注転換に失敗しました（別の操作と競合した可能性があります）');
+    }
+
+    const prospect = locked[0] as {
+      id: number;
+      deal_name: string;
+      customer_id: number | null;
+      rank: string;
+      expected_amount: number | null;
+      expected_order_date: string | null;
+      manager: string | null;
+      notes: string | null;
+    };
+
+    // Fetch customer name separately for order creation
+    let customerName: string | undefined;
+    if (prospect.customer_id) {
+      const customerRows = await sql`SELECT name FROM customers_master WHERE id = ${prospect.customer_id} LIMIT 1`;
+      if (customerRows.length > 0) customerName = (customerRows[0] as { name: string }).name;
+    }
+
+    let orderId: string | undefined;
+    try {
+      const orderData: InsertOrder = {
+        order_date: prospect.expected_order_date || new Date().toISOString().slice(0, 10),
+        client_name: customerName,
+        project_title: prospect.deal_name,
+        estimated_amount: prospect.expected_amount ?? undefined,
+        manager: prospect.manager ?? undefined,
+        note: prospect.notes ?? undefined,
+        status: 'pending',
+        is_delivered: false,
+        has_shipping_fee: false,
+        is_amount_confirmed: false,
+        is_invoiced: false,
+      };
+      orderId = await this.createOrder(orderData);
+
+      if (prospect.customer_id) {
+        await this.setOrderCustomerId(orderId, prospect.customer_id);
+      }
+    } catch (orderError) {
+      // Compensating rollback: revert prospect status and clean up any created order
+      await sql`UPDATE prospects SET status = 'active' WHERE id = ${prospectId}`;
+      if (orderId !== undefined) {
+        // Best-effort cleanup of the orphaned order; log any secondary cleanup failure
+        try { await this.deleteOrder(orderId); } catch (cleanupErr) {
+          console.error(`[convertProspectToOrder] WARN: prospect ${prospectId} status rolled back but orphaned order ${orderId} could not be deleted:`, cleanupErr);
+        }
+      }
+      throw orderError;
+    }
+
+    return orderId;
+  }
+
   // ========== Quotes (見積書) CRUD (Replit PostgreSQL) ==========
 
   async ensureQuotesTablesCreated(): Promise<void> {

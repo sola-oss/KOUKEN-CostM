@@ -33,6 +33,7 @@ const UserManagement = lazy(() => import("@/pages/user-management"));
 const QuotesList = lazy(() => import("@/pages/production/quotes"));
 const QuotesEdit = lazy(() => import("@/pages/production/quotes-edit"));
 const QuotesPrint = lazy(() => import("@/pages/production/quotes-print"));
+const Prospects = lazy(() => import("@/pages/production/prospects"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function PageFallback() {
@@ -129,6 +130,7 @@ function Router() {
             <Route path="/quotes" component={QuotesList} />
             <Route path="/quotes/new" component={QuotesEdit} />
             <Route path="/quotes/:id/edit" component={QuotesEdit} />
+            <Route path="/prospects" component={Prospects} />
             <Route component={NotFound} />
           </Switch>
         </Suspense>

@@ -48,6 +48,9 @@ try {
   }).catch((err: Error) => {
     console.error('✗ Failed to seed customers master:', err.message);
   });
+  dao.ensureProspectsTableCreated()
+    .then(() => console.log('✓ Prospects table ready'))
+    .catch((err: Error) => console.error('✗ Prospects table init error:', err.message));
 } catch (error) {
   console.error('✗ Failed to initialize Production DAO:', error);
 }
@@ -2198,6 +2201,114 @@ router.delete('/api/customers-master/:id', async (req, res) => {
       error: 'Internal server error',
       message: 'Failed to delete customer'
     });
+  }
+});
+
+// ========== Prospects API (受注状況管理) ==========
+
+const VALID_RANKS = ['A', 'B', 'C'] as const;
+const VALID_STATUSES = ['active', 'won', 'lost'] as const;
+
+// GET /api/prospects - 見込み案件一覧
+router.get('/api/prospects', async (req, res) => {
+  try {
+    const { rank, status } = req.query as Record<string, string>;
+    if (rank && !VALID_RANKS.includes(rank as typeof VALID_RANKS[number])) {
+      return res.status(400).json({ error: 'Bad request', message: `rank は A/B/C のいずれかを指定してください` });
+    }
+    if (status && !VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
+      return res.status(400).json({ error: 'Bad request', message: `status は active/won/lost のいずれかを指定してください` });
+    }
+    const prospects = await dao.getProspects({
+      rank: rank || undefined,
+      status: status || undefined,
+    });
+    res.json({ data: prospects });
+  } catch (error: any) {
+    console.error('Prospects list error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to fetch prospects' });
+  }
+});
+
+// GET /api/prospects/:id - 見込み案件詳細
+router.get('/api/prospects/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Bad request', message: '無効なIDです' });
+    const prospect = await dao.getProspectById(id);
+    if (!prospect) return res.status(404).json({ error: 'Not found', message: '見込み案件が見つかりません' });
+    res.json({ data: prospect });
+  } catch (error: any) {
+    console.error('Prospect get error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to fetch prospect' });
+  }
+});
+
+// POST /api/prospects - 見込み案件登録
+router.post('/api/prospects', async (req, res) => {
+  try {
+    const { insertProspectSchema } = await import('../../shared/production-schema.js');
+    const validation = insertProspectSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ error: 'Validation error', details: validation.error.errors });
+    }
+    const id = await dao.createProspect(validation.data);
+    const prospect = await dao.getProspectById(id);
+    res.status(201).json({ data: prospect });
+  } catch (error: any) {
+    console.error('Prospect create error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to create prospect' });
+  }
+});
+
+// PATCH /api/prospects/:id - 見込み案件更新
+router.patch('/api/prospects/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Bad request', message: '無効なIDです' });
+    const { updateProspectSchema } = await import('../../shared/production-schema.js');
+    const validation = updateProspectSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ error: 'Validation error', details: validation.error.errors });
+    }
+    const updated = await dao.updateProspect(id, validation.data);
+    if (!updated) return res.status(404).json({ error: 'Not found', message: '見込み案件が見つかりません' });
+    const prospect = await dao.getProspectById(id);
+    res.json({ data: prospect });
+  } catch (error: any) {
+    console.error('Prospect update error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to update prospect' });
+  }
+});
+
+// DELETE /api/prospects/:id - 見込み案件削除
+router.delete('/api/prospects/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Bad request', message: '無効なIDです' });
+    const prospect = await dao.getProspectById(id);
+    if (!prospect) return res.status(404).json({ error: 'Not found', message: '見込み案件が見つかりません' });
+    await dao.deleteProspect(id);
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('Prospect delete error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to delete prospect' });
+  }
+});
+
+// POST /api/prospects/:id/convert - 受注転換（AランクのみOrdersに登録）
+router.post('/api/prospects/:id/convert', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Bad request', message: '無効なIDです' });
+    const orderId = await dao.convertProspectToOrder(id);
+    res.json({ data: { order_id: orderId, message: '受注転換が完了しました' } });
+  } catch (error: any) {
+    console.error('Prospect convert error:', error);
+    const status = error.message.includes('見つかりません') ? 404
+      : error.message.includes('すでに受注済み') || error.message.includes('Aランクのみ') ? 400
+      : 500;
+    res.status(status).json({ error: 'Convert failed', message: error.message });
   }
 });
 

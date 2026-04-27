@@ -717,3 +717,38 @@ export interface CostAggregationResponse {
   total_outsourcing_cost: number;
   total_cost: number;
 }
+
+// ========== Prospects (見込み案件) ==========
+// 受注状況管理 - 見込み案件のA/B/Cランク管理
+
+export const prospects = sqliteTable("prospects", {
+  id: integer("id").primaryKey(),
+  deal_name: text("deal_name").notNull(),             // 案件名
+  customer_id: integer("customer_id"),               // customers_master への外部参照（任意）
+  rank: text("rank", { enum: ["A", "B", "C"] }).notNull().default("C"), // ランク
+  expected_amount: real("expected_amount"),           // 期待金額
+  expected_order_date: text("expected_order_date"),  // 期待受注日（Aランクのみ）
+  manager: text("manager"),                          // 担当者
+  notes: text("notes"),                              // メモ（次アクション・備考）
+  status: text("status", { enum: ["active", "won", "lost"] }).notNull().default("active"), // ステータス
+  created_at: text("created_at").notNull(),
+});
+
+export const insertProspectSchema = createInsertSchema(prospects).omit({
+  id: true,
+  created_at: true,
+}).extend({
+  deal_name: z.string().min(1, "案件名は必須です"),
+  customer_id: z.coerce.number().int().positive().optional().nullable(),
+  rank: z.enum(["A", "B", "C"]).default("C"),
+  expected_amount: z.coerce.number().min(0).optional().nullable(),
+  expected_order_date: z.string().optional().nullable(),
+  manager: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.enum(["active", "won", "lost"]).default("active"),
+});
+
+export const updateProspectSchema = insertProspectSchema.partial();
+
+export type Prospect = typeof prospects.$inferSelect;
+export type InsertProspect = z.infer<typeof insertProspectSchema>;
