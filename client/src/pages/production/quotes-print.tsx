@@ -128,21 +128,7 @@ export default function QuotesPrint() {
         </button>
       </div>
 
-      <div style={{ maxWidth: "210mm", margin: "0 auto", padding: "20px 20px", background: "#fff", position: "relative" }}>
-        {/* 印鑑 — 用紙の右上に固定。登録番号テキストと被らないよう右列に paddingRight を設定 */}
-        <img
-          src={sealImage}
-          alt="印鑑"
-          style={{
-            position: "absolute",
-            top: "20px",
-            right: "20px",
-            width: "80px",
-            height: "80px",
-            objectFit: "contain",
-            opacity: 0.85,
-          }}
-        />
+      <div style={{ maxWidth: "210mm", margin: "0 auto", padding: "20px 20px", background: "#fff" }}>
         <div style={{ textAlign: "center", marginBottom: "12px" }}>
           <h1 style={{ fontSize: "20px", fontWeight: "bold", letterSpacing: "4px", margin: 0 }}>
             御　見　積　書
@@ -166,7 +152,20 @@ export default function QuotesPrint() {
             )}
           </div>
 
-          <div style={{ textAlign: "right", marginTop: "88px" }}>
+          <div style={{ textAlign: "right" }}>
+            {/* 印鑑を右列の最上部に配置 */}
+            <div style={{ marginBottom: "6px" }}>
+              <img
+                src={sealImage}
+                alt="印鑑"
+                style={{
+                  width: "76px",
+                  height: "76px",
+                  objectFit: "contain",
+                  opacity: 0.85,
+                }}
+              />
+            </div>
             <div style={{ fontSize: "10px", color: "#555", marginBottom: "2px" }}>
               登録番号　{COMPANY_INFO.registration_no}
             </div>
