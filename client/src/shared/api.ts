@@ -45,6 +45,8 @@ export const FACTORY_LABELS: Record<string, string> = {
 interface SalesOrderParams {
   from?: string;
   to?: string;
+  due_from?: string;
+  due_to?: string;
   q?: string;
   status?: string;
   factory?: string;
@@ -121,6 +123,8 @@ export async function listSalesOrders(params: SalesOrderParams = {}): Promise<Sa
   
   if (params.from) searchParams.append('from', params.from);
   if (params.to) searchParams.append('to', params.to);
+  if (params.due_from) searchParams.append('due_from', params.due_from);
+  if (params.due_to) searchParams.append('due_to', params.due_to);
   if (params.q) searchParams.append('q', params.q);
   if (params.status) searchParams.append('status', params.status);
   if (params.factory) searchParams.append('factory', params.factory);

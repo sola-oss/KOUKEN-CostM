@@ -20,8 +20,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronsUpDown, FolderOpen, List, ChevronRight, ChevronDown, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { listOrders, type Order } from "@/shared/production-api";
 import { FACTORY_LABELS } from "@/shared/api";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -104,6 +105,190 @@ function StatusIconCluster({ is_delivered, has_shipping_fee, is_amount_confirmed
   );
 }
 
+// ========== YEAR/MONTH FOLDER VIEW ==========
+
+function YearMonthFolderView({
+  orders,
+  onRowClick,
+  onEdit,
+  onDelete,
+  togglingDeliveredId,
+  onToggleDelivered,
+  newlyCreatedOrderId,
+  formatCurrency,
+}: {
+  orders: Order[];
+  onRowClick: (id: string) => void;
+  onEdit: (order: Order, e: React.MouseEvent) => void;
+  onDelete: (id: string, e: React.MouseEvent) => void;
+  togglingDeliveredId: string | null;
+  onToggleDelivered: (id: string, value: boolean) => void;
+  newlyCreatedOrderId: string | null;
+  formatCurrency: (v: number | null) => string;
+}) {
+  const grouped = useMemo(() => {
+    const map: Record<string, Record<string, Order[]>> = {};
+    for (const order of orders) {
+      const raw = order.due_date || order.order_date;
+      if (!raw) continue;
+      const d = new Date(raw);
+      const year = d.getFullYear().toString();
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      if (!map[year]) map[year] = {};
+      if (!map[year][month]) map[year][month] = [];
+      map[year][month].push(order);
+    }
+    return map;
+  }, [orders]);
+
+  const sortedYears = useMemo(() => Object.keys(grouped).sort((a, b) => b.localeCompare(a)), [grouped]);
+
+  const latestYear = sortedYears[0] || null;
+  const latestMonth = latestYear
+    ? Object.keys(grouped[latestYear]).sort((a, b) => b.localeCompare(a))[0]
+    : null;
+
+  const [openYears, setOpenYears] = useState<Record<string, boolean>>(
+    latestYear ? { [latestYear]: true } : {}
+  );
+  const [openMonths, setOpenMonths] = useState<Record<string, boolean>>(
+    latestYear && latestMonth ? { [`${latestYear}-${latestMonth}`]: true } : {}
+  );
+
+  useEffect(() => {
+    const newLatestYear = Object.keys(grouped).sort((a, b) => b.localeCompare(a))[0] || null;
+    const newLatestMonth = newLatestYear
+      ? Object.keys(grouped[newLatestYear]).sort((a, b) => b.localeCompare(a))[0]
+      : null;
+    setOpenYears(newLatestYear ? { [newLatestYear]: true } : {});
+    setOpenMonths(newLatestYear && newLatestMonth ? { [`${newLatestYear}-${newLatestMonth}`]: true } : {});
+  }, [grouped]);
+
+  if (orders.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center text-muted-foreground py-12">
+        <Package className="h-8 w-8 mb-2" />
+        <p>該当する受注がありません</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {sortedYears.map((year) => {
+        const yearOpen = !!openYears[year];
+        const months = Object.keys(grouped[year]).sort((a, b) => b.localeCompare(a));
+        const yearTotal = months.reduce((sum, m) => sum + grouped[year][m].length, 0);
+        return (
+          <Collapsible key={year} open={yearOpen} onOpenChange={() => setOpenYears(p => ({ ...p, [year]: !p[year] }))}>
+            <CollapsibleTrigger asChild>
+              <button className="flex items-center gap-2 w-full px-4 py-3 rounded-md bg-muted/60 hover-elevate text-left">
+                {yearOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+                <FolderOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <span className="font-semibold">{year}年</span>
+                <span className="text-sm text-muted-foreground ml-1">({yearTotal}件)</span>
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="ml-6 mt-1 space-y-1">
+                {months.map((month) => {
+                  const key = `${year}-${month}`;
+                  const monthOpen = !!openMonths[key];
+                  const monthOrders = grouped[year][month];
+                  return (
+                    <Collapsible key={month} open={monthOpen} onOpenChange={() => setOpenMonths(p => ({ ...p, [key]: !p[key] }))}>
+                      <CollapsibleTrigger asChild>
+                        <button className="flex items-center gap-2 w-full px-4 py-2 rounded-md hover-elevate text-left">
+                          {monthOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+                          <FolderOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="font-medium">{parseInt(month)}月</span>
+                          <span className="text-sm text-muted-foreground ml-1">({monthOrders.length}件)</span>
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="ml-4 mt-1 mb-2 border rounded-md overflow-hidden">
+                          <Table>
+                            <TableHeader className="bg-muted/50">
+                              <TableRow>
+                                <TableHead className="w-[110px]">受注番号</TableHead>
+                                <TableHead>受注日</TableHead>
+                                <TableHead>得意先</TableHead>
+                                <TableHead>品名</TableHead>
+                                <TableHead>納期</TableHead>
+                                <TableHead className="text-right">受注金額</TableHead>
+                                <TableHead>工事</TableHead>
+                                <TableHead className="text-center w-[60px]">納品</TableHead>
+                                <TableHead className="text-right w-[80px]">操作</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {monthOrders.map((order) => (
+                                <TableRow
+                                  key={order.order_id}
+                                  className={[
+                                    order.order_id === newlyCreatedOrderId ? 'bg-green-50 dark:bg-green-950/20' : '',
+                                    order.factory === 'laser' ? 'bg-violet-50 dark:bg-violet-950/30' : '',
+                                    order.factory === 'factory1' ? 'bg-sky-50 dark:bg-sky-950/30' : '',
+                                    order.factory === 'factory2' ? 'bg-emerald-50 dark:bg-emerald-950/30' : '',
+                                    order.factory === 'machine' ? 'bg-amber-50 dark:bg-amber-950/30' : '',
+                                    order.factory === 'outsource' ? 'bg-gray-50 dark:bg-gray-900/30' : '',
+                                  ].filter(Boolean).join(' ')}
+                                >
+                                  <TableCell className="font-medium">#{order.order_id}</TableCell>
+                                  <TableCell>{formatDate(order.order_date)}</TableCell>
+                                  <TableCell>{order.client_name || '-'}</TableCell>
+                                  <TableCell>{order.project_title || order.product_name || '-'}</TableCell>
+                                  <TableCell>{formatDate(order.due_date)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(order.estimated_amount)}</TableCell>
+                                  <TableCell>
+                                    {order.factory ? (
+                                      <Badge variant="secondary" className={
+                                        order.factory === 'laser' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100' :
+                                        order.factory === 'factory1' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100' :
+                                        order.factory === 'factory2' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100' :
+                                        order.factory === 'machine' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100' :
+                                        'bg-gray-100 text-gray-800'
+                                      }>
+                                        {FACTORY_LABELS[order.factory] || order.factory}
+                                      </Badge>
+                                    ) : <span className="text-muted-foreground text-sm">-</span>}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Checkbox
+                                      checked={!!order.is_delivered}
+                                      disabled={togglingDeliveredId === order.order_id}
+                                      onCheckedChange={(v) => onToggleDelivered(order.order_id, v === true)}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button variant="ghost" size="sm" onClick={(e) => onEdit(order, e)}>
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button variant="ghost" size="sm" onClick={(e) => { onRowClick(order.order_id); e.stopPropagation(); }}>
+                                        <Search className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        );
+      })}
+    </div>
+  );
+}
+
 // ========== MAIN COMPONENT ==========
 
 type SortField = 'order_id' | 'due_date' | 'estimated_amount';
@@ -120,6 +305,9 @@ export default function Projects() {
   const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [factoryFilter, setFactoryFilter] = useState<string>("all");
+  const [dueFrom, setDueFrom] = useState("");
+  const [dueTo, setDueTo] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "folder">("folder");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
@@ -235,12 +423,20 @@ export default function Projects() {
   // Sort orders (search is handled server-side)
   const filteredAndSortedOrders = useMemo(() => {
     // Apply factory filter client-side
-    const factoryFiltered = factoryFilter === "all"
+    let filtered = factoryFilter === "all"
       ? orders
       : orders.filter(o => (o.factory ?? null) === (factoryFilter === "none" ? null : factoryFilter));
 
+    // Apply due date filter client-side
+    if (dueFrom) {
+      filtered = filtered.filter(o => o.due_date && o.due_date.slice(0, 10) >= dueFrom);
+    }
+    if (dueTo) {
+      filtered = filtered.filter(o => o.due_date && o.due_date.slice(0, 10) <= dueTo);
+    }
+
     // Apply sorting with null-safe comparators (nulls always sort to bottom)
-    const sorted = [...factoryFiltered].sort((a, b) => {
+    const sorted = [...filtered].sort((a, b) => {
       let compareValue = 0;
       
       // Determine null sentinel: +Infinity for asc, -Infinity for desc
@@ -265,7 +461,7 @@ export default function Projects() {
     });
 
     return sorted;
-  }, [orders, sortConfig, factoryFilter]);
+  }, [orders, sortConfig, factoryFilter, dueFrom, dueTo]);
 
   // Clear highlight when search query changes
   useEffect(() => {
@@ -512,49 +708,119 @@ export default function Projects() {
       </div>
 
       {/* Search Bar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="受注番号・客先名・件名で検索..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearchQuery(inputValue);
-              }
-            }}
-            className="pl-9"
-            data-testid="input-search"
-          />
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="受注番号・客先名・件名で検索..."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setSearchQuery(inputValue);
+                }
+              }}
+              className="pl-9"
+              data-testid="input-search"
+            />
+          </div>
+          <Button
+            variant="default"
+            onClick={() => setSearchQuery(inputValue)}
+            data-testid="button-search"
+          >
+            検索
+          </Button>
+          <Select value={factoryFilter} onValueChange={setFactoryFilter}>
+            <SelectTrigger className="w-[140px]" data-testid="select-factory-filter">
+              <SelectValue placeholder="工事" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">すべての工事</SelectItem>
+              <SelectItem value="laser">レーザー工場</SelectItem>
+              <SelectItem value="factory1">1工場</SelectItem>
+              <SelectItem value="factory2">2工場</SelectItem>
+              <SelectItem value="machine">機械加工場</SelectItem>
+              <SelectItem value="outsource">外注製作</SelectItem>
+              <SelectItem value="none">未設定</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Button
-          variant="default"
-          onClick={() => {
-            setSearchQuery(inputValue);
-          }}
-          data-testid="button-search"
-        >
-          検索
-        </Button>
-        <Select value={factoryFilter} onValueChange={setFactoryFilter}>
-          <SelectTrigger className="w-[140px]" data-testid="select-factory-filter">
-            <SelectValue placeholder="工事" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">すべての工事</SelectItem>
-            <SelectItem value="laser">レーザー工場</SelectItem>
-            <SelectItem value="factory1">1工場</SelectItem>
-            <SelectItem value="factory2">2工場</SelectItem>
-            <SelectItem value="machine">機械加工場</SelectItem>
-            <SelectItem value="outsource">外注製作</SelectItem>
-            <SelectItem value="none">未設定</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Due Date Filter Row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">納期：</span>
+          <Input
+            type="date"
+            value={dueFrom}
+            onChange={(e) => setDueFrom(e.target.value)}
+            className="w-[150px]"
+            data-testid="input-due-from"
+          />
+          <span className="text-sm text-muted-foreground">〜</span>
+          <Input
+            type="date"
+            value={dueTo}
+            onChange={(e) => setDueTo(e.target.value)}
+            className="w-[150px]"
+            data-testid="input-due-to"
+          />
+          {(dueFrom || dueTo) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setDueFrom(""); setDueTo(""); }}
+              data-testid="button-clear-due-filter"
+            >
+              <Filter className="h-3 w-3 mr-1" />
+              クリア
+            </Button>
+          )}
+          {/* View mode toggle */}
+          <div className="ml-auto flex items-center gap-1 rounded-md border p-1">
+            <Button
+              variant={viewMode === "folder" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("folder")}
+              data-testid="button-view-folder"
+            >
+              <FolderOpen className="h-4 w-4 mr-1" />
+              年月フォルダ
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+              data-testid="button-view-list"
+            >
+              <List className="h-4 w-4 mr-1" />
+              リスト
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Orders Table */}
       <Card>
+        {/* Count row */}
+        <div className="px-4 py-2 border-b text-sm text-muted-foreground">
+          {filteredAndSortedOrders.length}件
+        </div>
+
+        {viewMode === "folder" ? (
+          <div className="p-4">
+            <YearMonthFolderView
+              orders={filteredAndSortedOrders}
+              onRowClick={handleRowClick}
+              onEdit={handleEditOrder}
+              onDelete={handleDelete}
+              togglingDeliveredId={togglingDeliveredId}
+              onToggleDelivered={(id, v) => toggleDeliveredMutation.mutate({ orderId: id, is_delivered: v })}
+              newlyCreatedOrderId={newlyCreatedOrderId}
+              formatCurrency={formatCurrency}
+            />
+          </div>
+        ) : (
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
@@ -736,6 +1002,7 @@ export default function Projects() {
             )}
           </TableBody>
         </Table>
+        )}
       </Card>
 
       {/* Total count */}

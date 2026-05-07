@@ -19,6 +19,8 @@ router.get('/sales-orders', validateAccessCode, async (req, res) => {
       status = 'all',
       from,
       to,
+      due_from,
+      due_to,
       q,
       factory
     } = req.query;
@@ -52,6 +54,16 @@ router.get('/sales-orders', validateAccessCode, async (req, res) => {
     if (factory && factory !== 'all') {
       whereConditions.push('factory = ?');
       params.push(factory);
+    }
+
+    if (due_from) {
+      whereConditions.push('due_date >= ?');
+      params.push(due_from as string);
+    }
+
+    if (due_to) {
+      whereConditions.push('due_date <= ?');
+      params.push(due_to as string);
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
