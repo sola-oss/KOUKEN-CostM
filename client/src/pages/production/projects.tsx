@@ -222,7 +222,7 @@ function YearMonthFolderView({
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {[...monthOrders].sort((a, b) => a.order_id.localeCompare(b.order_id, 'ja')).map((order) => (
+                              {[...monthOrders].sort((a, b) => b.order_id.localeCompare(a.order_id, 'ja')).map((order) => (
                                 <TableRow
                                   key={order.order_id}
                                   className={[
