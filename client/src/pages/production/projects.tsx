@@ -116,6 +116,7 @@ function YearMonthFolderView({
   onToggleDelivered,
   newlyCreatedOrderId,
   formatCurrency,
+  groupBy,
 }: {
   orders: Order[];
   onRowClick: (id: string) => void;
@@ -125,11 +126,14 @@ function YearMonthFolderView({
   onToggleDelivered: (id: string, value: boolean) => void;
   newlyCreatedOrderId: string | null;
   formatCurrency: (v: number | null) => string;
+  groupBy: "order_date" | "due_date";
 }) {
   const grouped = useMemo(() => {
     const map: Record<string, Record<string, Order[]>> = {};
     for (const order of orders) {
-      const raw = order.due_date || order.order_date;
+      const raw = groupBy === "order_date"
+        ? (order.order_date || order.due_date)
+        : (order.due_date || order.order_date);
       if (!raw) continue;
       const d = new Date(raw);
       const year = d.getFullYear().toString();
@@ -139,7 +143,7 @@ function YearMonthFolderView({
       map[year][month].push(order);
     }
     return map;
-  }, [orders]);
+  }, [orders, groupBy]);
 
   const sortedYears = useMemo(() => Object.keys(grouped).sort((a, b) => b.localeCompare(a)), [grouped]);
 
@@ -222,7 +226,7 @@ function YearMonthFolderView({
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {monthOrders.map((order) => (
+                              {[...monthOrders].sort((a, b) => a.order_id.localeCompare(b.order_id, 'ja')).map((order) => (
                                 <TableRow
                                   key={order.order_id}
                                   className={[
@@ -308,6 +312,7 @@ export default function Projects() {
   const [dueFrom, setDueFrom] = useState("");
   const [dueTo, setDueTo] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "folder">("folder");
+  const [folderGroupBy, setFolderGroupBy] = useState<"order_date" | "due_date">("order_date");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
@@ -776,6 +781,27 @@ export default function Projects() {
               クリア
             </Button>
           )}
+          {/* Folder groupBy toggle (visible only in folder mode) */}
+          {viewMode === "folder" && (
+            <div className="flex items-center gap-1 rounded-md border p-1">
+              <Button
+                variant={folderGroupBy === "order_date" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setFolderGroupBy("order_date")}
+                data-testid="button-group-order-date"
+              >
+                受注日
+              </Button>
+              <Button
+                variant={folderGroupBy === "due_date" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setFolderGroupBy("due_date")}
+                data-testid="button-group-due-date"
+              >
+                納期
+              </Button>
+            </div>
+          )}
           {/* View mode toggle */}
           <div className="ml-auto flex items-center gap-1 rounded-md border p-1">
             <Button
@@ -818,6 +844,7 @@ export default function Projects() {
               onToggleDelivered={(id, v) => toggleDeliveredMutation.mutate({ orderId: id, is_delivered: v })}
               newlyCreatedOrderId={newlyCreatedOrderId}
               formatCurrency={formatCurrency}
+              groupBy={folderGroupBy}
             />
           </div>
         ) : (
