@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -57,6 +57,7 @@ export default function MaterialCostsPage() {
   const { toast } = useToast();
   const [editingRow, setEditingRow] = useState<MaterialCost | null>(null);
   const [orderComboOpen, setOrderComboOpen] = useState(false);
+  const [filterOrderId, setFilterOrderId] = useState("");
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -170,6 +171,18 @@ export default function MaterialCostsPage() {
 
   const selectedOrder = orders.find((o) => o.order_id === form.watch("order_id"));
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  const filteredRows = useMemo(() =>
+    filterOrderId.trim()
+      ? rows.filter(r => r.order_id.toLowerCase().includes(filterOrderId.trim().toLowerCase()))
+      : rows,
+    [rows, filterOrderId]
+  );
+
+  const filteredTotal = useMemo(() =>
+    filteredRows.reduce((sum, r) => sum + Number(r.total_amount), 0),
+    [filteredRows]
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -305,7 +318,18 @@ export default function MaterialCostsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">登録済み材料費</CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle className="text-base">登録済み材料費</CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">受注番号で絞り込み</span>
+              <Input
+                value={filterOrderId}
+                onChange={(e) => setFilterOrderId(e.target.value)}
+                placeholder="例: ko130843"
+                className="w-[180px]"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -318,48 +342,60 @@ export default function MaterialCostsPage() {
               <p>まだ材料費が登録されていません</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>受注番号</TableHead>
-                  <TableHead>明細</TableHead>
-                  <TableHead className="text-right">合計金額</TableHead>
-                  <TableHead>登録日時</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.order_id}</TableCell>
-                    <TableCell className="text-muted-foreground">{row.description || "-"}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(row.total_amount)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {new Date(row.created_at).toLocaleDateString("ja-JP")}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 justify-end">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleEdit(row)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => deleteMutation.mutate(row.id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <>
+              <div className="flex justify-end mb-2">
+                <span className="text-sm text-muted-foreground">
+                  {filterOrderId.trim() ? "絞り込み合計：" : "全件合計："}
+                  <span className="font-medium text-foreground">{formatCurrency(filteredTotal)}</span>
+                </span>
+              </div>
+              {filteredRows.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">該当なし</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>受注番号</TableHead>
+                      <TableHead>明細</TableHead>
+                      <TableHead className="text-right">合計金額</TableHead>
+                      <TableHead>登録日時</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRows.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-medium">{row.order_id}</TableCell>
+                        <TableCell className="text-muted-foreground">{row.description || "-"}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(row.total_amount)}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {new Date(row.created_at).toLocaleDateString("ja-JP")}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleEdit(row)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => deleteMutation.mutate(row.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
