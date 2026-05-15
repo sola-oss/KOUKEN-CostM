@@ -193,7 +193,7 @@ export default function MaterialCostsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{editingRow ? "材料費を編集" : "材料費を登録"}</CardTitle>
+          <CardTitle className="text-base">{editingRow ? "購入費を編集" : "購入費を登録"}</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
