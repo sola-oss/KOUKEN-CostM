@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -86,6 +86,7 @@ export default function TaskManagement() {
   const { toast } = useToast();
   const [orderComboOpen, setOrderComboOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [filterOrderId, setFilterOrderId] = useState("");
 
   // ─── Data fetching ────────────────────
 
@@ -117,6 +118,20 @@ export default function TaskManagement() {
 
   // Sort work logs by date desc
   const sortedLogs = [...workLogs].sort((a, b) => b.date.localeCompare(a.date));
+
+  const filteredLogs = useMemo(() =>
+    filterOrderId.trim()
+      ? sortedLogs.filter(log =>
+          (log.order_id ?? "").toLowerCase().includes(filterOrderId.trim().toLowerCase())
+        )
+      : sortedLogs,
+    [sortedLogs, filterOrderId]
+  );
+
+  const filteredTotalHours = useMemo(() =>
+    filteredLogs.reduce((sum, log) => sum + (log.duration_hours ?? 0), 0),
+    [filteredLogs]
+  );
 
   // ─── Form ─────────────────────────────
 
@@ -368,7 +383,18 @@ export default function TaskManagement() {
       {/* ── 実績一覧 ── */}
       <Card>
         <CardHeader>
-          <CardTitle>実績一覧</CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle>実績一覧</CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">受注番号で絞り込み</span>
+              <Input
+                value={filterOrderId}
+                onChange={(e) => setFilterOrderId(e.target.value)}
+                placeholder="例: ko130843"
+                className="w-[180px]"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -380,47 +406,61 @@ export default function TaskManagement() {
           ) : sortedLogs.length === 0 ? (
             <p className="p-6 text-center text-muted-foreground text-sm">実績データがありません</p>
           ) : (
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead>作業日</TableHead>
-                  <TableHead>受注番号</TableHead>
-                  <TableHead>作業名</TableHead>
-                  <TableHead>作業者</TableHead>
-                  <TableHead className="text-right">実績時間</TableHead>
-                  <TableHead>メモ</TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="whitespace-nowrap">{log.date}</TableCell>
-                    <TableCell className="font-mono text-sm whitespace-nowrap">{log.order_id || "-"}</TableCell>
-                    <TableCell className="text-sm">{log.task_name || "-"}</TableCell>
-                    <TableCell>{log.worker}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {log.duration_hours > 0
-                        ? `${log.duration_hours % 1 === 0 ? log.duration_hours : log.duration_hours.toFixed(2)}h`
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="max-w-[200px] truncate text-muted-foreground text-sm">
-                      {log.memo || ""}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeletingId(log.id)}
-                        data-testid={`button-delete-log-${log.id}`}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <>
+              <div className="flex justify-end px-4 py-2 text-sm text-muted-foreground border-b">
+                合計実績時間：
+                <span className="font-medium text-foreground ml-1">
+                  {filteredTotalHours % 1 === 0
+                    ? `${filteredTotalHours}h`
+                    : `${filteredTotalHours.toFixed(2)}h`}
+                </span>
+              </div>
+              {filteredLogs.length === 0 ? (
+                <p className="p-6 text-center text-muted-foreground text-sm">該当なし</p>
+              ) : (
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead>作業日</TableHead>
+                      <TableHead>受注番号</TableHead>
+                      <TableHead>作業名</TableHead>
+                      <TableHead>作業者</TableHead>
+                      <TableHead className="text-right">実績時間</TableHead>
+                      <TableHead>メモ</TableHead>
+                      <TableHead className="w-12"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="whitespace-nowrap">{log.date}</TableCell>
+                        <TableCell className="font-mono text-sm whitespace-nowrap">{log.order_id || "-"}</TableCell>
+                        <TableCell className="text-sm">{log.task_name || "-"}</TableCell>
+                        <TableCell>{log.worker}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {log.duration_hours > 0
+                            ? `${log.duration_hours % 1 === 0 ? log.duration_hours : log.duration_hours.toFixed(2)}h`
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate text-muted-foreground text-sm">
+                          {log.memo || ""}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeletingId(log.id)}
+                            data-testid={`button-delete-log-${log.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
