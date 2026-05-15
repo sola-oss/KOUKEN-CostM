@@ -168,14 +168,6 @@ export default function MaterialCostsPage() {
   const formatCurrency = (val: string | number) =>
     new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(Number(val));
 
-  const [filterOrderId, setFilterOrderId] = useState("");
-
-  const filteredCosts = filterOrderId.trim()
-    ? rows.filter((r) => r.order_id.includes(filterOrderId.trim()))
-    : rows;
-
-  const filteredTotal = filteredCosts.reduce((sum, r) => sum + Number(r.total_amount), 0);
-
   const selectedOrder = orders.find((o) => o.order_id === form.watch("order_id"));
   const isPending = createMutation.isPending || updateMutation.isPending;
 
@@ -315,28 +307,7 @@ export default function MaterialCostsPage() {
         <CardHeader>
           <CardTitle className="text-base">登録済み材料費</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-48">
-              <label htmlFor="filter-order-id" className="text-sm font-medium whitespace-nowrap">
-                受注番号で絞り込み
-              </label>
-              <Input
-                id="filter-order-id"
-                value={filterOrderId}
-                onChange={(e) => setFilterOrderId(e.target.value)}
-                placeholder="受注番号を入力..."
-                className="max-w-48"
-              />
-            </div>
-            <span className="text-sm font-medium text-muted-foreground">
-              絞り込み合計：
-              <span className="text-foreground font-semibold ml-1">
-                {formatCurrency(filteredTotal)}
-              </span>
-            </span>
-          </div>
-
+        <CardContent>
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -345,10 +316,6 @@ export default function MaterialCostsPage() {
             <div className="text-center py-12 text-muted-foreground">
               <Receipt className="h-10 w-10 mx-auto mb-3 opacity-40" />
               <p>まだ材料費が登録されていません</p>
-            </div>
-          ) : filteredCosts.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>該当する受注番号の明細が見つかりません</p>
             </div>
           ) : (
             <Table>
@@ -362,7 +329,7 @@ export default function MaterialCostsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCosts.map((row) => (
+                {rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">{row.order_id}</TableCell>
                     <TableCell className="text-muted-foreground">{row.description || "-"}</TableCell>
