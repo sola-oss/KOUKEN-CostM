@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronsUpDown, Check, Receipt, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { ChevronsUpDown, Check, Receipt, Plus, Pencil, Trash2, Loader2, List, BarChart2, ChevronRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Form,
@@ -68,6 +68,20 @@ export default function MaterialCostsPage() {
   const [editingRow, setEditingRow] = useState<MaterialCost | null>(null);
   const [orderComboOpen, setOrderComboOpen] = useState(false);
   const [filterOrderId, setFilterOrderId] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (orderId: string) => {
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -204,6 +218,20 @@ export default function MaterialCostsPage() {
     filteredRows.reduce((sum, r) => sum + Number(r.total_amount), 0),
     [filteredRows]
   );
+
+  const groupedRows = useMemo(() => {
+    const map = new Map<string, { order_id: string; count: number; total: number }>();
+    filteredRows.forEach((r) => {
+      const existing = map.get(r.order_id);
+      if (existing) {
+        existing.count += 1;
+        existing.total += Number(r.total_amount);
+      } else {
+        map.set(r.order_id, { order_id: r.order_id, count: 1, total: Number(r.total_amount) });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [filteredRows]);
 
   return (
     <div className="p-6 space-y-6">
@@ -371,14 +399,36 @@ export default function MaterialCostsPage() {
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle className="text-base">登録済み材料費</CardTitle>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground whitespace-nowrap">受注番号で絞り込み</span>
-              <Input
-                value={filterOrderId}
-                onChange={(e) => setFilterOrderId(e.target.value)}
-                placeholder="例: ko130843"
-                className="w-[180px]"
-              />
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1 border rounded-md p-0.5">
+                <Button
+                  size="sm"
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  onClick={() => setViewMode("list")}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <List className="h-3.5 w-3.5" />
+                  明細一覧
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "grouped" ? "default" : "ghost"}
+                  onClick={() => setViewMode("grouped")}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  受注別集計
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground whitespace-nowrap">受注番号で絞り込み</span>
+                <Input
+                  value={filterOrderId}
+                  onChange={(e) => setFilterOrderId(e.target.value)}
+                  placeholder="例: ko130843"
+                  className="w-[180px]"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -402,6 +452,55 @@ export default function MaterialCostsPage() {
               </div>
               {filteredRows.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">該当なし</div>
+              ) : viewMode === "grouped" ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>受注番号</TableHead>
+                      <TableHead className="text-right">件数</TableHead>
+                      <TableHead className="text-right">合計金額</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groupedRows.map((row) => {
+                      const isExpanded = expandedOrders.has(row.order_id);
+                      const details = filteredRows.filter((r) => r.order_id === row.order_id);
+                      return (
+                        <>
+                          <TableRow
+                            key={row.order_id}
+                            className="cursor-pointer hover-elevate"
+                            onClick={() => toggleExpanded(row.order_id)}
+                          >
+                            <TableCell className="pr-0">
+                              {isExpanded
+                                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            </TableCell>
+                            <TableCell className="font-medium">{row.order_id}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">{row.count}</TableCell>
+                            <TableCell className="text-right font-medium">{formatCurrency(row.total)}</TableCell>
+                          </TableRow>
+                          {isExpanded && details.map((detail) => (
+                            <TableRow key={detail.id} className="bg-muted/40">
+                              <TableCell />
+                              <TableCell className="text-muted-foreground text-sm pl-4">
+                                {detail.vendor_name || <span className="opacity-50">業者なし</span>}
+                              </TableCell>
+                              <TableCell colSpan={1} className="text-muted-foreground text-sm">
+                                {detail.description || <span className="opacity-50">-</span>}
+                              </TableCell>
+                              <TableCell className="text-right text-sm font-medium">
+                                {formatCurrency(detail.total_amount)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               ) : (
                 <Table>
                   <TableHeader>
