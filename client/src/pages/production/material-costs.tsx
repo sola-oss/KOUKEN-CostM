@@ -253,7 +253,7 @@ export default function MaterialCostsPage() {
                   control={form.control}
                   name="order_id"
                   render={({ field }) => (
-                    <FormItem className="flex flex-col">
+                    <FormItem>
                       <FormLabel>受注番号 *</FormLabel>
                       <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
                         <PopoverTrigger asChild>
@@ -261,7 +261,7 @@ export default function MaterialCostsPage() {
                             <Button
                               variant="outline"
                               role="combobox"
-                              className={cn("justify-between font-normal", !field.value && "text-muted-foreground")}
+                              className={cn("w-full justify-between font-normal", !field.value && "text-muted-foreground")}
                             >
                               {field.value
                                 ? `${field.value}${selectedOrder?.client_name ? ` / ${selectedOrder.client_name}` : ""}${(selectedOrder?.project_title || selectedOrder?.product_name) ? ` / ${selectedOrder?.project_title || selectedOrder?.product_name}` : ""}`
@@ -312,7 +312,7 @@ export default function MaterialCostsPage() {
                   control={form.control}
                   name="vendor_id"
                   render={({ field }) => (
-                    <FormItem className="flex flex-col">
+                    <FormItem>
                       <FormLabel>業者</FormLabel>
                       <Select
                         value={field.value != null ? String(field.value) : "none"}

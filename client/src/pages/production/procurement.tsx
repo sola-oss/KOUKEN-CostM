@@ -82,7 +82,7 @@ function ProcurementForm({
             control={form.control}
             name="order_id"
             render={({ field }) => (
-              <FormItem className="flex flex-col">
+              <FormItem>
                 <FormLabel>受注番号 *</FormLabel>
                 <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
                   <PopoverTrigger asChild>
