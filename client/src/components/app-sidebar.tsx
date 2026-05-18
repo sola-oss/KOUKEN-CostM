@@ -39,7 +39,7 @@ const orderPlanningItems = [
 // Section 2: 現場実績
 const fieldWorkItems = [
   { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
-  { title: "購入費入力", url: "/material-costs", icon: Receipt },
+  { title: "材料費入力", url: "/material-costs", icon: Receipt },
   { title: "発注管理", url: "/procurement", icon: ClipboardList }
 ];
 

@@ -188,12 +188,12 @@ export default function MaterialCostsPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
         <Receipt className="h-8 w-8 text-primary" />
-        <h1 className="text-2xl font-bold">購入費入力</h1>
+        <h1 className="text-2xl font-bold">材料費入力</h1>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{editingRow ? "購入費を編集" : "購入費を登録"}</CardTitle>
+          <CardTitle className="text-base">{editingRow ? "材料費を編集" : "材料費を登録"}</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
