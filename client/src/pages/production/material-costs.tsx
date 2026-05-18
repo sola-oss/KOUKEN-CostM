@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -467,9 +467,8 @@ export default function MaterialCostsPage() {
                       const isExpanded = expandedOrders.has(row.order_id);
                       const details = filteredRows.filter((r) => r.order_id === row.order_id);
                       return (
-                        <>
+                        <React.Fragment key={row.order_id}>
                           <TableRow
-                            key={row.order_id}
                             className="cursor-pointer hover-elevate"
                             onClick={() => toggleExpanded(row.order_id)}
                           >
@@ -496,7 +495,7 @@ export default function MaterialCostsPage() {
                               </TableCell>
                             </TableRow>
                           ))}
-                        </>
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>
