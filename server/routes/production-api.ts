@@ -2321,7 +2321,18 @@ router.get('/api/material-costs', async (req, res) => {
       .select()
       .from(material_costs)
       .orderBy(desc(material_costs.created_at));
-    res.json({ data: rows });
+    // 業者名をSupabaseから結合（クロスDB）
+    const vendorIds = [...new Set(rows.map(r => r.vendor_id).filter(Boolean))] as number[];
+    let vendorMap: Record<number, string> = {};
+    if (vendorIds.length > 0) {
+      const vendors = await dao.getVendorsMaster(true);
+      vendors.forEach(v => { vendorMap[v.id] = v.name; });
+    }
+    const data = rows.map(r => ({
+      ...r,
+      vendor_name: r.vendor_id ? (vendorMap[r.vendor_id] ?? null) : null,
+    }));
+    res.json({ data });
   } catch (error: any) {
     console.error('Get material costs error:', error);
     res.status(500).json({ error: 'Internal server error', message: 'Failed to fetch material costs' });
@@ -2331,13 +2342,18 @@ router.get('/api/material-costs', async (req, res) => {
 // POST /api/material-costs - 材料費登録
 router.post('/api/material-costs', async (req, res) => {
   try {
-    const { order_id, description, total_amount } = req.body;
+    const { order_id, description, total_amount, vendor_id } = req.body;
     if (!order_id || total_amount == null) {
       return res.status(400).json({ error: 'Bad request', message: '受注番号と合計金額は必須です' });
     }
     const [row] = await db
       .insert(material_costs)
-      .values({ order_id, description: description || null, total_amount: String(total_amount) })
+      .values({
+        order_id,
+        description: description || null,
+        total_amount: String(total_amount),
+        vendor_id: vendor_id ? Number(vendor_id) : null,
+      })
       .returning();
     res.status(201).json({ data: row });
   } catch (error: any) {
@@ -2350,11 +2366,12 @@ router.post('/api/material-costs', async (req, res) => {
 router.patch('/api/material-costs/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { order_id, description, total_amount } = req.body;
+    const { order_id, description, total_amount, vendor_id } = req.body;
     const updates: Record<string, any> = {};
     if (order_id !== undefined) updates.order_id = order_id;
     if (description !== undefined) updates.description = description;
     if (total_amount !== undefined) updates.total_amount = String(total_amount);
+    if (vendor_id !== undefined) updates.vendor_id = vendor_id ? Number(vendor_id) : null;
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'Bad request', message: '更新フィールドがありません' });
     }

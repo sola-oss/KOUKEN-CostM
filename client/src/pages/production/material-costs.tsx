@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronsUpDown, Check, Receipt, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -37,11 +38,19 @@ interface Order {
   product_name: string | null;
 }
 
+interface Vendor {
+  id: number;
+  name: string;
+  is_active: boolean;
+}
+
 interface MaterialCost {
   id: number;
   order_id: string;
   description: string | null;
   total_amount: string;
+  vendor_id: number | null;
+  vendor_name: string | null;
   created_at: string;
 }
 
@@ -49,6 +58,7 @@ const schema = z.object({
   order_id: z.string({ required_error: "受注番号は必須です" }).min(1, "受注番号は必須です"),
   description: z.string().optional(),
   total_amount: z.coerce.number({ required_error: "合計金額は必須です" }).int("整数を入力してください").positive("0より大きい値を入力してください"),
+  vendor_id: z.number().nullable().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -65,6 +75,7 @@ export default function MaterialCostsPage() {
       order_id: "",
       description: "",
       total_amount: 0,
+      vendor_id: null,
     },
   });
 
@@ -76,6 +87,15 @@ export default function MaterialCostsPage() {
     },
   });
   const orders: Order[] = ordersResponse?.data || [];
+
+  const { data: vendorsData } = useQuery({
+    queryKey: ["/api/vendors-master"],
+    queryFn: async () => {
+      const res = await fetch("/api/vendors-master");
+      return res.json();
+    },
+  });
+  const vendors: Vendor[] = (vendorsData ?? []).filter((v: Vendor) => v.is_active);
 
   const { data: mcResponse, isLoading } = useQuery({
     queryKey: ["/api/material-costs"],
@@ -100,7 +120,7 @@ export default function MaterialCostsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/material-costs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cost-aggregation"] });
       toast({ title: "登録しました" });
-      form.reset({ order_id: "", description: "", total_amount: 0 });
+      form.reset({ order_id: "", description: "", total_amount: 0, vendor_id: null });
     },
     onError: () => {
       toast({ title: "エラー", description: "登録に失敗しました", variant: "destructive" });
@@ -122,7 +142,7 @@ export default function MaterialCostsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/cost-aggregation"] });
       toast({ title: "更新しました" });
       setEditingRow(null);
-      form.reset({ order_id: "", description: "", total_amount: 0 });
+      form.reset({ order_id: "", description: "", total_amount: 0, vendor_id: null });
     },
     onError: () => {
       toast({ title: "エラー", description: "更新に失敗しました", variant: "destructive" });
@@ -158,12 +178,13 @@ export default function MaterialCostsPage() {
       order_id: row.order_id,
       description: row.description || "",
       total_amount: parseInt(row.total_amount, 10),
+      vendor_id: row.vendor_id ?? null,
     });
   };
 
   const handleCancel = () => {
     setEditingRow(null);
-    form.reset({ order_id: "", description: "", total_amount: 0 });
+    form.reset({ order_id: "", description: "", total_amount: 0, vendor_id: null });
   };
 
   const formatCurrency = (val: string | number) =>
@@ -198,7 +219,7 @@ export default function MaterialCostsPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* 受注番号 */}
                 <FormField
                   control={form.control}
@@ -253,6 +274,36 @@ export default function MaterialCostsPage() {
                           </Command>
                         </PopoverContent>
                       </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* 業者 */}
+                <FormField
+                  control={form.control}
+                  name="vendor_id"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>業者</FormLabel>
+                      <Select
+                        value={field.value != null ? String(field.value) : "none"}
+                        onValueChange={(val) => field.onChange(val === "none" ? null : Number(val))}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="業者を選択（任意）" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">指定なし</SelectItem>
+                          {vendors.map((v) => (
+                            <SelectItem key={v.id} value={String(v.id)}>
+                              {v.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -356,6 +407,7 @@ export default function MaterialCostsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>受注番号</TableHead>
+                      <TableHead>業者</TableHead>
                       <TableHead>明細</TableHead>
                       <TableHead className="text-right">合計金額</TableHead>
                       <TableHead>登録日時</TableHead>
@@ -366,6 +418,7 @@ export default function MaterialCostsPage() {
                     {filteredRows.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell className="font-medium">{row.order_id}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{row.vendor_name || "-"}</TableCell>
                         <TableCell className="text-muted-foreground">{row.description || "-"}</TableCell>
                         <TableCell className="text-right font-medium">{formatCurrency(row.total_amount)}</TableCell>
                         <TableCell className="text-muted-foreground text-sm">

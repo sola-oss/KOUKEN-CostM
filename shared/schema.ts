@@ -63,6 +63,7 @@ export const material_costs = pgTable("material_costs", {
   order_id: text("order_id").notNull(),   // 受注番号（文字列型: ko130XXX）
   description: text("description"),        // 明細
   total_amount: decimal("total_amount", { precision: 12, scale: 0 }).notNull(), // 合計金額
+  vendor_id: integer("vendor_id"),         // 業者マスタID（Supabase vendors_master）
   created_at: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   orderIdx: index("idx_material_costs_order_id").on(table.order_id),
