@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,7 +37,10 @@ import {
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
-import { CheckSquare, Plus, Trash2, ChevronsUpDown, Check } from "lucide-react";
+import {
+  CheckSquare, Plus, Trash2, ChevronsUpDown, Check,
+  List, BarChart2, ChevronRight, ChevronDown,
+} from "lucide-react";
 
 // ─────────────────────────────────────────
 // Types
@@ -57,11 +60,29 @@ interface Worker {
   is_active: boolean;
 }
 
+interface WorkerGroup {
+  name: string;
+  totalHours: number;
+  count: number;
+  logs: WorkLog[];
+}
+
+interface OrderGroup {
+  order_id: string;
+  totalHours: number;
+  count: number;
+  workers: WorkerGroup[];
+}
+
 // ─────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────
 
 const TODAY = dayjs().format("YYYY-MM-DD");
+
+function fmtHours(h: number) {
+  return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h`;
+}
 
 // ─────────────────────────────────────────
 // Schema
@@ -87,6 +108,9 @@ export default function TaskManagement() {
   const [orderComboOpen, setOrderComboOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [filterOrderId, setFilterOrderId] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
 
   // ─── Data fetching ────────────────────
 
@@ -117,7 +141,10 @@ export default function TaskManagement() {
   const workLogs: WorkLog[] = workLogsResponse?.data ?? [];
 
   // Sort work logs by date desc
-  const sortedLogs = [...workLogs].sort((a, b) => b.date.localeCompare(a.date));
+  const sortedLogs = useMemo(
+    () => [...workLogs].sort((a, b) => b.date.localeCompare(a.date)),
+    [workLogs]
+  );
 
   const filteredLogs = useMemo(() =>
     filterOrderId.trim()
@@ -132,6 +159,49 @@ export default function TaskManagement() {
     filteredLogs.reduce((sum, log) => sum + (log.duration_hours ?? 0), 0),
     [filteredLogs]
   );
+
+  // グループ集計: 受注番号 → 作業者 → 明細
+  const groupedLogs = useMemo<OrderGroup[]>(() => {
+    const orderMap = new Map<string, OrderGroup>();
+    for (const log of sortedLogs) {
+      const oid = log.order_id ?? "(受注なし)";
+      if (!orderMap.has(oid)) {
+        orderMap.set(oid, { order_id: oid, totalHours: 0, count: 0, workers: [] });
+      }
+      const og = orderMap.get(oid)!;
+      og.totalHours += log.duration_hours ?? 0;
+      og.count += 1;
+
+      const workerName = log.worker ?? "(不明)";
+      let wg = og.workers.find((w) => w.name === workerName);
+      if (!wg) {
+        wg = { name: workerName, totalHours: 0, count: 0, logs: [] };
+        og.workers.push(wg);
+      }
+      wg.totalHours += log.duration_hours ?? 0;
+      wg.count += 1;
+      wg.logs.push(log);
+    }
+    return Array.from(orderMap.values()).sort((a, b) => b.totalHours - a.totalHours);
+  }, [sortedLogs]);
+
+  // ─── Toggle helpers ───────────────────
+
+  const toggleOrder = (orderId: string) => {
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      next.has(orderId) ? next.delete(orderId) : next.add(orderId);
+      return next;
+    });
+  };
+
+  const toggleWorker = (key: string) => {
+    setExpandedWorkers((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
 
   // ─── Form ─────────────────────────────
 
@@ -385,14 +455,40 @@ export default function TaskManagement() {
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle>実績一覧</CardTitle>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground whitespace-nowrap">受注番号で絞り込み</span>
-              <Input
-                value={filterOrderId}
-                onChange={(e) => setFilterOrderId(e.target.value)}
-                placeholder="例: ko130843"
-                className="w-[180px]"
-              />
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* 表示切り替え */}
+              <div className="flex items-center gap-1 border rounded-md p-0.5">
+                <Button
+                  size="sm"
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  onClick={() => setViewMode("list")}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <List className="h-3.5 w-3.5" />
+                  明細一覧
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "grouped" ? "default" : "ghost"}
+                  onClick={() => setViewMode("grouped")}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  受注別集計
+                </Button>
+              </div>
+              {/* 受注番号フィルター（一覧ビューのみ） */}
+              {viewMode === "list" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">受注番号で絞り込み</span>
+                  <Input
+                    value={filterOrderId}
+                    onChange={(e) => setFilterOrderId(e.target.value)}
+                    placeholder="例: ko130843"
+                    className="w-[180px]"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -405,15 +501,90 @@ export default function TaskManagement() {
             </div>
           ) : sortedLogs.length === 0 ? (
             <p className="p-6 text-center text-muted-foreground text-sm">実績データがありません</p>
+          ) : viewMode === "grouped" ? (
+            /* ─── グループビュー ─── */
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>受注番号 / 作業者</TableHead>
+                  <TableHead className="text-right">件数</TableHead>
+                  <TableHead className="text-right">合計時間</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {groupedLogs.map((og) => {
+                  const isOrderExpanded = expandedOrders.has(og.order_id);
+                  return (
+                    <React.Fragment key={og.order_id}>
+                      {/* 受注番号行（第1階層） */}
+                      <TableRow
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => toggleOrder(og.order_id)}
+                      >
+                        <TableCell className="pr-0">
+                          {isOrderExpanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </TableCell>
+                        <TableCell className="font-medium">{og.order_id}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{og.count}</TableCell>
+                        <TableCell className="text-right font-medium">{fmtHours(og.totalHours)}</TableCell>
+                      </TableRow>
+
+                      {/* 作業者行（第2階層） */}
+                      {isOrderExpanded && og.workers.map((wg) => {
+                        const workerKey = `${og.order_id}|${wg.name}`;
+                        const isWorkerExpanded = expandedWorkers.has(workerKey);
+                        return (
+                          <React.Fragment key={workerKey}>
+                            <TableRow
+                              className="cursor-pointer bg-muted/30 hover-elevate"
+                              onClick={() => toggleWorker(workerKey)}
+                            >
+                              <TableCell className="pr-0 pl-6">
+                                {isWorkerExpanded
+                                  ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                  : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                              </TableCell>
+                              <TableCell className="text-sm pl-4 text-foreground">{wg.name}</TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">{wg.count}</TableCell>
+                              <TableCell className="text-right text-sm font-medium">{fmtHours(wg.totalHours)}</TableCell>
+                            </TableRow>
+
+                            {/* 明細行（第3階層） */}
+                            {isWorkerExpanded && wg.logs.map((log) => (
+                              <TableRow key={log.id} className="bg-muted/10">
+                                <TableCell />
+                                <TableCell className="pl-8 text-xs text-muted-foreground">
+                                  <span className="font-mono">{log.date}</span>
+                                  {log.task_name && (
+                                    <span className="ml-2">{log.task_name}</span>
+                                  )}
+                                  {log.memo && (
+                                    <span className="ml-2 opacity-60 truncate max-w-[200px] inline-block align-bottom">{log.memo}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell />
+                                <TableCell className="text-right text-xs font-medium">
+                                  {fmtHours(log.duration_hours ?? 0)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
           ) : (
+            /* ─── 一覧ビュー ─── */
             <>
               <div className="flex justify-end px-4 py-2 text-sm text-muted-foreground border-b">
-                合計実績時間：
-                <span className="font-medium text-foreground ml-1">
-                  {filteredTotalHours % 1 === 0
-                    ? `${filteredTotalHours}h`
-                    : `${filteredTotalHours.toFixed(2)}h`}
-                </span>
+                {filterOrderId.trim() ? "絞り込み合計：" : "合計実績時間："}
+                <span className="font-medium text-foreground ml-1">{fmtHours(filteredTotalHours)}</span>
               </div>
               {filteredLogs.length === 0 ? (
                 <p className="p-6 text-center text-muted-foreground text-sm">該当なし</p>
@@ -438,9 +609,7 @@ export default function TaskManagement() {
                         <TableCell className="text-sm">{log.task_name || "-"}</TableCell>
                         <TableCell>{log.worker}</TableCell>
                         <TableCell className="text-right font-medium">
-                          {log.duration_hours > 0
-                            ? `${log.duration_hours % 1 === 0 ? log.duration_hours : log.duration_hours.toFixed(2)}h`
-                            : "-"}
+                          {log.duration_hours > 0 ? fmtHours(log.duration_hours) : "-"}
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate text-muted-foreground text-sm">
                           {log.memo || ""}
