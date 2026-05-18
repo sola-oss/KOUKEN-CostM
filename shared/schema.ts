@@ -69,6 +69,18 @@ export const material_costs = pgTable("material_costs", {
   orderIdx: index("idx_material_costs_order_id").on(table.order_id),
 }));
 
+// 購入品入力 (Purchased Items) - 現場での購入品費記録
+export const purchased_items = pgTable("purchased_items", {
+  id: serial("id").primaryKey(),
+  order_id: text("order_id").notNull(),   // 受注番号（文字列型: ko130XXX）
+  description: text("description"),        // 明細
+  total_amount: decimal("total_amount", { precision: 12, scale: 0 }).notNull(), // 合計金額
+  vendor_id: integer("vendor_id"),         // 業者マスタID（Supabase vendors_master）
+  created_at: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  orderIdx: index("idx_purchased_items_order_id").on(table.order_id),
+}));
+
 // ========== Insert Schemas ==========
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true,
@@ -91,21 +103,29 @@ export const insertMaterialCostSchema = createInsertSchema(material_costs).omit(
   created_at: true,
 });
 
+export const insertPurchasedItemSchema = createInsertSchema(purchased_items).omit({
+  id: true,
+  created_at: true,
+});
+
 // Update schemas
 export const updateOrderSchema = insertOrderSchema.partial();
 export const updateProcurementSchema = insertProcurementSchema.partial();
 export const updateWorkerLogSchema = insertWorkerLogSchema.partial();
 export const updateMaterialCostSchema = insertMaterialCostSchema.partial();
+export const updatePurchasedItemSchema = insertPurchasedItemSchema.partial();
 
 // ========== Type Definitions ==========
 export type Order = typeof orders.$inferSelect;
 export type Procurement = typeof procurements.$inferSelect;
 export type WorkerLog = typeof workers_log.$inferSelect;
 export type MaterialCost = typeof material_costs.$inferSelect;
+export type PurchasedItem = typeof purchased_items.$inferSelect;
 export type InsertOrder = typeof insertOrderSchema._type;
 export type InsertProcurement = typeof insertProcurementSchema._type;
 export type InsertWorkerLog = typeof insertWorkerLogSchema._type;
 export type InsertMaterialCost = typeof insertMaterialCostSchema._type;
+export type InsertPurchasedItem = typeof insertPurchasedItemSchema._type;
 
 // KPI Types
 export interface OrderKPI {

@@ -4,7 +4,7 @@ import {
   ChevronRight, ChevronDown,
   CheckSquare, ClipboardList, GanttChart, Database, FileSpreadsheet,
   Calculator, Users, Settings, Building2, Hammer, TrendingUp,
-  UserCog, LogOut, Contact, Receipt, FileText, Target
+  UserCog, LogOut, Contact, Receipt, FileText, Target, ShoppingCart
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -40,6 +40,7 @@ const orderPlanningItems = [
 const fieldWorkItems = [
   { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
   { title: "材料費入力", url: "/material-costs", icon: Receipt },
+  { title: "購入品入力", url: "/purchased-items", icon: ShoppingCart },
   { title: "発注管理", url: "/procurement", icon: ClipboardList }
 ];
 

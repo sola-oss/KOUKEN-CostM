@@ -29,6 +29,7 @@ const WorkersMaster = lazy(() => import("@/pages/cost/workers-master"));
 const VendorsMaster = lazy(() => import("@/pages/cost/vendors-master"));
 const CustomersMaster = lazy(() => import("@/pages/production/customers-master"));
 const MaterialCosts = lazy(() => import("@/pages/production/material-costs"));
+const PurchasedItems = lazy(() => import("@/pages/production/purchased-items"));
 const UserManagement = lazy(() => import("@/pages/user-management"));
 const QuotesList = lazy(() => import("@/pages/production/quotes"));
 const QuotesEdit = lazy(() => import("@/pages/production/quotes-edit"));
@@ -126,6 +127,7 @@ function Router() {
             <Route path="/vendors-master" component={VendorsMaster} />
             <Route path="/customers-master" component={CustomersMaster} />
             <Route path="/material-costs" component={MaterialCosts} />
+            <Route path="/purchased-items" component={PurchasedItems} />
             <Route path="/user-management" component={UserManagement} />
             <Route path="/quotes" component={QuotesList} />
             <Route path="/quotes/new" component={QuotesEdit} />

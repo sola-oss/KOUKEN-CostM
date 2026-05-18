@@ -1,0 +1,552 @@
+import React, { useState, useMemo } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChevronsUpDown, Check, ShoppingCart, Plus, Pencil, Trash2, Loader2, List, BarChart2, ChevronRight, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+interface Order {
+  order_id: string;
+  client_name: string | null;
+  project_title: string | null;
+  product_name: string | null;
+}
+
+interface Vendor {
+  id: number;
+  name: string;
+  is_active: boolean;
+}
+
+interface PurchasedItem {
+  id: number;
+  order_id: string;
+  description: string | null;
+  total_amount: string;
+  vendor_id: number | null;
+  vendor_name: string | null;
+  created_at: string;
+}
+
+const schema = z.object({
+  order_id: z.string({ required_error: "受注番号は必須です" }).min(1, "受注番号は必須です"),
+  description: z.string().optional(),
+  total_amount: z.coerce.number({ required_error: "合計金額は必須です" }).int("整数を入力してください").positive("0より大きい値を入力してください"),
+  vendor_id: z.number().nullable().optional(),
+});
+
+type FormData = z.infer<typeof schema>;
+
+export default function PurchasedItemsPage() {
+  const { toast } = useToast();
+  const [editingRow, setEditingRow] = useState<PurchasedItem | null>(null);
+  const [orderComboOpen, setOrderComboOpen] = useState(false);
+  const [filterOrderId, setFilterOrderId] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (orderId: string) => {
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      order_id: "",
+      description: "",
+      total_amount: 0,
+      vendor_id: null,
+    },
+  });
+
+  const { data: ordersResponse } = useQuery({
+    queryKey: ["/api/orders-dropdown"],
+    queryFn: async () => {
+      const res = await fetch("/api/orders-dropdown");
+      return res.json();
+    },
+  });
+  const orders: Order[] = ordersResponse?.data || [];
+
+  const { data: vendorsData } = useQuery({
+    queryKey: ["/api/vendors-master"],
+    queryFn: async () => {
+      const res = await fetch("/api/vendors-master");
+      return res.json();
+    },
+  });
+  const vendors: Vendor[] = (vendorsData ?? []).filter((v: Vendor) => v.is_active);
+
+  const { data: piResponse, isLoading } = useQuery({
+    queryKey: ["/api/purchased-items"],
+    queryFn: async () => {
+      const res = await fetch("/api/purchased-items");
+      return res.json();
+    },
+  });
+  const rows: PurchasedItem[] = piResponse?.data || [];
+
+  const createMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      const res = await fetch("/api/purchased-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/purchased-items"] });
+      toast({ title: "登録しました" });
+      form.reset({ order_id: "", description: "", total_amount: 0, vendor_id: null });
+    },
+    onError: () => {
+      toast({ title: "エラー", description: "登録に失敗しました", variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: FormData }) => {
+      const res = await fetch(`/api/purchased-items/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/purchased-items"] });
+      toast({ title: "更新しました" });
+      setEditingRow(null);
+      form.reset({ order_id: "", description: "", total_amount: 0, vendor_id: null });
+    },
+    onError: () => {
+      toast({ title: "エラー", description: "更新に失敗しました", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/purchased-items/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/purchased-items"] });
+      toast({ title: "削除しました" });
+    },
+    onError: () => {
+      toast({ title: "エラー", description: "削除に失敗しました", variant: "destructive" });
+    },
+  });
+
+  const onSubmit = (data: FormData) => {
+    if (editingRow) {
+      updateMutation.mutate({ id: editingRow.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  const handleEdit = (row: PurchasedItem) => {
+    setEditingRow(row);
+    form.reset({
+      order_id: row.order_id,
+      description: row.description || "",
+      total_amount: parseInt(row.total_amount, 10),
+      vendor_id: row.vendor_id ?? null,
+    });
+  };
+
+  const handleCancel = () => {
+    setEditingRow(null);
+    form.reset({ order_id: "", description: "", total_amount: 0, vendor_id: null });
+  };
+
+  const formatCurrency = (val: string | number) =>
+    new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(Number(val));
+
+  const selectedOrder = orders.find((o) => o.order_id === form.watch("order_id"));
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
+  const filteredRows = useMemo(() =>
+    filterOrderId.trim()
+      ? rows.filter(r => r.order_id.toLowerCase().includes(filterOrderId.trim().toLowerCase()))
+      : rows,
+    [rows, filterOrderId]
+  );
+
+  const filteredTotal = useMemo(() =>
+    filteredRows.reduce((sum, r) => sum + Number(r.total_amount), 0),
+    [filteredRows]
+  );
+
+  const groupedRows = useMemo(() => {
+    const map = new Map<string, { order_id: string; count: number; total: number }>();
+    filteredRows.forEach((r) => {
+      const existing = map.get(r.order_id);
+      if (existing) {
+        existing.count += 1;
+        existing.total += Number(r.total_amount);
+      } else {
+        map.set(r.order_id, { order_id: r.order_id, count: 1, total: Number(r.total_amount) });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [filteredRows]);
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <ShoppingCart className="h-8 w-8 text-primary" />
+        <h1 className="text-2xl font-bold">購入品入力</h1>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{editingRow ? "購入品を編集" : "購入品を登録"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+                {/* 受注番号 */}
+                <FormField
+                  control={form.control}
+                  name="order_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>受注番号 *</FormLabel>
+                      <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className={cn("w-full justify-between font-normal", !field.value && "text-muted-foreground")}
+                            >
+                              {field.value
+                                ? `${field.value}${selectedOrder?.client_name ? ` / ${selectedOrder.client_name}` : ""}${(selectedOrder?.project_title || selectedOrder?.product_name) ? ` / ${selectedOrder?.project_title || selectedOrder?.product_name}` : ""}`
+                                : "受注番号を選択"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-0">
+                          <Command>
+                            <CommandInput placeholder="受注番号・得意先で検索..." />
+                            <CommandList>
+                              <CommandEmpty>見つかりません</CommandEmpty>
+                              <CommandGroup>
+                                {orders.map((order) => (
+                                  <CommandItem
+                                    key={order.order_id}
+                                    value={`${order.order_id} ${order.client_name || ""} ${order.project_title || order.product_name || ""}`}
+                                    onSelect={() => {
+                                      field.onChange(order.order_id);
+                                      setOrderComboOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn("mr-2 h-4 w-4", field.value === order.order_id ? "opacity-100" : "opacity-0")}
+                                    />
+                                    <span className="font-medium">{order.order_id}</span>
+                                    {order.client_name && (
+                                      <span className="ml-1 text-muted-foreground text-sm">{order.client_name}</span>
+                                    )}
+                                    {(order.project_title || order.product_name) && (
+                                      <span className="ml-1 text-muted-foreground text-sm truncate">/ {order.project_title || order.product_name}</span>
+                                    )}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* 業者 */}
+                <FormField
+                  control={form.control}
+                  name="vendor_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>業者</FormLabel>
+                      <Select
+                        value={field.value != null ? String(field.value) : "none"}
+                        onValueChange={(val) => field.onChange(val === "none" ? null : Number(val))}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="業者を選択（任意）" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">指定なし</SelectItem>
+                          {vendors.map((v) => (
+                            <SelectItem key={v.id} value={String(v.id)}>
+                              {v.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* 明細 */}
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>明細</FormLabel>
+                      <FormControl>
+                        <Input placeholder="部品・消耗品 など" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* 合計金額 */}
+                <FormField
+                  control={form.control}
+                  name="total_amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>合計金額（円）*</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          step={1}
+                          placeholder="50000"
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  {editingRow ? "更新" : "登録"}
+                </Button>
+                {editingRow && (
+                  <Button type="button" variant="outline" onClick={handleCancel}>
+                    キャンセル
+                  </Button>
+                )}
+              </div>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle className="text-base">登録済み購入品</CardTitle>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1 border rounded-md p-0.5">
+                <Button
+                  size="sm"
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  onClick={() => setViewMode("list")}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <List className="h-3.5 w-3.5" />
+                  明細一覧
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "grouped" ? "default" : "ghost"}
+                  onClick={() => setViewMode("grouped")}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  受注別集計
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground whitespace-nowrap">受注番号で絞り込み</span>
+                <Input
+                  value={filterOrderId}
+                  onChange={(e) => setFilterOrderId(e.target.value)}
+                  placeholder="例: ko130843"
+                  className="w-[180px]"
+                />
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <ShoppingCart className="h-10 w-10 mx-auto mb-3 opacity-40" />
+              <p>まだ購入品が登録されていません</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-end mb-2">
+                <span className="text-sm text-muted-foreground">
+                  {filterOrderId.trim() ? "絞り込み合計：" : "全件合計："}
+                  <span className="font-medium text-foreground">{formatCurrency(filteredTotal)}</span>
+                </span>
+              </div>
+              {filteredRows.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">該当なし</div>
+              ) : viewMode === "grouped" ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>受注番号</TableHead>
+                      <TableHead className="text-right">件数</TableHead>
+                      <TableHead className="text-right">合計金額</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groupedRows.map((row) => {
+                      const isExpanded = expandedOrders.has(row.order_id);
+                      const details = filteredRows.filter((r) => r.order_id === row.order_id);
+                      return (
+                        <React.Fragment key={row.order_id}>
+                          <TableRow
+                            className="cursor-pointer hover-elevate"
+                            onClick={() => toggleExpanded(row.order_id)}
+                          >
+                            <TableCell className="pr-0">
+                              {isExpanded
+                                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            </TableCell>
+                            <TableCell className="font-medium">{row.order_id}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">{row.count}</TableCell>
+                            <TableCell className="text-right font-medium">{formatCurrency(row.total)}</TableCell>
+                          </TableRow>
+                          {isExpanded && details.map((detail) => (
+                            <TableRow key={detail.id} className="bg-muted/40">
+                              <TableCell />
+                              <TableCell className="text-muted-foreground text-sm pl-4">
+                                {detail.vendor_name || <span className="opacity-50">業者なし</span>}
+                              </TableCell>
+                              <TableCell colSpan={1} className="text-muted-foreground text-sm">
+                                {detail.description || <span className="opacity-50">-</span>}
+                              </TableCell>
+                              <TableCell className="text-right text-sm font-medium">
+                                {formatCurrency(detail.total_amount)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>受注番号</TableHead>
+                      <TableHead>業者</TableHead>
+                      <TableHead>明細</TableHead>
+                      <TableHead className="text-right">合計金額</TableHead>
+                      <TableHead>登録日時</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRows.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-medium">{row.order_id}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{row.vendor_name || "-"}</TableCell>
+                        <TableCell className="text-muted-foreground">{row.description || "-"}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(row.total_amount)}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {new Date(row.created_at).toLocaleDateString("ja-JP")}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleEdit(row)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => deleteMutation.mutate(row.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

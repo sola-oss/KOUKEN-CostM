@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { ProductionDAO } from '../dao/production-dao.js';
 import { db } from '../lib/database.js';
-import { material_costs } from '../../shared/schema.js';
+import { material_costs, purchased_items } from '../../shared/schema.js';
 import { eq, desc } from 'drizzle-orm';
 import { 
   insertOrderSchema, 
@@ -2404,5 +2404,96 @@ router.delete('/api/material-costs/:id', async (req, res) => {
   }
 });
 
+
+// ========== Purchased Items API ==========
+
+// GET /api/purchased-items - 購入品一覧取得
+router.get('/api/purchased-items', async (req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(purchased_items)
+      .orderBy(desc(purchased_items.created_at));
+    const vendorIds = [...new Set(rows.map(r => r.vendor_id).filter(Boolean))] as number[];
+    let vendorMap: Record<number, string> = {};
+    if (vendorIds.length > 0) {
+      const vendors = await dao.getVendorsMaster(true);
+      vendors.forEach(v => { vendorMap[v.id] = v.name; });
+    }
+    const data = rows.map(r => ({
+      ...r,
+      vendor_name: r.vendor_id ? (vendorMap[r.vendor_id] ?? null) : null,
+    }));
+    res.json({ data });
+  } catch (error: any) {
+    console.error('Get purchased items error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to fetch purchased items' });
+  }
+});
+
+// POST /api/purchased-items - 購入品登録
+router.post('/api/purchased-items', async (req, res) => {
+  try {
+    const { order_id, description, total_amount, vendor_id } = req.body;
+    if (!order_id || total_amount == null) {
+      return res.status(400).json({ error: 'Bad request', message: '受注番号と合計金額は必須です' });
+    }
+    const [row] = await db
+      .insert(purchased_items)
+      .values({
+        order_id,
+        description: description || null,
+        total_amount: String(total_amount),
+        vendor_id: vendor_id ? Number(vendor_id) : null,
+      })
+      .returning();
+    res.status(201).json({ data: row });
+  } catch (error: any) {
+    console.error('Create purchased item error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to create purchased item' });
+  }
+});
+
+// PATCH /api/purchased-items/:id - 購入品更新
+router.patch('/api/purchased-items/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { order_id, description, total_amount, vendor_id } = req.body;
+    const updates: Record<string, any> = {};
+    if (order_id !== undefined) updates.order_id = order_id;
+    if (description !== undefined) updates.description = description;
+    if (total_amount !== undefined) updates.total_amount = String(total_amount);
+    if (vendor_id !== undefined) updates.vendor_id = vendor_id ? Number(vendor_id) : null;
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Bad request', message: '更新フィールドがありません' });
+    }
+    const [row] = await db
+      .update(purchased_items)
+      .set(updates)
+      .where(eq(purchased_items.id, id))
+      .returning();
+    if (!row) return res.status(404).json({ error: 'Not found', message: '購入品が見つかりません' });
+    res.json({ data: row });
+  } catch (error: any) {
+    console.error('Update purchased item error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to update purchased item' });
+  }
+});
+
+// DELETE /api/purchased-items/:id - 購入品削除
+router.delete('/api/purchased-items/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const [row] = await db
+      .delete(purchased_items)
+      .where(eq(purchased_items.id, id))
+      .returning();
+    if (!row) return res.status(404).json({ error: 'Not found', message: '購入品が見つかりません' });
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('Delete purchased item error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to delete purchased item' });
+  }
+});
 
 export default router;
