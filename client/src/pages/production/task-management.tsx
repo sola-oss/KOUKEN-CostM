@@ -74,6 +74,20 @@ interface OrderGroup {
   workers: WorkerGroup[];
 }
 
+interface OrderInWorkerGroup {
+  order_id: string;
+  totalHours: number;
+  count: number;
+  logs: WorkLog[];
+}
+
+interface WorkerTopGroup {
+  name: string;
+  totalHours: number;
+  count: number;
+  orders: OrderInWorkerGroup[];
+}
+
 // ─────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────
@@ -108,9 +122,11 @@ export default function TaskManagement() {
   const [orderComboOpen, setOrderComboOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [filterOrderId, setFilterOrderId] = useState("");
-  const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
+  const [viewMode, setViewMode] = useState<"list" | "grouped" | "by_worker">("list");
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
+  const [expandedWorkerTops, setExpandedWorkerTops] = useState<Set<string>>(new Set());
+  const [expandedOrdersInWorker, setExpandedOrdersInWorker] = useState<Set<string>>(new Set());
 
   // ─── Data fetching ────────────────────
 
@@ -185,6 +201,31 @@ export default function TaskManagement() {
     return Array.from(orderMap.values()).sort((a, b) => b.totalHours - a.totalHours);
   }, [sortedLogs]);
 
+  // グループ集計: 作業者 → 受注番号 → 明細
+  const groupedByWorker = useMemo<WorkerTopGroup[]>(() => {
+    const workerMap = new Map<string, WorkerTopGroup>();
+    for (const log of sortedLogs) {
+      const wname = log.worker ?? "(不明)";
+      if (!workerMap.has(wname)) {
+        workerMap.set(wname, { name: wname, totalHours: 0, count: 0, orders: [] });
+      }
+      const wg = workerMap.get(wname)!;
+      wg.totalHours += log.duration_hours ?? 0;
+      wg.count += 1;
+
+      const oid = log.order_id ?? "(受注なし)";
+      let og = wg.orders.find((o) => o.order_id === oid);
+      if (!og) {
+        og = { order_id: oid, totalHours: 0, count: 0, logs: [] };
+        wg.orders.push(og);
+      }
+      og.totalHours += log.duration_hours ?? 0;
+      og.count += 1;
+      og.logs.push(log);
+    }
+    return Array.from(workerMap.values()).sort((a, b) => b.totalHours - a.totalHours);
+  }, [sortedLogs]);
+
   // ─── Toggle helpers ───────────────────
 
   const toggleOrder = (orderId: string) => {
@@ -197,6 +238,22 @@ export default function TaskManagement() {
 
   const toggleWorker = (key: string) => {
     setExpandedWorkers((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const toggleWorkerTop = (name: string) => {
+    setExpandedWorkerTops((prev) => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  };
+
+  const toggleOrderInWorker = (key: string) => {
+    setExpandedOrdersInWorker((prev) => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
@@ -476,6 +533,15 @@ export default function TaskManagement() {
                   <BarChart2 className="h-3.5 w-3.5" />
                   受注別集計
                 </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "by_worker" ? "default" : "ghost"}
+                  onClick={() => setViewMode("by_worker")}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  作業者別集計
+                </Button>
               </div>
               {/* 受注番号フィルター（一覧ビューのみ） */}
               {viewMode === "list" && (
@@ -501,6 +567,84 @@ export default function TaskManagement() {
             </div>
           ) : sortedLogs.length === 0 ? (
             <p className="p-6 text-center text-muted-foreground text-sm">実績データがありません</p>
+          ) : viewMode === "by_worker" ? (
+            /* ─── 作業者別集計ビュー ─── */
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>作業者 / 受注番号</TableHead>
+                  <TableHead className="text-right">件数</TableHead>
+                  <TableHead className="text-right">合計時間</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {groupedByWorker.map((wg) => {
+                  const isWorkerExpanded = expandedWorkerTops.has(wg.name);
+                  return (
+                    <React.Fragment key={wg.name}>
+                      {/* 作業者行（第1階層） */}
+                      <TableRow
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => toggleWorkerTop(wg.name)}
+                      >
+                        <TableCell className="pr-0">
+                          {isWorkerExpanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </TableCell>
+                        <TableCell className="font-medium">{wg.name}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{wg.count}</TableCell>
+                        <TableCell className="text-right font-medium">{fmtHours(wg.totalHours)}</TableCell>
+                      </TableRow>
+
+                      {/* 受注番号行（第2階層） */}
+                      {isWorkerExpanded && wg.orders.map((og) => {
+                        const orderKey = `${wg.name}|${og.order_id}`;
+                        const isOrderExpanded = expandedOrdersInWorker.has(orderKey);
+                        return (
+                          <React.Fragment key={orderKey}>
+                            <TableRow
+                              className="cursor-pointer bg-muted/30 hover-elevate"
+                              onClick={() => toggleOrderInWorker(orderKey)}
+                            >
+                              <TableCell className="pr-0 pl-6">
+                                {isOrderExpanded
+                                  ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                  : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                              </TableCell>
+                              <TableCell className="text-sm pl-4 font-mono text-foreground">{og.order_id}</TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">{og.count}</TableCell>
+                              <TableCell className="text-right text-sm font-medium">{fmtHours(og.totalHours)}</TableCell>
+                            </TableRow>
+
+                            {/* 明細行（第3階層） */}
+                            {isOrderExpanded && og.logs.map((log) => (
+                              <TableRow key={log.id} className="bg-muted/10">
+                                <TableCell />
+                                <TableCell className="pl-8 text-xs text-muted-foreground">
+                                  <span className="font-mono">{log.date}</span>
+                                  {log.task_name && (
+                                    <span className="ml-2">{log.task_name}</span>
+                                  )}
+                                  {log.memo && (
+                                    <span className="ml-2 opacity-60 truncate max-w-[200px] inline-block align-bottom">{log.memo}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell />
+                                <TableCell className="text-right text-xs font-medium">
+                                  {fmtHours(log.duration_hours ?? 0)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
           ) : viewMode === "grouped" ? (
             /* ─── グループビュー ─── */
             <Table>
