@@ -1,11 +1,4 @@
-import { productionSqliteInitializer } from './lib/production-sqlite-init.js';
-
-productionSqliteInitializer.initialize()
-  .then(() => {
-    console.log('✅ Database initialized successfully');
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error('❌ Database initialization failed:', error);
-    process.exit(1);
-  });
+// init-db.ts - 旧SQLite初期化スクリプト（移行済みのため不要）
+// Supabase移行後はこのファイルは使用されません。
+console.log('✅ Database initialization is handled by Supabase — no action needed.');
+process.exit(0);

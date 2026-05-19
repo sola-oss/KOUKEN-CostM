@@ -1,7 +1,5 @@
 // Production Management MVP - Data Access Object (Supabase版)
 import { supabase } from '../lib/supabase-client.js';
-import { db } from '../lib/database.js';
-import { material_costs } from '../../shared/schema.js';
 import type { 
   Order, Procurement, WorkerLog, Task, WorkLog, Material, MaterialUsage, MaterialUsageWithMaterial,
   InsertOrder, InsertProcurement, InsertWorkerLog, InsertTask, InsertWorkLog, InsertMaterial, InsertMaterialUsage,
@@ -1214,19 +1212,21 @@ export class ProductionDAO {
 
     if (!data) {
       const now = new Date().toISOString();
-      const defaults: CostSettings = { id: 1, labor_rate_per_hour: 3000, updated_at: now };
-      const { error: ie } = await supabase.from('cost_settings').upsert(defaults, { onConflict: 'id' });
+      const { error: ie } = await supabase.from('cost_settings').upsert(
+        { id: 1, labor_cost_per_hour: 3000, updated_at: now },
+        { onConflict: 'id' }
+      );
       if (ie) throw new Error(`[getCostSettings upsert] ${ie.message}`);
-      return defaults;
+      return { id: 1, labor_rate_per_hour: 3000, updated_at: now };
     }
 
-    return data as CostSettings;
+    return { ...data, labor_rate_per_hour: (data as any).labor_cost_per_hour ?? (data as any).labor_rate_per_hour ?? 3000 } as CostSettings;
   }
 
   async updateCostSettings(laborRatePerHour: number): Promise<CostSettings> {
     const now = new Date().toISOString();
     const { error } = await supabase.from('cost_settings').update({
-      labor_rate_per_hour: laborRatePerHour,
+      labor_cost_per_hour: laborRatePerHour,
       updated_at: now
     }).eq('id', 1);
     if (error) throw new Error(`[updateCostSettings] ${error.message}`);
@@ -1250,7 +1250,7 @@ export class ProductionDAO {
       supabase.from('procurements').select('order_id,vendor,total_amount'),
       supabase.from('outsourcing_costs').select('project_id,amount'),
       supabase.from('workers_master').select('name,hourly_rate'),
-      db.select().from(material_costs)
+      supabase.from('material_costs').select('id,order_id,description,total_amount,vendor_id')
     ]);
 
     const orders = (ordersRes.data || []) as any[];
@@ -1260,7 +1260,7 @@ export class ProductionDAO {
     const procurementsData = (procRes.data || []) as any[];
     const outsourcingData = (outRes.data || []) as any[];
     const workersMasterData = (workersRes.data || []) as any[];
-    const materialCostRows = mcRows as { id: number; order_id: string; description: string | null; total_amount: string; }[];
+    const materialCostRows = (mcRows.data || []) as { id: number; order_id: string; description: string | null; total_amount: string; }[];
 
     // 材料IDから材料情報を取得
     const matIds = [...new Set(materialUsages.map(u => u.material_id).filter(Boolean) as number[])];

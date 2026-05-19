@@ -1,9 +1,7 @@
 // Production Management MVP - API Routes
 import { Router } from 'express';
 import { ProductionDAO } from '../dao/production-dao.js';
-import { db } from '../lib/database.js';
-import { material_costs, purchased_items } from '../../shared/schema.js';
-import { eq, desc } from 'drizzle-orm';
+import { supabase } from '../lib/supabase-client.js';
 import { 
   insertOrderSchema, 
   insertProcurementSchema, 
@@ -2312,23 +2310,23 @@ router.post('/api/prospects/:id/convert', async (req, res) => {
   }
 });
 
-// ========== Material Costs CRUD (Replit PostgreSQL) ==========
+// ========== Material Costs CRUD (Supabase) ==========
 
 // GET /api/material-costs - 材料費一覧取得
 router.get('/api/material-costs', async (req, res) => {
   try {
-    const rows = await db
-      .select()
-      .from(material_costs)
-      .orderBy(desc(material_costs.created_at));
-    // 業者名をSupabaseから結合（クロスDB）
-    const vendorIds = [...new Set(rows.map(r => r.vendor_id).filter(Boolean))] as number[];
+    const { data: rows, error } = await supabase
+      .from('material_costs')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    const vendorIds = [...new Set((rows || []).map((r: any) => r.vendor_id).filter(Boolean))] as number[];
     let vendorMap: Record<number, string> = {};
     if (vendorIds.length > 0) {
       const vendors = await dao.getVendorsMaster(true);
       vendors.forEach(v => { vendorMap[v.id] = v.name; });
     }
-    const data = rows.map(r => ({
+    const data = (rows || []).map((r: any) => ({
       ...r,
       vendor_name: r.vendor_id ? (vendorMap[r.vendor_id] ?? null) : null,
     }));
@@ -2346,15 +2344,17 @@ router.post('/api/material-costs', async (req, res) => {
     if (!order_id || total_amount == null) {
       return res.status(400).json({ error: 'Bad request', message: '受注番号と合計金額は必須です' });
     }
-    const [row] = await db
-      .insert(material_costs)
-      .values({
+    const { data: row, error } = await supabase
+      .from('material_costs')
+      .insert({
         order_id,
         description: description || null,
         total_amount: String(total_amount),
         vendor_id: vendor_id ? Number(vendor_id) : null,
       })
-      .returning();
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
     res.status(201).json({ data: row });
   } catch (error: any) {
     console.error('Create material cost error:', error);
@@ -2375,11 +2375,13 @@ router.patch('/api/material-costs/:id', async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'Bad request', message: '更新フィールドがありません' });
     }
-    const [row] = await db
-      .update(material_costs)
-      .set(updates)
-      .where(eq(material_costs.id, id))
-      .returning();
+    const { data: row, error } = await supabase
+      .from('material_costs')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
     if (!row) return res.status(404).json({ error: 'Not found', message: '材料費が見つかりません' });
     res.json({ data: row });
   } catch (error: any) {
@@ -2392,10 +2394,13 @@ router.patch('/api/material-costs/:id', async (req, res) => {
 router.delete('/api/material-costs/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const [row] = await db
-      .delete(material_costs)
-      .where(eq(material_costs.id, id))
-      .returning();
+    const { data: row, error } = await supabase
+      .from('material_costs')
+      .delete()
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
     if (!row) return res.status(404).json({ error: 'Not found', message: '材料費が見つかりません' });
     res.status(204).send();
   } catch (error: any) {
@@ -2405,22 +2410,23 @@ router.delete('/api/material-costs/:id', async (req, res) => {
 });
 
 
-// ========== Purchased Items API ==========
+// ========== Purchased Items API (Supabase) ==========
 
 // GET /api/purchased-items - 購入品一覧取得
 router.get('/api/purchased-items', async (req, res) => {
   try {
-    const rows = await db
-      .select()
-      .from(purchased_items)
-      .orderBy(desc(purchased_items.created_at));
-    const vendorIds = [...new Set(rows.map(r => r.vendor_id).filter(Boolean))] as number[];
+    const { data: rows, error } = await supabase
+      .from('purchased_items')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    const vendorIds = [...new Set((rows || []).map((r: any) => r.vendor_id).filter(Boolean))] as number[];
     let vendorMap: Record<number, string> = {};
     if (vendorIds.length > 0) {
       const vendors = await dao.getVendorsMaster(true);
       vendors.forEach(v => { vendorMap[v.id] = v.name; });
     }
-    const data = rows.map(r => ({
+    const data = (rows || []).map((r: any) => ({
       ...r,
       vendor_name: r.vendor_id ? (vendorMap[r.vendor_id] ?? null) : null,
     }));
@@ -2438,15 +2444,17 @@ router.post('/api/purchased-items', async (req, res) => {
     if (!order_id || total_amount == null) {
       return res.status(400).json({ error: 'Bad request', message: '受注番号と合計金額は必須です' });
     }
-    const [row] = await db
-      .insert(purchased_items)
-      .values({
+    const { data: row, error } = await supabase
+      .from('purchased_items')
+      .insert({
         order_id,
         description: description || null,
         total_amount: String(total_amount),
         vendor_id: vendor_id ? Number(vendor_id) : null,
       })
-      .returning();
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
     res.status(201).json({ data: row });
   } catch (error: any) {
     console.error('Create purchased item error:', error);
@@ -2467,11 +2475,13 @@ router.patch('/api/purchased-items/:id', async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'Bad request', message: '更新フィールドがありません' });
     }
-    const [row] = await db
-      .update(purchased_items)
-      .set(updates)
-      .where(eq(purchased_items.id, id))
-      .returning();
+    const { data: row, error } = await supabase
+      .from('purchased_items')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
     if (!row) return res.status(404).json({ error: 'Not found', message: '購入品が見つかりません' });
     res.json({ data: row });
   } catch (error: any) {
@@ -2484,10 +2494,13 @@ router.patch('/api/purchased-items/:id', async (req, res) => {
 router.delete('/api/purchased-items/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const [row] = await db
-      .delete(purchased_items)
-      .where(eq(purchased_items.id, id))
-      .returning();
+    const { data: row, error } = await supabase
+      .from('purchased_items')
+      .delete()
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
     if (!row) return res.status(404).json({ error: 'Not found', message: '購入品が見つかりません' });
     res.status(204).send();
   } catch (error: any) {

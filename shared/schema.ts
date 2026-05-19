@@ -1,146 +1,100 @@
-// Production Management Order System - PostgreSQL Schema
-import { sql } from "drizzle-orm";
-import { pgTable, text, integer, serial, varchar, decimal, timestamp, index } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
+// Production Management - Shared Schema (Zod版: Drizzle依存なし)
+import { z } from 'zod';
 
-// ========== Production Order Management Tables (PostgreSQL) ==========
-export const orders = pgTable("orders", {
-  id: serial("id").primaryKey(),                    // 受注番号（自動採番）
-  product_name: text("product_name").notNull(),     // 製品名
-  qty: decimal("qty", { precision: 10, scale: 3 }).notNull(), // 数量
-  due_date: text("due_date").notNull(),             // 納期（ISO文字列）
-  sales: decimal("sales", { precision: 12, scale: 2 }).notNull(), // 売上（見込み含む）
-  estimated_material_cost: decimal("estimated_material_cost", { precision: 10, scale: 2 }).notNull(), // 見込み材料費（概算）
-  std_time_per_unit: decimal("std_time_per_unit", { precision: 8, scale: 2 }).notNull(), // 標準作業時間[h/個]
-  status: varchar("status", { length: 20 }).notNull().default('pending'), // ステータス: pending/in_progress/completed
-  customer_name: text("customer_name"),             // 顧客名（任意）
-  created_at: timestamp("created_at").notNull().defaultNow(),
-  updated_at: timestamp("updated_at").notNull().defaultNow(),
-}, (table) => ({
-  dueDateIdx: index("idx_orders_due_date").on(table.due_date),
-  statusIdx: index("idx_orders_status").on(table.status),
-  customerNameIdx: index("idx_orders_customer_name").on(table.customer_name),
-}));
-
-// 手配 (Procurements) - 購買と製造の統合テーブル
-export const procurements = pgTable("procurements", {
-  id: serial("id").primaryKey(),
-  order_id: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  kind: varchar("kind", { length: 20 }).notNull(), // 'purchase' または 'manufacture'
-  item_name: text("item_name"),
-  qty: decimal("qty", { precision: 10, scale: 3 }),
-  unit: varchar("unit", { length: 10 }),           // 単位（個、本、kg、m、L など）
-  eta: text("eta"),                                // 予定日（ISO文字列）
-  status: varchar("status", { length: 20 }),       // 'planned'|'ordered'|'received'|'done'
-  vendor: text("vendor"),                          // 仕入先（purchase用）
-  unit_price: decimal("unit_price", { precision: 10, scale: 2 }), // 単価（purchase用）
-  received_at: text("received_at"),                // 入荷日（purchase用）
-  std_time_per_unit: decimal("std_time_per_unit", { precision: 8, scale: 2 }), // 標準時間（manufacture用）
-  act_time_per_unit: decimal("act_time_per_unit", { precision: 8, scale: 2 }), // 実績時間（manufacture用）
-  worker: text("worker"),                          // 作業者（manufacture用）
-  completed_at: text("completed_at"),              // 完了日（manufacture用）
-  created_at: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  orderKindStatusIdx: index("idx_procurements_order_kind_status").on(table.order_id, table.kind, table.status),
-}));
-
-// 工数入力 (Workers Log) - スタッフ用の簡易打刻
-export const workers_log = pgTable("workers_log", {
-  id: serial("id").primaryKey(),
-  order_id: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  qty: decimal("qty", { precision: 10, scale: 3 }).notNull(),
-  act_time_per_unit: decimal("act_time_per_unit", { precision: 8, scale: 2 }).notNull(), // [h/個]
-  worker: text("worker").notNull(),
-  date: text("date").notNull(),                    // 作業日（ISO文字列）
-  created_at: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  orderDateIdx: index("idx_workers_log_order_date").on(table.order_id, table.date),
-}));
-
-// 材料費入力 (Material Costs) - 現場での直接材料費記録
-export const material_costs = pgTable("material_costs", {
-  id: serial("id").primaryKey(),
-  order_id: text("order_id").notNull(),   // 受注番号（文字列型: ko130XXX）
-  description: text("description"),        // 明細
-  total_amount: decimal("total_amount", { precision: 12, scale: 0 }).notNull(), // 合計金額
-  vendor_id: integer("vendor_id"),         // 業者マスタID（Supabase vendors_master）
-  created_at: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  orderIdx: index("idx_material_costs_order_id").on(table.order_id),
-}));
-
-// 購入品入力 (Purchased Items) - 現場での購入品費記録
-export const purchased_items = pgTable("purchased_items", {
-  id: serial("id").primaryKey(),
-  order_id: text("order_id").notNull(),   // 受注番号（文字列型: ko130XXX）
-  description: text("description"),        // 明細
-  total_amount: decimal("total_amount", { precision: 12, scale: 0 }).notNull(), // 合計金額
-  vendor_id: integer("vendor_id"),         // 業者マスタID（Supabase vendors_master）
-  created_at: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  orderIdx: index("idx_purchased_items_order_id").on(table.order_id),
-}));
-
-// ========== Insert Schemas ==========
-export const insertOrderSchema = createInsertSchema(orders).omit({
-  id: true,
-  created_at: true,
-  updated_at: true,
+// ========== Material Costs ==========
+export const insertMaterialCostSchema = z.object({
+  order_id: z.string().min(1),
+  description: z.string().nullable().optional(),
+  total_amount: z.union([z.string(), z.number()]).transform(v => String(v)),
+  vendor_id: z.number().int().nullable().optional(),
 });
-
-export const insertProcurementSchema = createInsertSchema(procurements).omit({
-  id: true,
-  created_at: true,
-});
-
-export const insertWorkerLogSchema = createInsertSchema(workers_log).omit({
-  id: true,
-  created_at: true,
-});
-
-export const insertMaterialCostSchema = createInsertSchema(material_costs).omit({
-  id: true,
-  created_at: true,
-});
-
-export const insertPurchasedItemSchema = createInsertSchema(purchased_items).omit({
-  id: true,
-  created_at: true,
-});
-
-// Update schemas
-export const updateOrderSchema = insertOrderSchema.partial();
-export const updateProcurementSchema = insertProcurementSchema.partial();
-export const updateWorkerLogSchema = insertWorkerLogSchema.partial();
 export const updateMaterialCostSchema = insertMaterialCostSchema.partial();
+export type InsertMaterialCost = z.infer<typeof insertMaterialCostSchema>;
+export type MaterialCost = {
+  id: number;
+  order_id: string;
+  description: string | null;
+  total_amount: string;
+  vendor_id: number | null;
+  created_at: string;
+};
+
+// ========== Purchased Items ==========
+export const insertPurchasedItemSchema = z.object({
+  order_id: z.string().min(1),
+  description: z.string().nullable().optional(),
+  total_amount: z.union([z.string(), z.number()]).transform(v => String(v)),
+  vendor_id: z.number().int().nullable().optional(),
+});
 export const updatePurchasedItemSchema = insertPurchasedItemSchema.partial();
+export type InsertPurchasedItem = z.infer<typeof insertPurchasedItemSchema>;
+export type PurchasedItem = {
+  id: number;
+  order_id: string;
+  description: string | null;
+  total_amount: string;
+  vendor_id: number | null;
+  created_at: string;
+};
 
-// ========== Type Definitions ==========
-export type Order = typeof orders.$inferSelect;
-export type Procurement = typeof procurements.$inferSelect;
-export type WorkerLog = typeof workers_log.$inferSelect;
-export type MaterialCost = typeof material_costs.$inferSelect;
-export type PurchasedItem = typeof purchased_items.$inferSelect;
-export type InsertOrder = typeof insertOrderSchema._type;
-export type InsertProcurement = typeof insertProcurementSchema._type;
-export type InsertWorkerLog = typeof insertWorkerLogSchema._type;
-export type InsertMaterialCost = typeof insertMaterialCostSchema._type;
-export type InsertPurchasedItem = typeof insertPurchasedItemSchema._type;
+// ========== Legacy types (旧Drizzle pgTable由来 — クライアント互換のため残す) ==========
+export type Order = {
+  id: number;
+  product_name: string;
+  qty: string;
+  due_date: string;
+  sales: string;
+  estimated_material_cost: string;
+  std_time_per_unit: string;
+  status: string;
+  customer_name: string | null;
+  created_at: Date;
+  updated_at: Date;
+};
 
-// KPI Types
+export type Procurement = {
+  id: number;
+  order_id: number;
+  kind: string;
+  item_name: string | null;
+  qty: string | null;
+  unit: string | null;
+  eta: string | null;
+  status: string | null;
+  vendor: string | null;
+  unit_price: string | null;
+  received_at: string | null;
+  std_time_per_unit: string | null;
+  act_time_per_unit: string | null;
+  worker: string | null;
+  completed_at: string | null;
+  created_at: Date;
+};
+
+export type WorkerLog = {
+  id: number;
+  order_id: number;
+  qty: string;
+  act_time_per_unit: string;
+  worker: string;
+  date: string;
+  created_at: Date;
+};
+
+// ========== KPI Types ==========
 export interface OrderKPI {
   id: number;
   product_name: string;
   qty: number;
   due_date: string;
   sales: number;
-  material_cost: number;      // 計算済み材料費
-  labor_cost: number;         // 計算済み労務費
-  gross_profit: number;       // 計算済み粗利
-  actual_time_per_unit: number; // 実績工数[h/個]
-  variance_pct: number;       // 工数差異%
-  status: string;             // ステータス
-  customer_name?: string;     // 顧客名
+  material_cost: number;
+  labor_cost: number;
+  gross_profit: number;
+  actual_time_per_unit: number;
+  variance_pct: number;
+  status: string;
+  customer_name?: string;
 }
 
 export interface DashboardKPI {
@@ -149,8 +103,8 @@ export interface DashboardKPI {
   total_std_hours: number;
   total_actual_hours: number;
   avg_variance_pct: number;
-  purchase_completion_rate: number;  // 購買入荷率
-  manufacture_completion_rate: number; // 製造完成率
+  purchase_completion_rate: number;
+  manufacture_completion_rate: number;
 }
 
 export interface CalendarEvent {

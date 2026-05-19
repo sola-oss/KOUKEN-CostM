@@ -34,15 +34,6 @@ app.use(rateLimitConfig);
 app.use('/api', apiRateLimitConfig);
 
 (async () => {
-  // Initialize Production Management SQLite database
-  try {
-    const { productionSqliteInitializer } = await import('./lib/production-sqlite-init.js');
-    await productionSqliteInitializer.initialize();
-  } catch (error) {
-    console.error('✗ Failed to initialize Production Management SQLite database:', error);
-    process.exit(1);
-  }
-
   // Verify Supabase procurements table schema
   try {
     const { ProductionDAO } = await import('./dao/production-dao.js');
@@ -52,15 +43,6 @@ app.use('/api', apiRateLimitConfig);
     console.warn('⚠ Could not verify Supabase procurements schema:', error);
   }
 
-
-  // Initialize Sales Orders SQLite database
-  try {
-    const { sqliteInitializer } = await import('./lib/sqlite-init.js');
-    await sqliteInitializer.initialize();
-  } catch (error) {
-    console.error('✗ Failed to initialize Sales Orders SQLite database:', error);
-    process.exit(1);
-  }
 
   const server = await registerRoutes(app);
 
