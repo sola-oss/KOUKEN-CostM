@@ -1630,270 +1630,174 @@ export class ProductionDAO {
     return true;
   }
 
-  // ========== Customers Master CRUD (Replit PostgreSQL) ==========
+  // ========== Customers Master & order_customer_map CRUD (Supabase) ==========
 
   async ensureCustomersMasterSeeded(): Promise<void> {
-    const { sql } = await import('../lib/database.js');
-    await sql`
-      CREATE TABLE IF NOT EXISTS customers_master (
-        id SERIAL PRIMARY KEY,
-        code TEXT,
-        name TEXT NOT NULL,
-        zip TEXT,
-        address1 TEXT,
-        address2 TEXT,
-        phone TEXT,
-        note TEXT,
-        is_active BOOLEAN DEFAULT true,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    `;
-    await sql`CREATE INDEX IF NOT EXISTS idx_customers_master_name ON customers_master(name)`;
-    await sql`CREATE INDEX IF NOT EXISTS idx_customers_master_code ON customers_master(code)`;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS order_customer_map (
-        order_id TEXT PRIMARY KEY,
-        customer_id INTEGER NOT NULL REFERENCES customers_master(id) ON DELETE CASCADE,
-        updated_at TEXT NOT NULL
-      )
-    `;
-
-    const existing = await sql`SELECT count(*)::int AS cnt FROM customers_master`;
-    if (existing[0].cnt > 0) return;
-
-    const now = '2025-01-01T00:00:00Z';
-    const seed: Array<{ code?: string; name: string; zip?: string; address1?: string }> = [
-      { code: '109', name: 'the HOUSE' },
-      { code: '056', name: 'テイサ産業株式会社', zip: '569-0834', address1: '大阪府高槻市大字唐崎1270番地' },
-      { code: '038', name: '三晃特殊金属工業株式会社', zip: '740-8535', address1: '山口県岩国市室の木町1丁目4番55号' },
-      { code: '083', name: '光井商事\u3000有限会社', zip: '743-0001', address1: '光市室積西伊保木994の3' },
-      { code: '096', name: '兼安石灰機工\u3000株式会社', zip: '746-0012', address1: '周南市政所3丁目7番2号' },
-      { code: '024', name: '岐山化工機株式会社', zip: '745-0862', address1: '周南市江口3丁目1-8' },
-      { code: '015', name: '川岸工業（株）山口工場', zip: '744-0061', address1: '山口県下松市葉山2丁目904-30' },
-      { code: '014', name: '川崎エンジニアリング株式会社' },
-      { code: '061', name: '徳機\u3000株式会社', zip: '746-0028', address1: '周南市港町11番1号' },
-      { code: '063', name: '徳機\u3000株式会社\u3000エコ事業部', zip: '745-0802', address1: '周南市栗屋字奈切50-5' },
-      { code: '062', name: '徳機工事株式会社', zip: '746-0028', address1: '山口県周南市港町12-18' },
-      { code: '044', name: '新山陽剪断株式会社', zip: '746-0028', address1: '周南市港町12-26' },
-      { code: '069', name: '有限会社\u3000日進工務所', zip: '746-0022', address1: '周南市野村1丁目17-4' },
-      { code: '095', name: '有限会社\u3000環境造形', zip: '746-0024', address1: '周南市古泉3丁目8番25号' },
-      { code: '078', name: '有限会社\u3000福田鉄工', zip: '746-0043', address1: '周南市新田2丁目3-5' },
-      { code: '003', name: '株式会社\u3000アクシス', zip: '750-0323', address1: '下関市菊川町日新11142-1' },
-      { code: '039', name: '株式会社\u3000サンライト', zip: '745-0631', address1: '周南市大字安田166-1' },
-      { code: '108', name: '株式会社\u3000スティールフォース' },
-      { code: '082', name: '株式会社\u3000ミヤハラ', zip: '745-0802', address1: '山口県周南市大字栗屋字奈切50番地-47' },
-      { code: '066', name: '株式会社\u3000中村鉄工所', zip: '745-0056', address1: '山口県周南市新宿通3丁目8番地' },
-      { code: '065', name: '株式会社\u3000徳機製作所\u3000ベンダ事業部', zip: '746-0028', address1: '周南市港町6-60' },
-      { name: '株式会社\u3000河村工機' },
-      { code: '026', name: '株式会社\u3000蔵澄鉄工所', zip: '746-0026', address1: '周南市浜田1-7-15' },
-      { code: '018', name: '株式会社\u3000鹿野興産', zip: '745-0402', address1: '周南市大字金峰4300番地' },
-      { code: '043', name: '白井興業\u3000株式会社', zip: '743-0063', address1: '山口県光市島田2-27-1' },
-      { code: '071', name: '白鷺特殊鋼株式会社\u3000山口支店', zip: '754-0894', address1: '山口県山口市佐山字村山3-41山口テクノパーク' },
-      { code: '059', name: '藤和工業株式会社', zip: '756-0021', address1: '山陽小野田市高畑77-107' },
-      { code: '012', name: '長州産業株式会社' },
-      { code: '102', name: '高橋産業\u3000株式会社', zip: '750-0086', address1: '山口県下関市彦島塩浜町1丁目8番3号' },
-    ];
-
-    for (const c of seed) {
-      await sql`
-        INSERT INTO customers_master (code, name, zip, address1, address2, phone, note, is_active, created_at, updated_at)
-        VALUES (${c.code}, ${c.name}, ${c.zip || null}, ${c.address1 || null}, ${null}, ${null}, ${null}, ${true}, ${now}, ${now})
-      `;
-    }
-    console.log(`[DAO] Seeded ${seed.length} customers into customers_master`);
+    // テーブルとデータはSupabaseに移行済み — no-op
   }
 
   async setOrderCustomerId(orderId: string, customerId: number | null): Promise<void> {
-    const { sql } = await import('../lib/database.js');
     if (customerId === null) {
-      await sql`DELETE FROM order_customer_map WHERE order_id = ${orderId}`;
+      await supabase.from('order_customer_map').delete().eq('order_id', orderId);
     } else {
       const now = new Date().toISOString();
-      await sql`
-        INSERT INTO order_customer_map (order_id, customer_id, updated_at)
-        VALUES (${orderId}, ${customerId}, ${now})
-        ON CONFLICT (order_id) DO UPDATE SET customer_id = ${customerId}, updated_at = ${now}
-      `;
+      const { error } = await supabase
+        .from('order_customer_map')
+        .upsert({ order_id: orderId, customer_id: customerId, updated_at: now }, { onConflict: 'order_id' });
+      if (error) throw new Error(`[setOrderCustomerId] ${error.message}`);
     }
   }
 
   async getOrderCustomerId(orderId: string): Promise<number | null> {
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`SELECT customer_id FROM order_customer_map WHERE order_id = ${orderId} LIMIT 1`;
-    return rows.length > 0 ? rows[0].customer_id : null;
+    const { data, error } = await supabase
+      .from('order_customer_map')
+      .select('customer_id')
+      .eq('order_id', orderId)
+      .maybeSingle();
+    if (error) throw new Error(`[getOrderCustomerId] ${error.message}`);
+    return data ? (data as { customer_id: number }).customer_id : null;
   }
 
   async getOrderCustomerIds(orderIds: string[]): Promise<Record<string, number>> {
     if (orderIds.length === 0) return {};
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`SELECT order_id, customer_id FROM order_customer_map WHERE order_id = ANY(${orderIds})`;
+    const { data, error } = await supabase
+      .from('order_customer_map')
+      .select('order_id, customer_id')
+      .in('order_id', orderIds);
+    if (error) throw new Error(`[getOrderCustomerIds] ${error.message}`);
     const map: Record<string, number> = {};
-    for (const row of rows) {
+    for (const row of (data || []) as { order_id: string; customer_id: number }[]) {
       map[row.order_id] = row.customer_id;
     }
     return map;
   }
 
   async seedOrderCustomerMappings(): Promise<void> {
-    const { sql } = await import('../lib/database.js');
     const customers = await this.getCustomersMaster(true);
     const { data: orders } = await supabase.from('orders').select('order_id, client_name');
     if (!orders || orders.length === 0) return;
 
-    const existingMaps = await sql`SELECT order_id FROM order_customer_map`;
-    const mappedOrderIds = new Set(existingMaps.map((r: { order_id: string }) => r.order_id));
+    const { data: existingMaps } = await supabase.from('order_customer_map').select('order_id');
+    const mappedOrderIds = new Set((existingMaps || []).map((r: { order_id: string }) => r.order_id));
 
     const now = new Date().toISOString();
     let linked = 0;
-    for (const order of orders) {
+    for (const order of orders as { order_id: string; client_name: string }[]) {
       if (mappedOrderIds.has(order.order_id)) continue;
       const matched = customers.find(c => c.name === order.client_name);
       if (matched) {
-        await sql`
-          INSERT INTO order_customer_map (order_id, customer_id, updated_at)
-          VALUES (${order.order_id}, ${matched.id}, ${now})
-          ON CONFLICT (order_id) DO NOTHING
-        `;
+        await supabase
+          .from('order_customer_map')
+          .upsert({ order_id: order.order_id, customer_id: matched.id, updated_at: now }, { onConflict: 'order_id', ignoreDuplicates: true });
         linked++;
       }
     }
-    if (linked > 0) {
-      console.log(`[DAO] Linked ${linked} existing orders to customers`);
-    }
+    if (linked > 0) console.log(`[DAO] Linked ${linked} existing orders to customers`);
   }
 
   async createCustomerMaster(data: InsertCustomerMaster): Promise<number> {
     const now = new Date().toISOString();
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`
-      INSERT INTO customers_master (code, name, zip, address1, address2, phone, note, is_active, created_at, updated_at)
-      VALUES (${data.code || null}, ${data.name}, ${data.zip || null}, ${data.address1 || null}, ${data.address2 || null}, ${data.phone || null}, ${data.note || null}, ${data.is_active ?? true}, ${now}, ${now})
-      RETURNING id
-    `;
-    return rows[0].id as number;
+    const { data: row, error } = await supabase
+      .from('customers_master')
+      .insert({
+        code: data.code || null,
+        name: data.name,
+        zip: data.zip || null,
+        address1: data.address1 || null,
+        address2: data.address2 || null,
+        phone: data.phone || null,
+        note: data.note || null,
+        is_active: data.is_active ?? true,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id')
+      .single();
+    if (error) throw new Error(`[createCustomerMaster] ${error.message}`);
+    return (row as { id: number }).id;
   }
 
   async getCustomersMaster(includeInactive: boolean = false): Promise<CustomerMaster[]> {
-    const { sql } = await import('../lib/database.js');
-    let rows;
-    if (includeInactive) {
-      rows = await sql`SELECT * FROM customers_master ORDER BY name`;
-    } else {
-      rows = await sql`SELECT * FROM customers_master WHERE is_active = true ORDER BY name`;
-    }
-    return rows as CustomerMaster[];
+    let query = supabase.from('customers_master').select('*').order('name');
+    if (!includeInactive) query = query.eq('is_active', true);
+    const { data, error } = await query;
+    if (error) throw new Error(`[getCustomersMaster] ${error.message}`);
+    return (data || []) as CustomerMaster[];
   }
 
   async getCustomerMasterById(id: number): Promise<CustomerMaster | null> {
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`SELECT * FROM customers_master WHERE id = ${id} LIMIT 1`;
-    return (rows[0] as CustomerMaster) || null;
+    const { data, error } = await supabase
+      .from('customers_master')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(`[getCustomerMasterById] ${error.message}`);
+    return data as CustomerMaster | null;
   }
 
   async updateCustomerMaster(id: number, data: Partial<InsertCustomerMaster>): Promise<boolean> {
     const now = new Date().toISOString();
     const existing = await this.getCustomerMasterById(id);
     if (!existing) return false;
-    const merged = {
-      code: data.code !== undefined ? (data.code || null) : existing.code,
-      name: data.name !== undefined ? data.name : existing.name,
-      zip: data.zip !== undefined ? (data.zip || null) : existing.zip,
-      address1: data.address1 !== undefined ? (data.address1 || null) : existing.address1,
-      address2: data.address2 !== undefined ? (data.address2 || null) : existing.address2,
-      phone: data.phone !== undefined ? (data.phone || null) : existing.phone,
-      note: data.note !== undefined ? (data.note || null) : existing.note,
-      is_active: data.is_active !== undefined ? data.is_active : existing.is_active
-    };
-    const { sql } = await import('../lib/database.js');
-    await sql`
-      UPDATE customers_master
-      SET code = ${merged.code}, name = ${merged.name}, zip = ${merged.zip},
-          address1 = ${merged.address1}, address2 = ${merged.address2},
-          phone = ${merged.phone}, note = ${merged.note}, is_active = ${merged.is_active},
-          updated_at = ${now}
-      WHERE id = ${id}
-    `;
+    const { error } = await supabase
+      .from('customers_master')
+      .update({
+        code: data.code !== undefined ? (data.code || null) : existing.code,
+        name: data.name !== undefined ? data.name : existing.name,
+        zip: data.zip !== undefined ? (data.zip || null) : existing.zip,
+        address1: data.address1 !== undefined ? (data.address1 || null) : existing.address1,
+        address2: data.address2 !== undefined ? (data.address2 || null) : existing.address2,
+        phone: data.phone !== undefined ? (data.phone || null) : existing.phone,
+        note: data.note !== undefined ? (data.note || null) : existing.note,
+        is_active: data.is_active !== undefined ? data.is_active : existing.is_active,
+        updated_at: now,
+      })
+      .eq('id', id);
+    if (error) throw new Error(`[updateCustomerMaster] ${error.message}`);
     return true;
   }
 
   async deleteCustomerMaster(id: number): Promise<boolean> {
-    const { sql } = await import('../lib/database.js');
-    await sql`DELETE FROM customers_master WHERE id = ${id}`;
+    const { error } = await supabase.from('customers_master').delete().eq('id', id);
+    if (error) throw new Error(`[deleteCustomerMaster] ${error.message}`);
     return true;
   }
 
-  // ========== Prospects (見込み案件) CRUD ==========
+  // ========== Prospects (見込み案件) CRUD (Supabase) ==========
 
   async ensureProspectsTableCreated(): Promise<void> {
-    const { sql } = await import('../lib/database.js');
-    await sql`
-      CREATE TABLE IF NOT EXISTS prospects (
-        id SERIAL PRIMARY KEY,
-        deal_name TEXT NOT NULL,
-        customer_id INTEGER REFERENCES customers_master(id) ON DELETE SET NULL,
-        rank TEXT NOT NULL DEFAULT 'C' CHECK (rank IN ('A', 'B', 'C')),
-        expected_amount REAL,
-        expected_order_date TEXT,
-        manager TEXT,
-        notes TEXT,
-        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'won', 'lost')),
-        created_at TEXT NOT NULL
-      )
-    `;
-    await sql`CREATE INDEX IF NOT EXISTS idx_prospects_rank ON prospects(rank)`;
-    await sql`CREATE INDEX IF NOT EXISTS idx_prospects_status ON prospects(status)`;
+    // テーブルはSupabase SQL Editorで作成済み — no-op
   }
 
   async getProspects(options?: { rank?: string; status?: string }): Promise<any[]> {
-    const { sql } = await import('../lib/database.js');
-    let rows: any[];
-    if (options?.rank && options?.status) {
-      rows = await sql`
-        SELECT p.*, c.name AS customer_name
-        FROM prospects p
-        LEFT JOIN customers_master c ON c.id = p.customer_id
-        WHERE p.rank = ${options.rank} AND p.status = ${options.status}
-        ORDER BY p.created_at DESC
-      `;
-    } else if (options?.rank) {
-      rows = await sql`
-        SELECT p.*, c.name AS customer_name
-        FROM prospects p
-        LEFT JOIN customers_master c ON c.id = p.customer_id
-        WHERE p.rank = ${options.rank}
-        ORDER BY p.created_at DESC
-      `;
-    } else if (options?.status) {
-      rows = await sql`
-        SELECT p.*, c.name AS customer_name
-        FROM prospects p
-        LEFT JOIN customers_master c ON c.id = p.customer_id
-        WHERE p.status = ${options.status}
-        ORDER BY p.created_at DESC
-      `;
-    } else {
-      rows = await sql`
-        SELECT p.*, c.name AS customer_name
-        FROM prospects p
-        LEFT JOIN customers_master c ON c.id = p.customer_id
-        ORDER BY p.created_at DESC
-      `;
-    }
-    return rows;
+    let query = supabase
+      .from('prospects')
+      .select('*, customers_master!customer_id(name)')
+      .order('created_at', { ascending: false });
+    if (options?.rank) query = query.eq('rank', options.rank);
+    if (options?.status) query = query.eq('status', options.status);
+    const { data, error } = await query;
+    if (error) throw new Error(`[getProspects] ${error.message}`);
+    return (data || []).map((row: any) => ({
+      ...row,
+      customer_name: row.customers_master?.name ?? null,
+      customers_master: undefined,
+    }));
   }
 
   async getProspectById(id: number): Promise<any | null> {
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`
-      SELECT p.*, c.name AS customer_name
-      FROM prospects p
-      LEFT JOIN customers_master c ON c.id = p.customer_id
-      WHERE p.id = ${id}
-      LIMIT 1
-    `;
-    return rows.length > 0 ? rows[0] : null;
+    const { data, error } = await supabase
+      .from('prospects')
+      .select('*, customers_master!customer_id(name)')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(`[getProspectById] ${error.message}`);
+    if (!data) return null;
+    return {
+      ...(data as any),
+      customer_name: (data as any).customers_master?.name ?? null,
+      customers_master: undefined,
+    };
   }
 
   async createProspect(data: {
@@ -1906,26 +1810,25 @@ export class ProductionDAO {
     notes?: string;
     status?: string;
   }): Promise<number> {
-    const { sql } = await import('../lib/database.js');
     const now = new Date().toISOString();
     const rank = data.rank || 'C';
-    const expectedOrderDate = rank === 'A' ? (data.expected_order_date ?? null) : null;
-    const rows = await sql`
-      INSERT INTO prospects (deal_name, customer_id, rank, expected_amount, expected_order_date, manager, notes, status, created_at)
-      VALUES (
-        ${data.deal_name},
-        ${data.customer_id ?? null},
-        ${rank},
-        ${data.expected_amount ?? null},
-        ${expectedOrderDate},
-        ${data.manager || null},
-        ${data.notes || null},
-        ${data.status || 'active'},
-        ${now}
-      )
-      RETURNING id
-    `;
-    return rows[0].id as number;
+    const { data: row, error } = await supabase
+      .from('prospects')
+      .insert({
+        deal_name: data.deal_name,
+        customer_id: data.customer_id ?? null,
+        rank,
+        expected_amount: data.expected_amount ?? null,
+        expected_order_date: rank === 'A' ? (data.expected_order_date ?? null) : null,
+        manager: data.manager || null,
+        notes: data.notes || null,
+        status: data.status || 'active',
+        created_at: now,
+      })
+      .select('id')
+      .single();
+    if (error) throw new Error(`[createProspect] ${error.message}`);
+    return (row as { id: number }).id;
   }
 
   async updateProspect(id: number, data: Partial<{
@@ -1938,82 +1841,73 @@ export class ProductionDAO {
     notes: string | null;
     status: string;
   }>): Promise<boolean> {
-    const { sql } = await import('../lib/database.js');
-
-    // Fetch current row to merge with partial updates in one atomic statement
-    const rows = await sql`SELECT * FROM prospects WHERE id = ${id} LIMIT 1`;
-    if (rows.length === 0) return false;
-    const cur = rows[0] as {
-      deal_name: string; customer_id: number | null; rank: string;
-      expected_amount: number | null; expected_order_date: string | null;
-      manager: string | null; notes: string | null; status: string;
-    };
+    const cur = await this.getProspectById(id);
+    if (!cur) return false;
 
     const newRank = data.rank !== undefined ? data.rank : cur.rank;
-    // expected_order_date is only meaningful for rank A; clear it otherwise
     const rawDate = data.expected_order_date !== undefined ? data.expected_order_date : cur.expected_order_date;
-    const newExpectedOrderDate = newRank === 'A' ? rawDate : null;
 
-    await sql`
-      UPDATE prospects SET
-        deal_name            = ${data.deal_name !== undefined ? data.deal_name : cur.deal_name},
-        customer_id          = ${data.customer_id !== undefined ? data.customer_id : cur.customer_id},
-        rank                 = ${newRank},
-        expected_amount      = ${data.expected_amount !== undefined ? data.expected_amount : cur.expected_amount},
-        expected_order_date  = ${newExpectedOrderDate},
-        manager              = ${data.manager !== undefined ? data.manager : cur.manager},
-        notes                = ${data.notes !== undefined ? data.notes : cur.notes},
-        status               = ${data.status !== undefined ? data.status : cur.status}
-      WHERE id = ${id}
-    `;
+    const { error } = await supabase
+      .from('prospects')
+      .update({
+        deal_name: data.deal_name !== undefined ? data.deal_name : cur.deal_name,
+        customer_id: data.customer_id !== undefined ? data.customer_id : cur.customer_id,
+        rank: newRank,
+        expected_amount: data.expected_amount !== undefined ? data.expected_amount : cur.expected_amount,
+        expected_order_date: newRank === 'A' ? rawDate : null,
+        manager: data.manager !== undefined ? data.manager : cur.manager,
+        notes: data.notes !== undefined ? data.notes : cur.notes,
+        status: data.status !== undefined ? data.status : cur.status,
+      })
+      .eq('id', id);
+    if (error) throw new Error(`[updateProspect] ${error.message}`);
     return true;
   }
 
   async deleteProspect(id: number): Promise<boolean> {
-    const { sql } = await import('../lib/database.js');
-    await sql`DELETE FROM prospects WHERE id = ${id}`;
+    const { error } = await supabase.from('prospects').delete().eq('id', id);
+    if (error) throw new Error(`[deleteProspect] ${error.message}`);
     return true;
   }
 
   async convertProspectToOrder(prospectId: number): Promise<string> {
-    const { sql } = await import('../lib/database.js');
+    // Atomically claim the prospect: active+A → won
+    const { data: locked, error: lockErr } = await supabase
+      .from('prospects')
+      .update({ status: 'won' })
+      .eq('id', prospectId)
+      .eq('status', 'active')
+      .eq('rank', 'A')
+      .select('id, deal_name, customer_id, rank, expected_amount, expected_order_date, manager, notes');
+    if (lockErr) throw new Error(`[convertProspectToOrder] ${lockErr.message}`);
 
-    // Atomically claim the prospect by changing status active→won in a single UPDATE.
-    // This prevents duplicate conversions in concurrent requests.
-    const locked = await sql`
-      UPDATE prospects
-      SET status = 'won'
-      WHERE id = ${prospectId} AND status = 'active' AND rank = 'A'
-      RETURNING id, deal_name, customer_id, rank, expected_amount,
-                expected_order_date, manager, notes
-    `;
-
-    if (locked.length === 0) {
-      // Check why the update failed to give a meaningful error
-      const rows = await sql`SELECT status, rank FROM prospects WHERE id = ${prospectId} LIMIT 1`;
-      if (rows.length === 0) throw new Error('見込み案件が見つかりません');
-      const p = rows[0] as { status: string; rank: string };
+    if (!locked || locked.length === 0) {
+      const { data: rows } = await supabase
+        .from('prospects')
+        .select('status, rank')
+        .eq('id', prospectId)
+        .maybeSingle();
+      if (!rows) throw new Error('見込み案件が見つかりません');
+      const p = rows as { status: string; rank: string };
       if (p.status === 'won') throw new Error('この案件はすでに受注済みです');
       if (p.rank !== 'A') throw new Error('受注転換はAランクの案件のみ可能です');
       throw new Error('受注転換に失敗しました（別の操作と競合した可能性があります）');
     }
 
     const prospect = locked[0] as {
-      id: number;
-      deal_name: string;
-      customer_id: number | null;
-      rank: string;
-      expected_amount: number | null;
-      expected_order_date: string | null;
-      manager: string | null;
-      notes: string | null;
+      id: number; deal_name: string; customer_id: number | null; rank: string;
+      expected_amount: number | null; expected_order_date: string | null;
+      manager: string | null; notes: string | null;
     };
 
-    // Fetch customer name separately for order creation
     let customerName: string | undefined;
     if (prospect.customer_id) {
-      const customerRows = await sql`SELECT name FROM customers_master WHERE id = ${prospect.customer_id} LIMIT 1`;
-      if (customerRows.length > 0) customerName = (customerRows[0] as { name: string }).name;
+      const { data: cust } = await supabase
+        .from('customers_master')
+        .select('name')
+        .eq('id', prospect.customer_id)
+        .maybeSingle();
+      if (cust) customerName = (cust as { name: string }).name;
     }
 
     let orderId: string | undefined;
@@ -2032,17 +1926,13 @@ export class ProductionDAO {
         is_invoiced: false,
       };
       orderId = await this.createOrder(orderData);
-
-      if (prospect.customer_id) {
-        await this.setOrderCustomerId(orderId, prospect.customer_id);
-      }
+      if (prospect.customer_id) await this.setOrderCustomerId(orderId, prospect.customer_id);
     } catch (orderError) {
-      // Compensating rollback: revert prospect status and clean up any created order
-      await sql`UPDATE prospects SET status = 'active' WHERE id = ${prospectId}`;
+      // 補償ロールバック: prospectのstatusを戻す
+      await supabase.from('prospects').update({ status: 'active' }).eq('id', prospectId);
       if (orderId !== undefined) {
-        // Best-effort cleanup of the orphaned order; log any secondary cleanup failure
         try { await this.deleteOrder(orderId); } catch (cleanupErr) {
-          console.error(`[convertProspectToOrder] WARN: prospect ${prospectId} status rolled back but orphaned order ${orderId} could not be deleted:`, cleanupErr);
+          console.error(`[convertProspectToOrder] WARN: rollback failed for order ${orderId}:`, cleanupErr);
         }
       }
       throw orderError;
