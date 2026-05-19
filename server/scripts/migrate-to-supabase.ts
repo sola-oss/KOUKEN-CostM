@@ -1,25 +1,39 @@
 /**
- * SQLite → Supabase データ移行スクリプト
- * 
+ * Neon PostgreSQL + SQLite → Supabase データ移行スクリプト
+ *
  * 使用方法:
  *   npx tsx server/scripts/migrate-to-supabase.ts
- * 
- * 注意:
- * 1. supabase-setup.sql をSupabaseダッシュボードで先に実行してください
- * 2. SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY が環境変数に設定されていること
- * 3. このスクリプトは冪等(何度実行してもよい)ではありません。
- *    重複実行するとデータが重複します。
+ *
+ * フェーズ1: テーブルが存在しない場合、CREATE SQL を出力して終了
+ * フェーズ2: テーブルが存在する場合、データ移行を実行
+ *
+ * ※ Neon の material_costs 実カラム:
+ *    id, order_id, description, total_amount, created_at, vendor_id
+ * ※ Neon の order_customer_map 実カラム:
+ *    order_id, customer_id, updated_at
+ * ※ SQLite の cost_settings 実カラム:
+ *    id, labor_rate_per_hour, updated_at
  */
 
 import Database from 'better-sqlite3';
 import { createClient } from '@supabase/supabase-js';
+import { neon } from '@neondatabase/serverless';
+
+// ============================================================
+// 接続設定
+// ============================================================
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SQLITE_PATH = process.env.DB_PATH || './server/db/production.sqlite';
+const DATABASE_URL = process.env.DATABASE_URL;
+const SQLITE_PATH = process.env.DB_PATH || './server/db/app.sqlite';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY を設定してください');
+  console.error('❌ SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY を設定してください');
+  process.exit(1);
+}
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL (Neon) を設定してください');
   process.exit(1);
 }
 
@@ -27,326 +41,259 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
+const neonSql = neon(DATABASE_URL);
 const sqlite = new Database(SQLITE_PATH, { readonly: true });
+
+// ============================================================
+// CREATE TABLE SQL 定義
+// （実際のカラム構造に合わせたスキーマ）
+// ============================================================
+
+const CREATE_SQLS: Record<string, string> = {
+  material_costs: `
+CREATE TABLE IF NOT EXISTS material_costs (
+  id          SERIAL PRIMARY KEY,
+  order_id    TEXT NOT NULL,
+  description TEXT,
+  total_amount NUMERIC NOT NULL DEFAULT 0,
+  vendor_id   INTEGER,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_material_costs_order_id ON material_costs(order_id);
+  `.trim(),
+
+  purchased_items: `
+CREATE TABLE IF NOT EXISTS purchased_items (
+  id          SERIAL PRIMARY KEY,
+  order_id    TEXT NOT NULL,
+  description TEXT,
+  total_amount NUMERIC NOT NULL DEFAULT 0,
+  vendor_id   INTEGER,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_purchased_items_order_id ON purchased_items(order_id);
+  `.trim(),
+
+  order_customer_map: `
+CREATE TABLE IF NOT EXISTS order_customer_map (
+  order_id    TEXT PRIMARY KEY,
+  customer_id INTEGER,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+  `.trim(),
+
+  cost_settings: `
+CREATE TABLE IF NOT EXISTS cost_settings (
+  id                  SERIAL PRIMARY KEY,
+  labor_rate_per_hour NUMERIC NOT NULL DEFAULT 3000,
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+  `.trim(),
+};
 
 // ============================================================
 // ユーティリティ
 // ============================================================
 
-function boolToPostgres(val: any): boolean | null {
-  if (val === null || val === undefined) return null;
-  return val === 1 || val === true || val === '1' || val === 'true';
+async function tableExists(tableName: string): Promise<boolean> {
+  const { error } = await supabase.from(tableName).select('*').limit(1);
+  if (!error) return true;
+  // 42P01 = table not found, PGRST116 = no rows (= table exists but empty)
+  if (error.code === 'PGRST116') return true;
+  if (error.message?.includes('does not exist') || error.code === '42P01') return false;
+  // その他のエラーはテーブルが存在する可能性（権限エラーなど）
+  console.warn(`  ⚠️  ${tableName} の確認中に警告: ${error.message} (code: ${error.code})`);
+  return true;
 }
 
-async function upsertBatch(tableName: string, rows: any[], conflictCol: string, batchSize = 100): Promise<void> {
+async function checkRequiredTables(): Promise<boolean> {
+  console.log('\n📋 Supabase テーブル存在確認...');
+  const required = Object.keys(CREATE_SQLS);
+  const missing: string[] = [];
+
+  for (const table of required) {
+    const exists = await tableExists(table);
+    console.log(`  ${exists ? '✓' : '✗'} ${table}`);
+    if (!exists) missing.push(table);
+  }
+
+  if (missing.length > 0) {
+    console.log('\n' + '='.repeat(60));
+    console.log('⚠️  以下のテーブルが Supabase に存在しません。');
+    console.log('Supabase ダッシュボード → SQL Editor で以下を実行してください:');
+    console.log('='.repeat(60));
+    for (const table of missing) {
+      console.log(`\n-- ===== ${table} =====`);
+      console.log(CREATE_SQLS[table]);
+    }
+    console.log('\n' + '='.repeat(60));
+    console.log('SQL 実行後、このスクリプトを再実行してください。');
+    console.log('='.repeat(60));
+    return false;
+  }
+
+  console.log('  ✅ 必要なテーブルがすべて存在します');
+  return true;
+}
+
+// ============================================================
+// データ移行: Neon → Supabase
+// ============================================================
+
+async function migrateMaterialCosts(): Promise<void> {
+  console.log('\n💴 material_costs 移行中 (Neon → Supabase)...');
+
+  const rows = await neonSql('SELECT id, order_id, description, total_amount, vendor_id, created_at FROM material_costs ORDER BY id') as any[];
+  console.log(`  Neon から ${rows.length} 件取得`);
+
   if (rows.length === 0) {
-    console.log(`  ${tableName}: スキップ (0件)`);
+    console.log('  スキップ (0件)');
     return;
   }
 
+  // 既存データ確認
+  const { data: existing } = await supabase.from('material_costs').select('id');
+  if (existing && existing.length > 0) {
+    console.log(`  Supabase に既存データ ${existing.length} 件あり → スキップします`);
+    console.log('  (強制上書きする場合は Supabase SQL Editor で DELETE FROM material_costs; を実行してから再実行)');
+    return;
+  }
+
+  const converted = rows.map((r: any) => ({
+    order_id:     r.order_id,
+    description:  r.description || null,
+    total_amount: Number(r.total_amount) || 0,
+    vendor_id:    r.vendor_id ?? null,
+    created_at:   r.created_at || new Date().toISOString(),
+  }));
+
+  const BATCH = 100;
   let inserted = 0;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-    const { error } = await supabase.from(tableName).upsert(batch, { onConflict: conflictCol });
+  for (let i = 0; i < converted.length; i += BATCH) {
+    const batch = converted.slice(i, i + BATCH);
+    const { error } = await supabase.from('material_costs').insert(batch);
     if (error) {
-      console.error(`  ✗ ${tableName} バッチ ${i}-${i + batchSize} エラー:`, error.message);
-      // Try one by one
-      for (const row of batch) {
-        const { error: rowError } = await supabase.from(tableName).upsert(row, { onConflict: conflictCol });
-        if (rowError) console.error(`    行エラー ${JSON.stringify(row).substring(0, 100)}:`, rowError.message);
-        else inserted++;
-      }
+      console.error(`  ✗ バッチ ${i}~${i + batch.length} エラー:`, error.message);
     } else {
       inserted += batch.length;
     }
   }
-  console.log(`  ✓ ${tableName}: ${inserted}/${rows.length}件 移行完了`);
+  console.log(`  ✓ ${inserted}/${rows.length} 件 挿入完了`);
+}
+
+async function migrateOrderCustomerMap(): Promise<void> {
+  console.log('\n🗺️  order_customer_map 移行中 (Neon → Supabase)...');
+
+  const rows = await neonSql('SELECT order_id, customer_id, updated_at FROM order_customer_map ORDER BY order_id') as any[];
+  console.log(`  Neon から ${rows.length} 件取得`);
+
+  if (rows.length === 0) {
+    console.log('  スキップ (0件)');
+    return;
+  }
+
+  // 既存データ確認
+  const { count } = await supabase.from('order_customer_map').select('*', { count: 'exact', head: true });
+  if (count && count > 0) {
+    console.log(`  Supabase に既存データ ${count} 件あり → スキップします`);
+    return;
+  }
+
+  const converted = rows.map((r: any) => ({
+    order_id:    r.order_id,
+    customer_id: r.customer_id ?? null,
+    updated_at:  r.updated_at || new Date().toISOString(),
+  }));
+
+  const BATCH = 200;
+  let inserted = 0;
+  for (let i = 0; i < converted.length; i += BATCH) {
+    const batch = converted.slice(i, i + BATCH);
+    const { error } = await supabase.from('order_customer_map').upsert(batch, { onConflict: 'order_id' });
+    if (error) {
+      console.error(`  ✗ バッチ ${i}~${i + batch.length} エラー:`, error.message);
+    } else {
+      inserted += batch.length;
+    }
+  }
+  console.log(`  ✓ ${inserted}/${rows.length} 件 移行完了`);
 }
 
 // ============================================================
-// 各テーブル移行関数
+// データ移行: SQLite → Supabase
 // ============================================================
-
-async function migrateOrders(): Promise<void> {
-  console.log('\n📋 受注 (orders) 移行中...');
-  const rows = sqlite.prepare('SELECT * FROM orders').all() as any[];
-  
-  const converted = rows.map(r => ({
-    order_id: r.order_id,
-    order_date: r.order_date || null,
-    client_name: r.client_name || null,
-    manager: r.manager || null,
-    client_order_no: r.client_order_no || null,
-    project_title: r.project_title || null,
-    is_delivered: boolToPostgres(r.is_delivered) ?? false,
-    has_shipping_fee: boolToPostgres(r.has_shipping_fee) ?? false,
-    is_amount_confirmed: boolToPostgres(r.is_amount_confirmed) ?? false,
-    is_invoiced: boolToPostgres(r.is_invoiced) ?? false,
-    due_date: r.due_date || null,
-    delivery_date: r.delivery_date || null,
-    confirmed_date: r.confirmed_date || null,
-    estimated_amount: r.estimated_amount ?? null,
-    invoiced_amount: r.invoiced_amount ?? null,
-    invoice_month: r.invoice_month || null,
-    subcontractor: r.subcontractor || null,
-    processing_hours: r.processing_hours ?? null,
-    note: r.note || null,
-    product_name: r.product_name || null,
-    qty: r.qty ?? null,
-    start_date: r.start_date || null,
-    sales: r.sales ?? null,
-    estimated_material_cost: r.estimated_material_cost ?? null,
-    std_time_per_unit: r.std_time_per_unit ?? null,
-    status: r.status || 'pending',
-    customer_name: r.customer_name || null,
-    customer_code: r.customer_code || null,
-    customer_zip: r.customer_zip || null,
-    customer_address1: r.customer_address1 || null,
-    customer_address2: r.customer_address2 || null,
-    created_at: r.created_at || new Date().toISOString(),
-    updated_at: r.updated_at || new Date().toISOString()
-  }));
-
-  await upsertBatch('orders', converted, 'order_id');
-}
-
-async function migrateProcurements(): Promise<void> {
-  console.log('\n🔧 調達 (procurements) 移行中...');
-  
-  // 先に既存データを削除（idがSERIALなので重複するため）
-  const { error: delError } = await supabase.from('procurements').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
-
-  const rows = sqlite.prepare('SELECT * FROM procurements').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    order_id: r.order_id || null,
-    kind: r.kind || null,
-    item_name: r.item_name || null,
-    qty: r.qty ?? null,
-    unit: r.unit || null,
-    eta: r.eta || null,
-    status: r.status || null,
-    vendor: r.vendor || null,
-    unit_price: r.unit_price ?? null,
-    received_at: r.received_at || null,
-    std_time_per_unit: r.std_time_per_unit ?? null,
-    act_time_per_unit: r.act_time_per_unit ?? null,
-    worker: r.worker || null,
-    completed_at: r.completed_at || null,
-    vendor_id: r.vendor_id ?? null,
-    total_amount: r.total_amount ?? null,
-    is_approved: boolToPostgres(r.is_approved) ?? false,
-    created_at: r.created_at || new Date().toISOString()
-  }));
-
-  await upsertBatch('procurements', converted, 'id');
-}
-
-async function migrateWorkersLog(): Promise<void> {
-  console.log('\n👷 作業者ログ (workers_log) 移行中...');
-  
-  const { error: delError } = await supabase.from('workers_log').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
-
-  const rows = sqlite.prepare('SELECT * FROM workers_log').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    order_id: r.order_id || null,
-    qty: r.qty ?? null,
-    act_time_per_unit: r.act_time_per_unit ?? null,
-    worker: r.worker || null,
-    date: r.date || null,
-    created_at: r.created_at || new Date().toISOString()
-  }));
-
-  await upsertBatch('workers_log', converted, 'id');
-}
-
-async function migrateTasks(): Promise<void> {
-  console.log('\n📌 タスク (tasks) 移行中...');
-  
-  const { error: delError } = await supabase.from('tasks').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
-
-  const rows = sqlite.prepare('SELECT * FROM tasks').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    order_id: r.order_id || null,
-    task_name: r.task_name || null,
-    assignee: r.assignee || null,
-    planned_start: r.planned_start || null,
-    planned_end: r.planned_end || null,
-    std_time_per_unit: r.std_time_per_unit ?? null,
-    qty: r.qty ?? null,
-    status: r.status || 'not_started',
-    created_at: r.created_at || new Date().toISOString()
-  }));
-
-  await upsertBatch('tasks', converted, 'id');
-}
-
-async function migrateWorkLogs(): Promise<void> {
-  console.log('\n⏱️  作業実績 (work_logs) 移行中...');
-  
-  const { error: delError } = await supabase.from('work_logs').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
-
-  const rows = sqlite.prepare('SELECT * FROM work_logs').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    work_date: r.work_date || null,
-    employee_name: r.employee_name || null,
-    client_name: r.client_name || null,
-    project_name: r.project_name || null,
-    task_large: r.task_large || null,
-    task_medium: r.task_medium || null,
-    task_small: r.task_small || null,
-    work_name: r.work_name || null,
-    planned_time: r.planned_time || null,
-    actual_time: r.actual_time || null,
-    total_work_time: r.total_work_time || null,
-    note: r.note || null,
-    date: r.date || null,
-    worker: r.worker || null,
-    task_name: r.task_name || null,
-    task_id: r.task_id ?? null,
-    start_time: r.start_time || null,
-    end_time: r.end_time || null,
-    duration_hours: r.duration_hours ?? null,
-    quantity: r.quantity ?? null,
-    memo: r.memo || null,
-    status: r.status || null,
-    order_id: r.order_id || null,
-    order_no: r.order_no || null,
-    match_status: r.match_status || 'unlinked',
-    source: r.source || 'manual',
-    imported_at: r.imported_at || null
-  }));
-
-  await upsertBatch('work_logs', converted, 'id');
-}
-
-async function migrateMaterials(): Promise<void> {
-  console.log('\n🧱 材料マスタ (materials) 移行中...');
-
-  const { error: delError } = await supabase.from('materials').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
-
-  const rows = sqlite.prepare('SELECT * FROM materials').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    material_type: r.material_type,
-    name: r.name,
-    size: r.size,
-    unit: r.unit,
-    unit_weight: r.unit_weight ?? null,
-    unit_price: r.unit_price ?? null,
-    remark: r.remark || null,
-    created_at: r.created_at || new Date().toISOString()
-  }));
-
-  await upsertBatch('materials', converted, 'id');
-}
-
-async function migrateMaterialUsages(): Promise<void> {
-  console.log('\n📐 材料使用実績 (material_usages) 移行中...');
-
-  const { error: delError } = await supabase.from('material_usages').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
-
-  const rows = sqlite.prepare('SELECT * FROM material_usages').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    project_id: r.project_id || null,
-    area: r.area || null,
-    zone: r.zone || null,
-    drawing_no: r.drawing_no || null,
-    material_id: r.material_id ?? null,
-    quantity: r.quantity ?? 1,
-    length: r.length ?? null,
-    remark: r.remark || null,
-    created_at: r.created_at || new Date().toISOString()
-  }));
-
-  await upsertBatch('material_usages', converted, 'id');
-}
-
-async function migrateWorkersMaster(): Promise<void> {
-  console.log('\n👤 作業者マスタ (workers_master) 移行中...');
-
-  const { error: delError } = await supabase.from('workers_master').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
-
-  const rows = sqlite.prepare('SELECT * FROM workers_master').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    name: r.name,
-    hourly_rate: r.hourly_rate,
-    is_active: boolToPostgres(r.is_active) ?? true,
-    created_at: r.created_at || new Date().toISOString(),
-    updated_at: r.updated_at || new Date().toISOString()
-  }));
-
-  await upsertBatch('workers_master', converted, 'id');
-}
-
-async function migrateVendorsMaster(): Promise<void> {
-  console.log('\n🏭 業者マスタ (vendors_master) 移行中...');
-
-  const { error: delError } = await supabase.from('vendors_master').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
-
-  const rows = sqlite.prepare('SELECT * FROM vendors_master').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    name: r.name,
-    contact_person: r.contact_person || null,
-    phone: r.phone || null,
-    email: r.email || null,
-    address: r.address || null,
-    note: r.note || null,
-    is_active: boolToPostgres(r.is_active) ?? true,
-    created_at: r.created_at || new Date().toISOString(),
-    updated_at: r.updated_at || new Date().toISOString()
-  }));
-
-  await upsertBatch('vendors_master', converted, 'id');
-}
 
 async function migrateCostSettings(): Promise<void> {
-  console.log('\n💰 原価設定 (cost_settings) 移行中...');
+  console.log('\n⚙️  cost_settings 移行中 (SQLite → Supabase)...');
+
   const row = sqlite.prepare('SELECT * FROM cost_settings WHERE id = 1').get() as any;
-  if (row) {
-    const { error } = await supabase.from('cost_settings').upsert({
-      id: 1,
-      labor_rate_per_hour: row.labor_rate_per_hour,
-      updated_at: row.updated_at || new Date().toISOString()
-    }, { onConflict: 'id' });
-    if (error) console.error('  ✗ cost_settings エラー:', error.message);
-    else console.log('  ✓ cost_settings: 1件 移行完了');
+  if (!row) {
+    console.log('  SQLite にデータなし → スキップ');
+    return;
+  }
+
+  const { data: existing } = await supabase.from('cost_settings').select('id').limit(1);
+  if (existing && existing.length > 0) {
+    console.log(`  Supabase に既存データあり → スキップします`);
+    return;
+  }
+
+  const { error } = await supabase.from('cost_settings').insert({
+    labor_rate_per_hour: row.labor_rate_per_hour ?? 3000,
+    updated_at:          row.updated_at || new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error('  ✗ cost_settings エラー:', error.message);
+  } else {
+    console.log('  ✓ 1件 挿入完了 (labor_rate_per_hour:', row.labor_rate_per_hour, ')');
   }
 }
 
-async function migrateOutsourcingCosts(): Promise<void> {
-  console.log('\n💼 外注費 (outsourcing_costs) 移行中...');
+async function migratePurchasedItems(): Promise<void> {
+  console.log('\n🛒 purchased_items 確認中 (Neon → Supabase)...');
 
-  const { error: delError } = await supabase.from('outsourcing_costs').delete().neq('id', 0);
-  if (delError) console.warn('  削除警告:', delError.message);
+  const rows = await neonSql('SELECT id, order_id, description, total_amount, vendor_id, created_at FROM purchased_items ORDER BY id') as any[];
+  console.log(`  Neon から ${rows.length} 件取得`);
 
-  const rows = sqlite.prepare('SELECT * FROM outsourcing_costs').all() as any[];
-  const converted = rows.map(r => ({
-    id: r.id,
-    project_id: r.project_id || null,
-    vendor_id: r.vendor_id ?? null,
-    description: r.description || null,
-    amount: r.amount ?? null,
-    date: r.date || null,
-    note: r.note || null,
-    created_at: r.created_at || new Date().toISOString()
+  if (rows.length === 0) {
+    console.log('  スキップ (0件) — テーブルは Supabase に存在します');
+    return;
+  }
+
+  const converted = rows.map((r: any) => ({
+    order_id:     r.order_id,
+    description:  r.description || null,
+    total_amount: Number(r.total_amount) || 0,
+    vendor_id:    r.vendor_id ?? null,
+    created_at:   r.created_at || new Date().toISOString(),
   }));
 
-  await upsertBatch('outsourcing_costs', converted, 'id');
+  const { error } = await supabase.from('purchased_items').insert(converted);
+  if (error) {
+    console.error('  ✗ purchased_items エラー:', error.message);
+  } else {
+    console.log(`  ✓ ${converted.length} 件 挿入完了`);
+  }
+}
+
+// ============================================================
+// 移行後サマリー
+// ============================================================
+
+async function printSummary(): Promise<void> {
+  console.log('\n📊 移行後の件数確認...');
+  const tables = ['material_costs', 'purchased_items', 'order_customer_map', 'cost_settings'];
+  for (const t of tables) {
+    const { count, error } = await supabase.from(t).select('*', { count: 'exact', head: true });
+    if (error) {
+      console.log(`  ${t}: エラー (${error.message})`);
+    } else {
+      console.log(`  ${t}: ${count} 件`);
+    }
+  }
 }
 
 // ============================================================
@@ -354,31 +301,35 @@ async function migrateOutsourcingCosts(): Promise<void> {
 // ============================================================
 
 async function main(): Promise<void> {
-  console.log('=================================================');
-  console.log('SQLite → Supabase データ移行スクリプト');
-  console.log('=================================================');
-  console.log(`SQLiteファイル: ${SQLITE_PATH}`);
-  console.log(`Supabase URL: ${SUPABASE_URL?.substring(0, 40)}...`);
+  console.log('='.repeat(60));
+  console.log('Neon + SQLite → Supabase データ移行スクリプト');
+  console.log('='.repeat(60));
+  console.log(`Neon:     ${DATABASE_URL!.substring(0, 40)}...`);
+  console.log(`Supabase: ${SUPABASE_URL!.substring(0, 40)}...`);
+  console.log(`SQLite:   ${SQLITE_PATH}`);
 
   try {
-    // 移行順序は外部キー制約を考慮
-    await migrateOrders();
-    await migrateProcurements();
-    await migrateWorkersLog();
-    await migrateTasks();
-    await migrateWorkLogs();
-    await migrateMaterials();
-    await migrateMaterialUsages();
-    await migrateWorkersMaster();
-    await migrateVendorsMaster();
-    await migrateCostSettings();
-    await migrateOutsourcingCosts();
+    // フェーズ1: テーブル存在確認
+    const tablesReady = await checkRequiredTables();
+    if (!tablesReady) {
+      process.exit(1);
+    }
 
-    console.log('\n=================================================');
-    console.log('✅ データ移行完了！');
-    console.log('=================================================');
+    // フェーズ2: データ移行
+    console.log('\n🚀 データ移行開始...');
+    await migrateMaterialCosts();
+    await migratePurchasedItems();
+    await migrateOrderCustomerMap();
+    await migrateCostSettings();
+
+    await printSummary();
+
+    console.log('\n' + '='.repeat(60));
+    console.log('✅ 移行完了！');
+    console.log('='.repeat(60));
   } catch (err: any) {
     console.error('\n❌ 移行エラー:', err.message);
+    console.error(err.stack);
     process.exit(1);
   } finally {
     sqlite.close();
