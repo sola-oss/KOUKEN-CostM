@@ -2051,66 +2051,26 @@ export class ProductionDAO {
     return orderId;
   }
 
-  // ========== Quotes (見積書) CRUD (Replit PostgreSQL) ==========
+  // ========== Quotes (見積書) CRUD (Supabase) ==========
 
   async ensureQuotesTablesCreated(): Promise<void> {
-    const { sql } = await import('../lib/database.js');
-    await sql`
-      CREATE TABLE IF NOT EXISTS quotes (
-        id SERIAL PRIMARY KEY,
-        quote_number TEXT NOT NULL UNIQUE,
-        issue_date TEXT,
-        client_name TEXT NOT NULL,
-        contact_person TEXT,
-        client_request_no TEXT,
-        status TEXT NOT NULL DEFAULT 'draft',
-        converted_order_id TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    `;
-    await sql`CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status)`;
-    await sql`CREATE INDEX IF NOT EXISTS idx_quotes_client ON quotes(client_name)`;
-    await sql`CREATE INDEX IF NOT EXISTS idx_quotes_converted ON quotes(converted_order_id)`;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS quote_items (
-        id SERIAL PRIMARY KEY,
-        quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        product_name TEXT,
-        model_number TEXT,
-        quantity REAL,
-        unit TEXT,
-        unit_price REAL,
-        notes TEXT
-      )
-    `;
-    await sql`CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id)`;
-
-    // Add material_id column if it doesn't exist (migration for existing tables)
-    try {
-      await sql`ALTER TABLE quote_items ADD COLUMN material_id INTEGER`;
-    } catch {
-      // Column already exists — ignore
-    }
+    // テーブルはSupabase SQL Editorで作成済み — no-op
   }
 
   private async _generateQuoteNumber(): Promise<string> {
-    const { sql } = await import('../lib/database.js');
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
     const prefix = `QT-${y}${m}-`;
-    const rows = await sql`
-      SELECT quote_number FROM quotes
-      WHERE quote_number LIKE ${prefix + '%'}
-      ORDER BY quote_number DESC
-      LIMIT 1
-    `;
+    const { data } = await supabase
+      .from('quotes')
+      .select('quote_number')
+      .like('quote_number', `${prefix}%`)
+      .order('quote_number', { ascending: false })
+      .limit(1);
     let seq = 1;
-    if (rows.length > 0) {
-      const last = rows[0].quote_number as string;
+    if (data && data.length > 0) {
+      const last = (data[0] as { quote_number: string }).quote_number;
       const num = parseInt(last.slice(prefix.length), 10);
       if (!isNaN(num)) seq = num + 1;
     }
@@ -2118,198 +2078,196 @@ export class ProductionDAO {
   }
 
   async createQuote(data: InsertQuote, items: Omit<InsertQuoteItem, 'quote_id'>[]): Promise<number> {
-    const { sql } = await import('../lib/database.js');
     const now = new Date().toISOString();
     const quoteNumber = data.quote_number || await this._generateQuoteNumber();
 
-    const rows = await sql`
-      INSERT INTO quotes (quote_number, issue_date, client_name, contact_person, client_request_no, status, converted_order_id, created_at, updated_at)
-      VALUES (
-        ${quoteNumber},
-        ${data.issue_date || null},
-        ${data.client_name},
-        ${data.contact_person || null},
-        ${data.client_request_no || null},
-        ${data.status || 'draft'},
-        ${data.converted_order_id || null},
-        ${now},
-        ${now}
-      )
-      RETURNING id
-    `;
-    const quoteId = rows[0].id as number;
+    const { data: row, error } = await supabase
+      .from('quotes')
+      .insert({
+        quote_number: quoteNumber,
+        issue_date: data.issue_date || null,
+        client_name: data.client_name,
+        contact_person: data.contact_person || null,
+        client_request_no: data.client_request_no || null,
+        status: data.status || 'draft',
+        converted_order_id: data.converted_order_id || null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id')
+      .single();
+    if (error) throw new Error(`[createQuote] ${error.message}`);
+    const quoteId = (row as { id: number }).id;
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      await sql`
-        INSERT INTO quote_items (quote_id, sort_order, material_id, product_name, model_number, quantity, unit, unit_price, notes)
-        VALUES (
-          ${quoteId},
-          ${item.sort_order ?? i},
-          ${(item as { material_id?: number | null }).material_id ?? null},
-          ${item.product_name || null},
-          ${item.model_number || null},
-          ${item.quantity ?? null},
-          ${item.unit || null},
-          ${item.unit_price ?? null},
-          ${item.notes || null}
-        )
-      `;
+    if (items.length > 0) {
+      const itemRows = items.map((item, i) => ({
+        quote_id: quoteId,
+        sort_order: item.sort_order ?? i,
+        material_id: (item as { material_id?: number | null }).material_id ?? null,
+        product_name: item.product_name || null,
+        model_number: item.model_number || null,
+        quantity: item.quantity ?? null,
+        unit: item.unit || null,
+        unit_price: item.unit_price ?? null,
+        notes: item.notes || null,
+      }));
+      const { error: ie } = await supabase.from('quote_items').insert(itemRows);
+      if (ie) throw new Error(`[createQuote items] ${ie.message}`);
     }
-
     return quoteId;
   }
 
   async getQuotes(): Promise<(Quote & { total_amount: number })[]> {
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`
-      SELECT q.*,
-        COALESCE(SUM(qi.quantity * qi.unit_price), 0) AS total_amount
-      FROM quotes q
-      LEFT JOIN quote_items qi ON qi.quote_id = q.id
-      GROUP BY q.id
-      ORDER BY q.created_at DESC
-    `;
-    return rows as (Quote & { total_amount: number })[];
+    const { data: quotes, error } = await supabase
+      .from('quotes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`[getQuotes] ${error.message}`);
+    if (!quotes || quotes.length === 0) return [];
+
+    const quoteIds = (quotes as Quote[]).map(q => q.id);
+    const { data: items } = await supabase
+      .from('quote_items')
+      .select('quote_id, quantity, unit_price')
+      .in('quote_id', quoteIds);
+
+    const totalMap = new Map<number, number>();
+    for (const item of (items || []) as { quote_id: number; quantity: number | null; unit_price: number | null }[]) {
+      const prev = totalMap.get(item.quote_id) || 0;
+      totalMap.set(item.quote_id, prev + (item.quantity || 0) * (item.unit_price || 0));
+    }
+    return (quotes as Quote[]).map(q => ({ ...q, total_amount: totalMap.get(q.id) || 0 }));
   }
 
   async getQuoteById(id: number): Promise<QuoteWithItems | null> {
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`SELECT * FROM quotes WHERE id = ${id} LIMIT 1`;
-    if (rows.length === 0) return null;
-    const quote = rows[0] as Quote;
-    const items = await sql`
-      SELECT * FROM quote_items WHERE quote_id = ${id} ORDER BY sort_order, id
-    `;
-    return { ...quote, items: items as QuoteItem[] };
+    const { data: quote, error } = await supabase
+      .from('quotes')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(`[getQuoteById] ${error.message}`);
+    if (!quote) return null;
+    const { data: items } = await supabase
+      .from('quote_items')
+      .select('*')
+      .eq('quote_id', id)
+      .order('sort_order')
+      .order('id');
+    return { ...(quote as Quote), items: (items || []) as QuoteItem[] };
   }
 
   async getQuoteByOrderId(orderId: string): Promise<Quote | null> {
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`
-      SELECT * FROM quotes WHERE converted_order_id = ${orderId} LIMIT 1
-    `;
-    return rows.length > 0 ? (rows[0] as Quote) : null;
+    const { data, error } = await supabase
+      .from('quotes')
+      .select('*')
+      .eq('converted_order_id', orderId)
+      .maybeSingle();
+    if (error) throw new Error(`[getQuoteByOrderId] ${error.message}`);
+    return data as Quote | null;
   }
 
   async updateQuote(id: number, data: Partial<InsertQuote>, items?: Omit<InsertQuoteItem, 'quote_id'>[]): Promise<boolean> {
-    const { sql } = await import('../lib/database.js');
     const now = new Date().toISOString();
+    const updates: Record<string, any> = { updated_at: now };
+    if (data.quote_number !== undefined) updates.quote_number = data.quote_number;
+    if (data.issue_date !== undefined) updates.issue_date = data.issue_date || null;
+    if (data.client_name !== undefined) updates.client_name = data.client_name;
+    if (data.contact_person !== undefined) updates.contact_person = data.contact_person || null;
+    if (data.client_request_no !== undefined) updates.client_request_no = data.client_request_no || null;
+    if (data.status !== undefined) updates.status = data.status;
+    if (data.converted_order_id !== undefined) updates.converted_order_id = data.converted_order_id || null;
 
-    if (data.quote_number !== undefined) {
-      await sql`UPDATE quotes SET quote_number = ${data.quote_number} WHERE id = ${id}`;
-    }
-    if (data.issue_date !== undefined) {
-      await sql`UPDATE quotes SET issue_date = ${data.issue_date || null} WHERE id = ${id}`;
-    }
-    if (data.client_name !== undefined) {
-      await sql`UPDATE quotes SET client_name = ${data.client_name} WHERE id = ${id}`;
-    }
-    if (data.contact_person !== undefined) {
-      await sql`UPDATE quotes SET contact_person = ${data.contact_person || null} WHERE id = ${id}`;
-    }
-    if (data.client_request_no !== undefined) {
-      await sql`UPDATE quotes SET client_request_no = ${data.client_request_no || null} WHERE id = ${id}`;
-    }
-    if (data.status !== undefined) {
-      await sql`UPDATE quotes SET status = ${data.status} WHERE id = ${id}`;
-    }
-    if (data.converted_order_id !== undefined) {
-      await sql`UPDATE quotes SET converted_order_id = ${data.converted_order_id || null} WHERE id = ${id}`;
-    }
-    await sql`UPDATE quotes SET updated_at = ${now} WHERE id = ${id}`;
+    const { error } = await supabase.from('quotes').update(updates).eq('id', id);
+    if (error) throw new Error(`[updateQuote] ${error.message}`);
 
     if (items !== undefined) {
-      await sql`DELETE FROM quote_items WHERE quote_id = ${id}`;
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        await sql`
-          INSERT INTO quote_items (quote_id, sort_order, material_id, product_name, model_number, quantity, unit, unit_price, notes)
-          VALUES (
-            ${id},
-            ${item.sort_order ?? i},
-            ${(item as { material_id?: number | null }).material_id ?? null},
-            ${item.product_name || null},
-            ${item.model_number || null},
-            ${item.quantity ?? null},
-            ${item.unit || null},
-            ${item.unit_price ?? null},
-            ${item.notes || null}
-          )
-        `;
+      await supabase.from('quote_items').delete().eq('quote_id', id);
+      if (items.length > 0) {
+        const itemRows = items.map((item, i) => ({
+          quote_id: id,
+          sort_order: item.sort_order ?? i,
+          material_id: (item as { material_id?: number | null }).material_id ?? null,
+          product_name: item.product_name || null,
+          model_number: item.model_number || null,
+          quantity: item.quantity ?? null,
+          unit: item.unit || null,
+          unit_price: item.unit_price ?? null,
+          notes: item.notes || null,
+        }));
+        const { error: ie } = await supabase.from('quote_items').insert(itemRows);
+        if (ie) throw new Error(`[updateQuote items] ${ie.message}`);
       }
     }
-
     return true;
   }
 
   async deleteQuote(id: number): Promise<boolean> {
-    const { sql } = await import('../lib/database.js');
-    await sql`DELETE FROM quotes WHERE id = ${id}`;
+    await supabase.from('quote_items').delete().eq('quote_id', id);
+    const { error } = await supabase.from('quotes').delete().eq('id', id);
+    if (error) throw new Error(`[deleteQuote] ${error.message}`);
     return true;
   }
 
   async getQuoteItems(quoteId: number): Promise<QuoteItem[]> {
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`
-      SELECT * FROM quote_items WHERE quote_id = ${quoteId} ORDER BY sort_order, id
-    `;
-    return rows as QuoteItem[];
+    const { data, error } = await supabase
+      .from('quote_items')
+      .select('*')
+      .eq('quote_id', quoteId)
+      .order('sort_order')
+      .order('id');
+    if (error) throw new Error(`[getQuoteItems] ${error.message}`);
+    return (data || []) as QuoteItem[];
   }
 
   async addQuoteItem(quoteId: number, item: Omit<InsertQuoteItem, 'quote_id'>): Promise<QuoteItem> {
-    const { sql } = await import('../lib/database.js');
-    const rows = await sql`
-      INSERT INTO quote_items (quote_id, sort_order, material_id, product_name, model_number, quantity, unit, unit_price, notes)
-      VALUES (
-        ${quoteId},
-        ${item.sort_order ?? 0},
-        ${(item as { material_id?: number | null }).material_id ?? null},
-        ${item.product_name || null},
-        ${item.model_number || null},
-        ${item.quantity ?? null},
-        ${item.unit || null},
-        ${item.unit_price ?? null},
-        ${item.notes || null}
-      )
-      RETURNING *
-    `;
-    return rows[0] as QuoteItem;
+    const { data, error } = await supabase
+      .from('quote_items')
+      .insert({
+        quote_id: quoteId,
+        sort_order: item.sort_order ?? 0,
+        material_id: (item as { material_id?: number | null }).material_id ?? null,
+        product_name: item.product_name || null,
+        model_number: item.model_number || null,
+        quantity: item.quantity ?? null,
+        unit: item.unit || null,
+        unit_price: item.unit_price ?? null,
+        notes: item.notes || null,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(`[addQuoteItem] ${error.message}`);
+    return data as QuoteItem;
   }
 
   async updateQuoteItem(itemId: number, item: Partial<Omit<InsertQuoteItem, 'quote_id'>>): Promise<QuoteItem | null> {
-    const { sql } = await import('../lib/database.js');
-    if ((item as { material_id?: number | null }).material_id !== undefined) {
-      await sql`UPDATE quote_items SET material_id = ${(item as { material_id?: number | null }).material_id ?? null} WHERE id = ${itemId}`;
+    const updates: Record<string, any> = {};
+    if ((item as { material_id?: number | null }).material_id !== undefined)
+      updates.material_id = (item as { material_id?: number | null }).material_id ?? null;
+    if (item.sort_order !== undefined) updates.sort_order = item.sort_order;
+    if (item.product_name !== undefined) updates.product_name = item.product_name || null;
+    if (item.model_number !== undefined) updates.model_number = item.model_number || null;
+    if (item.quantity !== undefined) updates.quantity = item.quantity ?? null;
+    if (item.unit !== undefined) updates.unit = item.unit || null;
+    if (item.unit_price !== undefined) updates.unit_price = item.unit_price ?? null;
+    if (item.notes !== undefined) updates.notes = item.notes || null;
+
+    if (Object.keys(updates).length === 0) {
+      const { data } = await supabase.from('quote_items').select('*').eq('id', itemId).maybeSingle();
+      return data as QuoteItem | null;
     }
-    if (item.sort_order !== undefined) {
-      await sql`UPDATE quote_items SET sort_order = ${item.sort_order} WHERE id = ${itemId}`;
-    }
-    if (item.product_name !== undefined) {
-      await sql`UPDATE quote_items SET product_name = ${item.product_name || null} WHERE id = ${itemId}`;
-    }
-    if (item.model_number !== undefined) {
-      await sql`UPDATE quote_items SET model_number = ${item.model_number || null} WHERE id = ${itemId}`;
-    }
-    if (item.quantity !== undefined) {
-      await sql`UPDATE quote_items SET quantity = ${item.quantity ?? null} WHERE id = ${itemId}`;
-    }
-    if (item.unit !== undefined) {
-      await sql`UPDATE quote_items SET unit = ${item.unit || null} WHERE id = ${itemId}`;
-    }
-    if (item.unit_price !== undefined) {
-      await sql`UPDATE quote_items SET unit_price = ${item.unit_price ?? null} WHERE id = ${itemId}`;
-    }
-    if (item.notes !== undefined) {
-      await sql`UPDATE quote_items SET notes = ${item.notes || null} WHERE id = ${itemId}`;
-    }
-    const rows = await sql`SELECT * FROM quote_items WHERE id = ${itemId} LIMIT 1`;
-    return rows.length > 0 ? (rows[0] as QuoteItem) : null;
+    const { data, error } = await supabase
+      .from('quote_items')
+      .update(updates)
+      .eq('id', itemId)
+      .select()
+      .single();
+    if (error) throw new Error(`[updateQuoteItem] ${error.message}`);
+    return data as QuoteItem;
   }
 
   async deleteQuoteItem(itemId: number): Promise<boolean> {
-    const { sql } = await import('../lib/database.js');
-    await sql`DELETE FROM quote_items WHERE id = ${itemId}`;
+    const { error } = await supabase.from('quote_items').delete().eq('id', itemId);
+    if (error) throw new Error(`[deleteQuoteItem] ${error.message}`);
     return true;
   }
 
