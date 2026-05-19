@@ -38,19 +38,21 @@ function setCachedProfile(user: AuthUser | null) {
 
 async function loadUserProfile(userId: string, email: string): Promise<AuthUser | null> {
   try {
-    const { data, error } = await supabase
-      .from("user_profiles")
-      .select("id, name, role")
-      .eq("id", userId)
-      .single();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return null;
 
-    if (error || !data) return null;
+    const res = await fetch("/api/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
 
+    const data = await res.json();
     return {
       id: data.id,
       name: data.name,
       role: data.role as "admin" | "worker",
-      email,
+      email: data.email || email,
     };
   } catch {
     return null;

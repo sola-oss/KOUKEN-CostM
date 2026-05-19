@@ -45,6 +45,32 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 // ---- Routes ----
 
+// GET /api/auth/me - Get own profile (any authenticated user)
+router.get('/api/auth/me', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: '認証が必要です' });
+  }
+
+  const token = authHeader.slice(7);
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) {
+    return res.status(401).json({ error: '無効なトークンです' });
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from('user_profiles')
+    .select('id, name, role')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError || !profile) {
+    return res.status(404).json({ error: 'プロフィールが見つかりません' });
+  }
+
+  return res.json({ id: profile.id, name: profile.name, role: profile.role, email: user.email ?? '' });
+});
+
 // GET /api/auth/users - List all users (admin only)
 router.get('/api/auth/users', requireAdmin, async (req, res) => {
   try {
