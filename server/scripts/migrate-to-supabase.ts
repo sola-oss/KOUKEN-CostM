@@ -100,10 +100,12 @@ CREATE TABLE IF NOT EXISTS cost_settings (
 async function tableExists(tableName: string): Promise<boolean> {
   const { error } = await supabase.from(tableName).select('*').limit(1);
   if (!error) return true;
-  // 42P01 = table not found, PGRST116 = no rows (= table exists but empty)
+  // PGRST116 = no rows (テーブル存在するが空)
   if (error.code === 'PGRST116') return true;
+  // PGRST205 = schema cache にテーブルなし → 存在しない
+  if (error.code === 'PGRST205') return false;
   if (error.message?.includes('does not exist') || error.code === '42P01') return false;
-  // その他のエラーはテーブルが存在する可能性（権限エラーなど）
+  // その他のエラーはテーブルが存在する可能性
   console.warn(`  ⚠️  ${tableName} の確認中に警告: ${error.message} (code: ${error.code})`);
   return true;
 }
@@ -240,15 +242,17 @@ async function migrateCostSettings(): Promise<void> {
     return;
   }
 
+  // Supabase: labor_cost_per_hour / SQLite: labor_rate_per_hour (カラム名が異なる)
   const { error } = await supabase.from('cost_settings').insert({
-    labor_rate_per_hour: row.labor_rate_per_hour ?? 3000,
+    labor_cost_per_hour: row.labor_rate_per_hour ?? 3000,
+    overhead_rate:       0,
     updated_at:          row.updated_at || new Date().toISOString(),
   });
 
   if (error) {
     console.error('  ✗ cost_settings エラー:', error.message);
   } else {
-    console.log('  ✓ 1件 挿入完了 (labor_rate_per_hour:', row.labor_rate_per_hour, ')');
+    console.log('  ✓ 1件 挿入完了 (labor_cost_per_hour:', row.labor_rate_per_hour, ')');
   }
 }
 
