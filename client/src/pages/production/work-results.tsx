@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -51,13 +51,31 @@ const workLogSchema = z.object({
 
 type WorkLogFormData = z.infer<typeof workLogSchema>;
 
+const NOW = dayjs();
+const YEAR_OPTIONS = Array.from(
+  { length: NOW.year() - 2022 },
+  (_, i) => NOW.year() - i
+);
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
+
 export default function WorkResults() {
   const { toast } = useToast();
   const [editingLog, setEditingLog] = useState<WorkLog | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(NOW.year());
+  const [selectedMonth, setSelectedMonth] = useState(NOW.month() + 1);
 
-  const todayDate = dayjs().format("YYYY-MM-DD");
+  const todayDate = NOW.format("YYYY-MM-DD");
+
+  const fromDate = useMemo(
+    () => dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).format("YYYY-MM-DD"),
+    [selectedYear, selectedMonth]
+  );
+  const toDate = useMemo(
+    () => dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).endOf("month").format("YYYY-MM-DD"),
+    [selectedYear, selectedMonth]
+  );
 
   const form = useForm<WorkLogFormData>({
     resolver: zodResolver(workLogSchema),
@@ -86,10 +104,10 @@ export default function WorkResults() {
     }
   }, [activeWorkers.length]);
 
-  // 作業実績一覧取得（最新200件）
+  // 作業実績一覧取得（選択月）
   const { data: workLogsData, isLoading: logsLoading } = useQuery({
-    queryKey: ["/api/work-logs"],
-    queryFn: () => listWorkLogs({ page_size: 200 }),
+    queryKey: ["/api/work-logs", fromDate, toDate],
+    queryFn: () => listWorkLogs({ from: fromDate, to: toDate, page_size: 1000 }),
   });
 
   // 作成
@@ -132,6 +150,11 @@ export default function WorkResults() {
       toast({ title: "エラー", description: error.message || "削除に失敗しました", variant: "destructive" });
     },
   });
+
+  const totalHours = useMemo(
+    () => (workLogsData?.data ?? []).reduce((sum, l) => sum + (l.duration_hours ?? 0), 0),
+    [workLogsData]
+  );
 
   const onSubmit = (data: WorkLogFormData) => {
     if (editingLog) {
@@ -374,15 +397,48 @@ export default function WorkResults() {
       {/* 作業実績一覧 */}
       <Card>
         <CardHeader>
-          <CardTitle>作業実績一覧</CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle>作業実績一覧</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select
+                value={String(selectedYear)}
+                onValueChange={(v) => setSelectedYear(Number(v))}
+              >
+                <SelectTrigger className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {YEAR_OPTIONS.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}年</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(selectedMonth)}
+                onValueChange={(v) => setSelectedMonth(Number(v))}
+              >
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_OPTIONS.map((m) => (
+                    <SelectItem key={m} value={String(m)}>{m}月</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {logsLoading ? (
             <div className="text-center py-8 text-muted-foreground">読み込み中...</div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">作業実績はまだありません</div>
+            <div className="text-center py-8 text-muted-foreground">{selectedYear}年{selectedMonth}月の作業実績はありません</div>
           ) : (
             <div className="overflow-x-auto">
+              <div className="flex justify-end mb-2 text-sm text-muted-foreground">
+                月間合計：<span className="font-medium text-foreground ml-1">{totalHours % 1 === 0 ? `${totalHours}h` : `${totalHours.toFixed(2)}h`}</span>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
