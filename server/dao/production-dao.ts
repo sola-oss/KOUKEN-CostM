@@ -1327,10 +1327,15 @@ export class ProductionDAO {
 
     // 実績労務費（work_logs）
     const actualLaborMap = new Map<string, { totalHours: number; totalCost: number }>();
+    const unregisteredWorkerSet = new Set<string>();
     for (const wl of workLogs) {
       const hours = wl.duration_hours || 0;
       const workerName = wl.worker || wl.employee_name || '不明';
-      const rate = workerRatesMap.get(workerName) ?? defaultRate;
+      if (!workerRatesMap.has(workerName)) {
+        unregisteredWorkerSet.add(workerName);
+        continue;
+      }
+      const rate = workerRatesMap.get(workerName)!;
       const cost = hours * rate;
       if (!actualLaborMap.has(wl.order_id)) actualLaborMap.set(wl.order_id, { totalHours: 0, totalCost: 0 });
       const e = actualLaborMap.get(wl.order_id)!;
@@ -1342,7 +1347,11 @@ export class ProductionDAO {
     const estimatedLaborMap = new Map<string, { totalHours: number; totalCost: number }>();
     for (const wl of workersLogs) {
       const hours = (wl.qty || 0) * (wl.act_time_per_unit || 0);
-      const rate = workerRatesMap.get(wl.worker) ?? defaultRate;
+      if (!workerRatesMap.has(wl.worker)) {
+        unregisteredWorkerSet.add(wl.worker);
+        continue;
+      }
+      const rate = workerRatesMap.get(wl.worker)!;
       const cost = hours * rate;
       if (!estimatedLaborMap.has(wl.order_id)) estimatedLaborMap.set(wl.order_id, { totalHours: 0, totalCost: 0 });
       const e = estimatedLaborMap.get(wl.order_id)!;
@@ -1433,7 +1442,8 @@ export class ProductionDAO {
       total_material_cost: Math.round(totalMaterialCost),
       total_labor_cost: Math.round(totalLaborCost),
       total_outsourcing_cost: Math.round(totalOutsourcingCost),
-      total_cost: Math.round(totalMaterialCost + totalLaborCost + totalOutsourcingCost)
+      total_cost: Math.round(totalMaterialCost + totalLaborCost + totalOutsourcingCost),
+      unregistered_workers: [...unregisteredWorkerSet].sort()
     };
   }
 

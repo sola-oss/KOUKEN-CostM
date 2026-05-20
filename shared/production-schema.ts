@@ -716,6 +716,7 @@ export interface CostAggregationResponse {
   total_labor_cost: number;
   total_outsourcing_cost: number;
   total_cost: number;
+  unregistered_workers: string[];
 }
 
 // ========== Prospects (見込み案件) ==========
