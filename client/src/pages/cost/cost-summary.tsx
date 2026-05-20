@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown, Users, List } from "lucide-react";
 import { FACTORY_LABELS } from "@/shared/api";
 
 const factoryColors: Record<string, string> = {
@@ -25,9 +25,22 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { CostAggregationResponse, OrderCostSummary } from "@shared/production-schema";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+
+interface CustomerGroup {
+  client_name: string;
+  order_count: number;
+  material_cost: number;
+  purchased_cost: number;
+  labor_cost: number;
+  outsourcing_cost: number;
+  total_cost: number;
+  estimated_amount: number | null;
+  profit: number | null;
+  orders: OrderCostSummary[];
+}
 
 function OrderRow({ 
   order, 
@@ -112,8 +125,111 @@ function OrderRow({
   );
 }
 
+function CustomerRow({
+  group,
+  expanded,
+  onToggle,
+  formatCurrency,
+  formatPercent,
+}: {
+  group: CustomerGroup;
+  expanded: boolean;
+  onToggle: () => void;
+  formatCurrency: (value: number | null) => string;
+  formatPercent: (value: number | null) => string;
+}) {
+  const profitRate = group.estimated_amount && group.estimated_amount > 0 && group.profit !== null
+    ? Math.round((group.profit / group.estimated_amount) * 100 * 10) / 10
+    : null;
+
+  return (
+    <>
+      <TableRow
+        className="cursor-pointer hover-elevate"
+        onClick={onToggle}
+        data-testid={`row-customer-${group.client_name}`}
+      >
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-2">
+            {expanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+            <span>{group.client_name}</span>
+          </div>
+        </TableCell>
+        <TableCell className="text-center">
+          <Badge variant="secondary">{group.order_count}件</Badge>
+        </TableCell>
+        <TableCell className="text-right">{formatCurrency(group.material_cost)}</TableCell>
+        <TableCell className="text-right">{formatCurrency(group.purchased_cost)}</TableCell>
+        <TableCell className="text-right">{formatCurrency(group.labor_cost)}</TableCell>
+        <TableCell className="text-right">{formatCurrency(group.outsourcing_cost)}</TableCell>
+        <TableCell className="text-right font-bold">{formatCurrency(group.total_cost)}</TableCell>
+        <TableCell className="text-right">{formatCurrency(group.estimated_amount)}</TableCell>
+        <TableCell className="text-right">
+          {group.profit !== null ? (
+            <span className={group.profit >= 0 ? "text-green-600" : "text-red-600"}>
+              {group.profit >= 0 ? (
+                <TrendingUp className="h-4 w-4 inline mr-1" />
+              ) : (
+                <TrendingDown className="h-4 w-4 inline mr-1" />
+              )}
+              {formatCurrency(group.profit)}
+            </span>
+          ) : "-"}
+        </TableCell>
+        <TableCell className="text-right">
+          {profitRate !== null ? (
+            <Badge className={profitRate >= 0 ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}>
+              {formatPercent(profitRate)}
+            </Badge>
+          ) : "-"}
+        </TableCell>
+      </TableRow>
+      {expanded && group.orders.map((order) => (
+        <TableRow key={order.order_id} className="bg-muted/30">
+          <TableCell className="pl-10 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>{order.order_id}</span>
+              {order.factory && (
+                <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${factoryColors[order.factory] || 'bg-gray-100 text-gray-600'}`}>
+                  {FACTORY_LABELS[order.factory] || order.factory}
+                </span>
+              )}
+            </div>
+          </TableCell>
+          <TableCell className="text-sm text-muted-foreground">{order.project_title || "-"}</TableCell>
+          <TableCell className="text-right text-sm">{formatCurrency(order.material_cost)}</TableCell>
+          <TableCell className="text-right text-sm">{formatCurrency(order.purchased_cost)}</TableCell>
+          <TableCell className="text-right text-sm">{formatCurrency(order.labor_cost)}</TableCell>
+          <TableCell className="text-right text-sm">{formatCurrency(order.outsourcing_cost)}</TableCell>
+          <TableCell className="text-right text-sm font-medium">{formatCurrency(order.total_cost)}</TableCell>
+          <TableCell className="text-right text-sm">{formatCurrency(order.estimated_amount)}</TableCell>
+          <TableCell className="text-right text-sm">
+            {order.profit !== null ? (
+              <span className={order.profit >= 0 ? "text-green-600" : "text-red-600"}>
+                {formatCurrency(order.profit)}
+              </span>
+            ) : "-"}
+          </TableCell>
+          <TableCell className="text-right text-sm">
+            {order.profit_rate !== null ? (
+              <Badge variant="outline" className={order.profit_rate >= 0 ? "text-green-600 border-green-600" : "text-red-600 border-red-600"}>
+                {formatPercent(order.profit_rate)}
+              </Badge>
+            ) : "-"}
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
 type SortKey = 'order_id' | 'client_name' | 'estimated_amount' | 'profit';
 type SortDir = 'asc' | 'desc' | null;
+type ViewMode = 'order' | 'customer';
 
 function SortIcon({ sortKey, currentKey, currentDir }: { sortKey: SortKey; currentKey: SortKey | null; currentDir: SortDir }) {
   if (currentKey !== sortKey || currentDir === null) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />;
@@ -127,6 +243,8 @@ export default function CostSummaryPage() {
   const [laborRate, setLaborRate] = useState<string>("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('order');
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
 
   const handleSort = (key: SortKey) => {
     if (sortKey !== key) {
@@ -138,6 +256,15 @@ export default function CostSummaryPage() {
       setSortKey(null);
       setSortDir(null);
     }
+  };
+
+  const toggleCustomer = (clientName: string) => {
+    setExpandedCustomers(prev => {
+      const next = new Set(prev);
+      if (next.has(clientName)) next.delete(clientName);
+      else next.add(clientName);
+      return next;
+    });
   };
 
   const { data, isLoading, error } = useQuery<CostAggregationResponse>({
@@ -213,6 +340,43 @@ export default function CostSummaryPage() {
     });
   })();
 
+  const customerGroups = useMemo<CustomerGroup[]>(() => {
+    const orders = data?.orders ?? [];
+    const map = new Map<string, CustomerGroup>();
+    for (const order of orders) {
+      const key = order.client_name || '（未設定）';
+      if (!map.has(key)) {
+        map.set(key, {
+          client_name: key,
+          order_count: 0,
+          material_cost: 0,
+          purchased_cost: 0,
+          labor_cost: 0,
+          outsourcing_cost: 0,
+          total_cost: 0,
+          estimated_amount: null,
+          profit: null,
+          orders: [],
+        });
+      }
+      const g = map.get(key)!;
+      g.order_count++;
+      g.material_cost += order.material_cost;
+      g.purchased_cost += order.purchased_cost;
+      g.labor_cost += order.labor_cost;
+      g.outsourcing_cost += order.outsourcing_cost;
+      g.total_cost += order.total_cost;
+      if (order.estimated_amount != null) {
+        g.estimated_amount = (g.estimated_amount ?? 0) + order.estimated_amount;
+      }
+      if (order.profit != null) {
+        g.profit = (g.profit ?? 0) + order.profit;
+      }
+      g.orders.push(order);
+    }
+    return [...map.values()].sort((a, b) => b.total_cost - a.total_cost);
+  }, [data?.orders]);
+
   if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center h-64">
@@ -239,7 +403,7 @@ export default function CostSummaryPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Calculator className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">受注別原価集計</h1>
+          <h1 className="text-2xl font-bold">原価集計</h1>
         </div>
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
           <DialogTrigger asChild>
@@ -360,81 +524,143 @@ export default function CostSummaryPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle>受注別原価集計</CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle>
+              {viewMode === 'order' ? '受注別原価集計' : '顧客別原価集計'}
+            </CardTitle>
+            <div className="flex items-center gap-1 border rounded-md p-1">
+              <Button
+                variant={viewMode === 'order' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('order')}
+                data-testid="tab-order-view"
+              >
+                <List className="h-4 w-4 mr-1.5" />
+                受注別
+              </Button>
+              <Button
+                variant={viewMode === 'customer' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('customer')}
+                data-testid="tab-customer-view"
+              >
+                <Users className="h-4 w-4 mr-1.5" />
+                顧客別
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          {sortedOrders.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <button
-                      className="flex items-center hover:text-foreground transition-colors"
-                      onClick={() => handleSort('order_id')}
-                      data-testid="sort-order-id"
-                    >
-                      受注番号
-                      <SortIcon sortKey="order_id" currentKey={sortKey} currentDir={sortDir} />
-                    </button>
-                  </TableHead>
-                  <TableHead>受注名</TableHead>
-                  <TableHead>
-                    <button
-                      className="flex items-center hover:text-foreground transition-colors"
-                      onClick={() => handleSort('client_name')}
-                      data-testid="sort-client-name"
-                    >
-                      顧客
-                      <SortIcon sortKey="client_name" currentKey={sortKey} currentDir={sortDir} />
-                    </button>
-                  </TableHead>
-                  <TableHead className="text-right">材料費</TableHead>
-                  <TableHead className="text-right">購入品</TableHead>
-                  <TableHead className="text-right">労務費</TableHead>
-                  <TableHead className="text-right">外注費</TableHead>
-                  <TableHead className="text-right">総原価</TableHead>
-                  <TableHead className="text-right">
-                    <button
-                      className="flex items-center justify-end w-full hover:text-foreground transition-colors"
-                      onClick={() => handleSort('estimated_amount')}
-                      data-testid="sort-estimated-amount"
-                    >
-                      見積金額
-                      <SortIcon sortKey="estimated_amount" currentKey={sortKey} currentDir={sortDir} />
-                    </button>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <button
-                      className="flex items-center justify-end w-full hover:text-foreground transition-colors"
-                      onClick={() => handleSort('profit')}
-                      data-testid="sort-profit"
-                    >
-                      利益
-                      <SortIcon sortKey="profit" currentKey={sortKey} currentDir={sortDir} />
-                    </button>
-                  </TableHead>
-                  <TableHead className="text-right">利益率</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedOrders.map((order) => (
-                  <OrderRow 
-                    key={order.order_id}
-                    order={order}
-                    formatCurrency={formatCurrency}
-                    formatPercent={formatPercent}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+          {viewMode === 'order' ? (
+            sortedOrders.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      <button
+                        className="flex items-center hover:text-foreground transition-colors"
+                        onClick={() => handleSort('order_id')}
+                        data-testid="sort-order-id"
+                      >
+                        受注番号
+                        <SortIcon sortKey="order_id" currentKey={sortKey} currentDir={sortDir} />
+                      </button>
+                    </TableHead>
+                    <TableHead>受注名</TableHead>
+                    <TableHead>
+                      <button
+                        className="flex items-center hover:text-foreground transition-colors"
+                        onClick={() => handleSort('client_name')}
+                        data-testid="sort-client-name"
+                      >
+                        顧客
+                        <SortIcon sortKey="client_name" currentKey={sortKey} currentDir={sortDir} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-right">材料費</TableHead>
+                    <TableHead className="text-right">購入品</TableHead>
+                    <TableHead className="text-right">労務費</TableHead>
+                    <TableHead className="text-right">外注費</TableHead>
+                    <TableHead className="text-right">総原価</TableHead>
+                    <TableHead className="text-right">
+                      <button
+                        className="flex items-center justify-end w-full hover:text-foreground transition-colors"
+                        onClick={() => handleSort('estimated_amount')}
+                        data-testid="sort-estimated-amount"
+                      >
+                        見積金額
+                        <SortIcon sortKey="estimated_amount" currentKey={sortKey} currentDir={sortDir} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <button
+                        className="flex items-center justify-end w-full hover:text-foreground transition-colors"
+                        onClick={() => handleSort('profit')}
+                        data-testid="sort-profit"
+                      >
+                        利益
+                        <SortIcon sortKey="profit" currentKey={sortKey} currentDir={sortDir} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-right">利益率</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedOrders.map((order) => (
+                    <OrderRow 
+                      key={order.order_id}
+                      order={order}
+                      formatCurrency={formatCurrency}
+                      formatPercent={formatPercent}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-muted-foreground text-center py-12">
+                <Calculator className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>原価データがありません</p>
+                <p className="text-sm mt-2">
+                  材料使用実績や作業実績を入力すると、ここに原価集計が表示されます
+                </p>
+              </div>
+            )
           ) : (
-            <div className="text-muted-foreground text-center py-12">
-              <Calculator className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>原価データがありません</p>
-              <p className="text-sm mt-2">
-                材料使用実績や作業実績を入力すると、ここに原価集計が表示されます
-              </p>
-            </div>
+            customerGroups.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>顧客名</TableHead>
+                    <TableHead className="text-center">件数</TableHead>
+                    <TableHead className="text-right">材料費</TableHead>
+                    <TableHead className="text-right">購入品</TableHead>
+                    <TableHead className="text-right">労務費</TableHead>
+                    <TableHead className="text-right">外注費</TableHead>
+                    <TableHead className="text-right">総原価</TableHead>
+                    <TableHead className="text-right">見積金額</TableHead>
+                    <TableHead className="text-right">利益</TableHead>
+                    <TableHead className="text-right">利益率</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customerGroups.map((group) => (
+                    <CustomerRow
+                      key={group.client_name}
+                      group={group}
+                      expanded={expandedCustomers.has(group.client_name)}
+                      onToggle={() => toggleCustomer(group.client_name)}
+                      formatCurrency={formatCurrency}
+                      formatPercent={formatPercent}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-muted-foreground text-center py-12">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>原価データがありません</p>
+              </div>
+            )
           )}
         </CardContent>
       </Card>
