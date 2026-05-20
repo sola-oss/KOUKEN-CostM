@@ -29,6 +29,9 @@ import type { CostAggregationResponse, OrderCostSummary } from "@shared/producti
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
 interface CustomerGroup {
@@ -138,15 +141,22 @@ export default function CostSummaryPage() {
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('order');
   const [keyword, setKeyword] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState('__ALL__');
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [selectedFactory, setSelectedFactory] = useState('__ALL__');
+  const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
 
-  const hasActiveFilter = keyword.trim() !== '' || selectedCustomer !== '__ALL__' || selectedFactory !== '__ALL__';
+  const hasActiveFilter = keyword.trim() !== '' || selectedCustomers.length > 0 || selectedFactory !== '__ALL__';
 
   const resetFilters = () => {
     setKeyword('');
-    setSelectedCustomer('__ALL__');
+    setSelectedCustomers([]);
     setSelectedFactory('__ALL__');
+  };
+
+  const toggleCustomer = (name: string) => {
+    setSelectedCustomers(prev =>
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    );
   };
 
   const handleSort = (key: SortKey) => {
@@ -252,14 +262,14 @@ export default function CostSummaryPage() {
         (o.client_name ?? '').toLowerCase().includes(kw)
       );
     }
-    if (selectedCustomer !== '__ALL__') {
-      orders = orders.filter(o => (o.client_name ?? '') === selectedCustomer);
+    if (selectedCustomers.length > 0) {
+      orders = orders.filter(o => selectedCustomers.includes(o.client_name ?? ''));
     }
     if (selectedFactory !== '__ALL__') {
       orders = orders.filter(o => (o.factory ?? '') === selectedFactory);
     }
     return orders;
-  }, [sortedOrders, keyword, selectedCustomer, selectedFactory]);
+  }, [sortedOrders, keyword, selectedCustomers, selectedFactory]);
 
   const customerGroups = useMemo<CustomerGroup[]>(() => {
     const map = new Map<string, CustomerGroup>();
@@ -459,17 +469,46 @@ export default function CostSummaryPage() {
                 data-testid="filter-keyword"
               />
             </div>
-            <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-              <SelectTrigger className="w-44" data-testid="filter-customer">
-                <SelectValue placeholder="全顧客" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__ALL__">全顧客</SelectItem>
-                {customerNames.map(name => (
-                  <SelectItem key={name} value={name}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-44 justify-between font-normal"
+                  data-testid="filter-customer"
+                >
+                  <span className="truncate">
+                    {selectedCustomers.length === 0
+                      ? '全顧客'
+                      : `${selectedCustomers.length}社選択中`}
+                  </span>
+                  <Users className="h-4 w-4 ml-2 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="顧客名で検索..." />
+                  <CommandList className="max-h-60">
+                    <CommandEmpty>該当する顧客がありません</CommandEmpty>
+                    {customerNames.map(name => (
+                      <CommandItem
+                        key={name}
+                        value={name}
+                        onSelect={() => toggleCustomer(name)}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={selectedCustomers.includes(name)}
+                          onCheckedChange={() => toggleCustomer(name)}
+                          onClick={e => e.stopPropagation()}
+                        />
+                        <span className="truncate">{name}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             <Select value={selectedFactory} onValueChange={setSelectedFactory}>
               <SelectTrigger className="w-40" data-testid="filter-factory">
                 <SelectValue placeholder="全工場" />
