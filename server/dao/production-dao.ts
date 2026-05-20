@@ -1240,13 +1240,11 @@ export class ProductionDAO {
     const laborRate = settings.labor_rate_per_hour;
 
     // バッチ取得
-    const [ordersRes, muRes, wlRes, wlogRes, procRes, outRes, workersRes, mcRows] = await Promise.all([
+    const [ordersRes, muRes, wlRes, procRes, outRes, workersRes, mcRows] = await Promise.all([
       supabase.from('orders').select('order_id,factory,project_title,client_name,estimated_amount'),
       supabase.from('material_usages').select('*'),
       supabase.from('work_logs').select('order_id,worker,employee_name,duration_hours')
         .not('order_id', 'is', null).not('duration_hours', 'is', null).gt('duration_hours', 0),
-      supabase.from('workers_log').select('order_id,worker,qty,act_time_per_unit')
-        .not('order_id', 'is', null),
       supabase.from('procurements').select('order_id,vendor,total_amount'),
       supabase.from('outsourcing_costs').select('project_id,amount'),
       supabase.from('workers_master').select('name,hourly_rate'),
@@ -1256,7 +1254,6 @@ export class ProductionDAO {
     const orders = (ordersRes.data || []) as any[];
     const materialUsages = (muRes.data || []) as MaterialUsage[];
     const workLogs = (wlRes.data || []) as any[];
-    const workersLogs = (wlogRes.data || []) as any[];
     const procurementsData = (procRes.data || []) as any[];
     const outsourcingData = (outRes.data || []) as any[];
     const workersMasterData = (workersRes.data || []) as any[];
@@ -1273,7 +1270,6 @@ export class ProductionDAO {
     // 作業者単価マップ
     const workerRatesMap = new Map<string, number>();
     for (const w of workersMasterData) workerRatesMap.set(w.name, w.hourly_rate);
-    const defaultRate = laborRate;
 
     // 材料費集計（受注別・工区別）
     const materialCostByOrderZone = new Map<string, Map<string, { cost: number; hasMissing: boolean }>>();
@@ -1343,22 +1339,6 @@ export class ProductionDAO {
       e.totalCost += cost;
     }
 
-    // 推定労務費（workers_log）
-    const estimatedLaborMap = new Map<string, { totalHours: number; totalCost: number }>();
-    for (const wl of workersLogs) {
-      const hours = (wl.qty || 0) * (wl.act_time_per_unit || 0);
-      if (!workerRatesMap.has(wl.worker)) {
-        unregisteredWorkerSet.add(wl.worker);
-        continue;
-      }
-      const rate = workerRatesMap.get(wl.worker)!;
-      const cost = hours * rate;
-      if (!estimatedLaborMap.has(wl.order_id)) estimatedLaborMap.set(wl.order_id, { totalHours: 0, totalCost: 0 });
-      const e = estimatedLaborMap.get(wl.order_id)!;
-      e.totalHours += hours;
-      e.totalCost += cost;
-    }
-
     // 外注費（procurements[account_type='外注費'] + outsourcing_costs）
     // NOTE: account_type is stored as JSON in old Supabase `vendor` column
     const outsourcingCostMap = new Map<string, number>();
@@ -1384,13 +1364,10 @@ export class ProductionDAO {
       const outsourcingCost = outsourcingCostMap.get(order.order_id) || 0;
 
       const actualLabor = actualLaborMap.get(order.order_id);
-      const estimatedLabor = estimatedLaborMap.get(order.order_id);
 
-      let laborHours: number, laborCost: number, laborSource: 'actual' | 'estimated' | 'none';
+      let laborHours: number, laborCost: number, laborSource: 'actual' | 'none';
       if (actualLabor && actualLabor.totalHours > 0) {
         laborHours = actualLabor.totalHours; laborCost = actualLabor.totalCost; laborSource = 'actual';
-      } else if (estimatedLabor && estimatedLabor.totalHours > 0) {
-        laborHours = estimatedLabor.totalHours; laborCost = estimatedLabor.totalCost; laborSource = 'estimated';
       } else {
         laborHours = 0; laborCost = 0; laborSource = 'none';
       }

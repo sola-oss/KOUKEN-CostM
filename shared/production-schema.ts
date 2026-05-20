@@ -699,7 +699,7 @@ export interface OrderCostSummary {
   material_cost: number;        // 材料費
   labor_cost: number;           // 労務費
   labor_hours: number;          // 作業時間（時間）
-  labor_source: 'actual' | 'estimated' | 'none'; // 実績 / 推定 / データなし
+  labor_source: 'actual' | 'none'; // 実績 / データなし
   outsourcing_cost: number;     // 外注費
   total_cost: number;           // 総原価
   estimated_amount: number | null; // 見積金額

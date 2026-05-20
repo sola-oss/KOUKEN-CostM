@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, Timer, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { FACTORY_LABELS } from "@/shared/api";
 
 const factoryColors: Record<string, string> = {
@@ -78,19 +78,6 @@ function OrderRow({
                   <TooltipContent>
                     <p>実績時間: {order.labor_hours}h</p>
                     <p className="text-xs text-muted-foreground">作業者別単価で計算</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            {order.labor_source === 'estimated' && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Timer className="h-3 w-3 text-amber-600" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>推定時間: {order.labor_hours}h</p>
-                    <p className="text-xs text-muted-foreground">作業者別単価で計算（実績未入力）</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -322,11 +309,7 @@ export default function CostSummaryPage() {
             <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3 text-green-600" />
-                実績
-              </span>
-              <span className="flex items-center gap-1">
-                <Timer className="h-3 w-3 text-amber-600" />
-                推定
+                日報実績から計算
               </span>
             </div>
           </CardContent>
