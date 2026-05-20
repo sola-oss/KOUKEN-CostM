@@ -1075,14 +1075,20 @@ router.get('/api/work-logs', async (req, res) => {
       date,
       worker,
       order_id,
-      status 
+      status,
+      from,
+      to,
+      page_size
     } = req.query as Record<string, string | undefined>;
 
     const options = {
       date: date ? toUTC(date) : undefined,
       worker,
       order_id: order_id || undefined,
-      status
+      status,
+      from: from || undefined,
+      to: to || undefined,
+      pageSize: page_size ? parseInt(page_size, 10) : undefined,
     };
 
     const result = await dao.getWorkLogs(options);
