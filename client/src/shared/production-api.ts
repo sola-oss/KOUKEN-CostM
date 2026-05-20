@@ -413,18 +413,12 @@ export async function listWorkLogs(params?: {
   worker?: string;
   order_id?: string;
   status?: string;
-  from?: string;
-  to?: string;
-  page_size?: number;
 }): Promise<{ data: WorkLog[]; total: number }> {
   const searchParams = new URLSearchParams();
   if (params?.date) searchParams.append('date', params.date);
   if (params?.worker) searchParams.append('worker', params.worker);
   if (params?.order_id) searchParams.append('order_id', params.order_id.toString());
   if (params?.status) searchParams.append('status', params.status);
-  if (params?.from) searchParams.append('from', params.from);
-  if (params?.to) searchParams.append('to', params.to);
-  if (params?.page_size) searchParams.append('page_size', params.page_size.toString());
   
   const queryString = searchParams.toString();
   const endpoint = queryString ? `/api/work-logs?${queryString}` : '/api/work-logs';

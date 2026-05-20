@@ -93,12 +93,6 @@ interface WorkerTopGroup {
 // ─────────────────────────────────────────
 
 const TODAY = dayjs().format("YYYY-MM-DD");
-const NOW_TM = dayjs();
-const YEAR_OPTIONS_TM = Array.from(
-  { length: NOW_TM.year() - 2022 },
-  (_, i) => NOW_TM.year() - i
-);
-const MONTH_OPTIONS_TM = Array.from({ length: 12 }, (_, i) => i + 1);
 
 function fmtHours(h: number) {
   return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h`;
@@ -133,17 +127,6 @@ export default function TaskManagement() {
   const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
   const [expandedWorkerTops, setExpandedWorkerTops] = useState<Set<string>>(new Set());
   const [expandedOrdersInWorker, setExpandedOrdersInWorker] = useState<Set<string>>(new Set());
-  const [selectedYear, setSelectedYear] = useState(NOW_TM.year());
-  const [selectedMonth, setSelectedMonth] = useState(NOW_TM.month() + 1);
-
-  const fromDate = useMemo(
-    () => dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).format("YYYY-MM-DD"),
-    [selectedYear, selectedMonth]
-  );
-  const toDate = useMemo(
-    () => dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).endOf("month").format("YYYY-MM-DD"),
-    [selectedYear, selectedMonth]
-  );
 
   // ─── Data fetching ────────────────────
 
@@ -165,8 +148,8 @@ export default function TaskManagement() {
   });
 
   const { data: workLogsResponse, isLoading } = useQuery({
-    queryKey: ["work-logs", fromDate, toDate],
-    queryFn: () => listWorkLogs({ from: fromDate, to: toDate, page_size: 1000 }),
+    queryKey: ["work-logs"],
+    queryFn: () => listWorkLogs({ page_size: 200 }),
   });
 
   const orders: Order[] = ordersResponse?.data ?? [];
@@ -298,7 +281,6 @@ export default function TaskManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["work-logs"] });
       toast({ title: "日報を保存しました" });
-
       form.reset({
         date: form.getValues("date"),
         order_id: form.getValues("order_id"),
@@ -531,35 +513,6 @@ export default function TaskManagement() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle>実績一覧</CardTitle>
             <div className="flex items-center gap-3 flex-wrap">
-              {/* 年・月セレクター */}
-              <div className="flex items-center gap-2">
-                <Select
-                  value={String(selectedYear)}
-                  onValueChange={(v) => setSelectedYear(Number(v))}
-                >
-                  <SelectTrigger className="w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {YEAR_OPTIONS_TM.map((y) => (
-                      <SelectItem key={y} value={String(y)}>{y}年</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={String(selectedMonth)}
-                  onValueChange={(v) => setSelectedMonth(Number(v))}
-                >
-                  <SelectTrigger className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTH_OPTIONS_TM.map((m) => (
-                      <SelectItem key={m} value={String(m)}>{m}月</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               {/* 表示切り替え */}
               <div className="flex items-center gap-1 border rounded-md p-0.5">
                 <Button
