@@ -1086,8 +1086,8 @@ router.get('/api/work-logs', async (req, res) => {
       worker,
       order_id: order_id || undefined,
       status,
-      from: from || undefined,
-      to: to || undefined,
+      from: from ? toUTC(from) : undefined,
+      to: to ? toUTC(to) : undefined,
       pageSize: page_size ? parseInt(page_size, 10) : undefined,
     };
 
