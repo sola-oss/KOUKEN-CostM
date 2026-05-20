@@ -138,15 +138,15 @@ export default function CostSummaryPage() {
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('order');
   const [keyword, setKeyword] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [selectedFactory, setSelectedFactory] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState('__ALL__');
+  const [selectedFactory, setSelectedFactory] = useState('__ALL__');
 
-  const hasActiveFilter = keyword.trim() !== '' || selectedCustomer !== '' || selectedFactory !== '';
+  const hasActiveFilter = keyword.trim() !== '' || selectedCustomer !== '__ALL__' || selectedFactory !== '__ALL__';
 
   const resetFilters = () => {
     setKeyword('');
-    setSelectedCustomer('');
-    setSelectedFactory('');
+    setSelectedCustomer('__ALL__');
+    setSelectedFactory('__ALL__');
   };
 
   const handleSort = (key: SortKey) => {
@@ -252,10 +252,10 @@ export default function CostSummaryPage() {
         (o.client_name ?? '').toLowerCase().includes(kw)
       );
     }
-    if (selectedCustomer) {
+    if (selectedCustomer !== '__ALL__') {
       orders = orders.filter(o => (o.client_name ?? '') === selectedCustomer);
     }
-    if (selectedFactory) {
+    if (selectedFactory !== '__ALL__') {
       orders = orders.filter(o => (o.factory ?? '') === selectedFactory);
     }
     return orders;
@@ -464,7 +464,7 @@ export default function CostSummaryPage() {
                 <SelectValue placeholder="全顧客" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全顧客</SelectItem>
+                <SelectItem value="__ALL__">全顧客</SelectItem>
                 {customerNames.map(name => (
                   <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
@@ -475,7 +475,7 @@ export default function CostSummaryPage() {
                 <SelectValue placeholder="全工場" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全工場</SelectItem>
+                <SelectItem value="__ALL__">全工場</SelectItem>
                 {Object.entries(FACTORY_LABELS).map(([key, label]) => (
                   <SelectItem key={key} value={key}>{label}</SelectItem>
                 ))}
