@@ -1,3 +1,4 @@
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -501,8 +502,8 @@ export default function CostSummaryPage() {
                 </TableHeader>
                 <TableBody>
                   {customerGroups.map((group) => (
-                    <>
-                      <TableRow key={`header-${group.client_name}`} className="bg-muted/60 border-t-2">
+                    <React.Fragment key={group.client_name}>
+                      <TableRow className="bg-muted/60 border-t-2">
                         <TableCell colSpan={10} className="py-2 font-semibold text-sm">
                           <div className="flex items-center gap-2">
                             <Users className="h-4 w-4 text-muted-foreground" />
@@ -573,7 +574,7 @@ export default function CostSummaryPage() {
                           </TableCell>
                         </TableRow>
                       ))}
-                    </>
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>
