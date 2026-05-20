@@ -128,6 +128,15 @@ export default function TaskManagement() {
   const [expandedWorkerTops, setExpandedWorkerTops] = useState<Set<string>>(new Set());
   const [expandedOrdersInWorker, setExpandedOrdersInWorker] = useState<Set<string>>(new Set());
 
+  const currentYear = dayjs().year();
+  const currentMonth = dayjs().month() + 1;
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const yearOptions = Array.from({ length: 4 }, (_, i) => currentYear - i);
+  const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
+  const fromDate = dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).format("YYYY-MM-DD");
+  const toDate = dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).endOf("month").format("YYYY-MM-DD");
+
   // ─── Data fetching ────────────────────
 
   const { data: ordersResponse } = useQuery({
@@ -148,8 +157,8 @@ export default function TaskManagement() {
   });
 
   const { data: workLogsResponse, isLoading } = useQuery({
-    queryKey: ["work-logs"],
-    queryFn: () => listWorkLogs({ page_size: 200 }),
+    queryKey: ["work-logs", selectedYear, selectedMonth],
+    queryFn: () => listWorkLogs({ from: fromDate, to: toDate, page_size: 200 }),
   });
 
   const orders: Order[] = ordersResponse?.data ?? [];
@@ -513,6 +522,27 @@ export default function TaskManagement() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle>実績一覧</CardTitle>
             <div className="flex items-center gap-3 flex-wrap">
+              {/* 年月フィルター */}
+              <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+                <SelectTrigger className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}年</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map((m) => (
+                    <SelectItem key={m} value={String(m)}>{m}月</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {/* 表示切り替え */}
               <div className="flex items-center gap-1 border rounded-md p-0.5">
                 <Button
