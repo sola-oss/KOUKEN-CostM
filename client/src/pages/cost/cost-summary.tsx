@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, ArrowUpDown, ArrowUp, ArrowDown, Users, List } from "lucide-react";
+import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, ArrowUpDown, ArrowUp, ArrowDown, Users, List, Search, X } from "lucide-react";
 import { FACTORY_LABELS } from "@/shared/api";
 
 const factoryColors: Record<string, string> = {
@@ -28,6 +28,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { CostAggregationResponse, OrderCostSummary } from "@shared/production-schema";
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 interface CustomerGroup {
@@ -136,6 +137,17 @@ export default function CostSummaryPage() {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('order');
+  const [keyword, setKeyword] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState('');
+  const [selectedFactory, setSelectedFactory] = useState('');
+
+  const hasActiveFilter = keyword.trim() !== '' || selectedCustomer !== '' || selectedFactory !== '';
+
+  const resetFilters = () => {
+    setKeyword('');
+    setSelectedCustomer('');
+    setSelectedFactory('');
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey !== key) {
@@ -222,10 +234,36 @@ export default function CostSummaryPage() {
     });
   })();
 
+  const customerNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const o of data?.orders ?? []) {
+      if (o.client_name) names.add(o.client_name);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, 'ja'));
+  }, [data?.orders]);
+
+  const filteredOrders = useMemo(() => {
+    let orders = sortedOrders;
+    const kw = keyword.trim().toLowerCase();
+    if (kw) {
+      orders = orders.filter(o =>
+        (o.order_id ?? '').toLowerCase().includes(kw) ||
+        (o.project_title ?? '').toLowerCase().includes(kw) ||
+        (o.client_name ?? '').toLowerCase().includes(kw)
+      );
+    }
+    if (selectedCustomer) {
+      orders = orders.filter(o => (o.client_name ?? '') === selectedCustomer);
+    }
+    if (selectedFactory) {
+      orders = orders.filter(o => (o.factory ?? '') === selectedFactory);
+    }
+    return orders;
+  }, [sortedOrders, keyword, selectedCustomer, selectedFactory]);
+
   const customerGroups = useMemo<CustomerGroup[]>(() => {
-    const orders = data?.orders ?? [];
     const map = new Map<string, CustomerGroup>();
-    for (const order of orders) {
+    for (const order of filteredOrders) {
       const key = order.client_name || '（未設定）';
       if (!map.has(key)) map.set(key, { client_name: key, orders: [] });
       map.get(key)!.orders.push(order);
@@ -233,7 +271,7 @@ export default function CostSummaryPage() {
     return [...map.values()].sort((a, b) =>
       a.client_name.localeCompare(b.client_name, 'ja')
     );
-  }, [data?.orders]);
+  }, [filteredOrders]);
 
   if (isLoading) {
     return (
@@ -409,8 +447,55 @@ export default function CostSummaryPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Filter bar */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="relative flex-1 min-w-40">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="受注番号・受注名・顧客名で検索"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="pl-8"
+                data-testid="filter-keyword"
+              />
+            </div>
+            <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+              <SelectTrigger className="w-44" data-testid="filter-customer">
+                <SelectValue placeholder="全顧客" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">全顧客</SelectItem>
+                {customerNames.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedFactory} onValueChange={setSelectedFactory}>
+              <SelectTrigger className="w-40" data-testid="filter-factory">
+                <SelectValue placeholder="全工場" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">全工場</SelectItem>
+                {Object.entries(FACTORY_LABELS).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {hasActiveFilter && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} data-testid="filter-reset">
+                <X className="h-4 w-4 mr-1" />
+                リセット
+              </Button>
+            )}
+            <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap">
+              {hasActiveFilter
+                ? `${(data?.orders ?? []).length}件中 ${filteredOrders.length}件表示`
+                : `${filteredOrders.length}件`}
+            </span>
+          </div>
+
           {viewMode === 'order' ? (
-            sortedOrders.length > 0 ? (
+            filteredOrders.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -464,7 +549,7 @@ export default function CostSummaryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedOrders.map((order) => (
+                  {filteredOrders.map((order) => (
                     <OrderRow 
                       key={order.order_id}
                       order={order}
@@ -477,10 +562,17 @@ export default function CostSummaryPage() {
             ) : (
               <div className="text-muted-foreground text-center py-12">
                 <Calculator className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>原価データがありません</p>
-                <p className="text-sm mt-2">
-                  材料使用実績や作業実績を入力すると、ここに原価集計が表示されます
-                </p>
+                {hasActiveFilter ? (
+                  <>
+                    <p>条件に一致する受注はありません</p>
+                    <p className="text-sm mt-2">フィルター条件を変更するか、リセットしてください</p>
+                  </>
+                ) : (
+                  <>
+                    <p>原価データがありません</p>
+                    <p className="text-sm mt-2">材料使用実績や作業実績を入力すると、ここに原価集計が表示されます</p>
+                  </>
+                )}
               </div>
             )
           ) : (
