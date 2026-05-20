@@ -1240,7 +1240,7 @@ export class ProductionDAO {
     const laborRate = settings.labor_rate_per_hour;
 
     // バッチ取得
-    const [ordersRes, muRes, wlRes, procRes, outRes, workersRes, mcRows] = await Promise.all([
+    const [ordersRes, muRes, wlRes, procRes, outRes, workersRes, mcRows, piRows] = await Promise.all([
       supabase.from('orders').select('order_id,factory,project_title,client_name,estimated_amount'),
       supabase.from('material_usages').select('*'),
       supabase.from('work_logs').select('order_id,worker,employee_name,duration_hours')
@@ -1248,7 +1248,8 @@ export class ProductionDAO {
       supabase.from('procurements').select('order_id,vendor,total_amount'),
       supabase.from('outsourcing_costs').select('project_id,amount'),
       supabase.from('workers_master').select('name,hourly_rate'),
-      supabase.from('material_costs').select('id,order_id,description,total_amount,vendor_id')
+      supabase.from('material_costs').select('id,order_id,description,total_amount,vendor_id'),
+      supabase.from('purchased_items').select('order_id,total_amount')
     ]);
 
     const orders = (ordersRes.data || []) as any[];
@@ -1258,6 +1259,7 @@ export class ProductionDAO {
     const outsourcingData = (outRes.data || []) as any[];
     const workersMasterData = (workersRes.data || []) as any[];
     const materialCostRows = (mcRows.data || []) as { id: number; order_id: string; description: string | null; total_amount: string; }[];
+    const purchasedItemRows = (piRows.data || []) as { order_id: string; total_amount: string; }[];
 
     // 材料IDから材料情報を取得
     const matIds = [...new Set(materialUsages.map(u => u.material_id).filter(Boolean) as number[])];
@@ -1339,6 +1341,14 @@ export class ProductionDAO {
       e.totalCost += cost;
     }
 
+    // 購入品費集計（purchased_items テーブル）
+    const purchasedCostMap = new Map<string, number>();
+    for (const pi of purchasedItemRows) {
+      if (!pi.order_id) continue;
+      const amount = parseFloat(pi.total_amount) || 0;
+      purchasedCostMap.set(pi.order_id, (purchasedCostMap.get(pi.order_id) || 0) + amount);
+    }
+
     // 外注費（procurements[account_type='外注費'] + outsourcing_costs）
     // NOTE: account_type is stored as JSON in old Supabase `vendor` column
     const outsourcingCostMap = new Map<string, number>();
@@ -1357,10 +1367,11 @@ export class ProductionDAO {
     }
 
     const orderSummaries: OrderCostSummary[] = [];
-    let totalMaterialCost = 0, totalLaborCost = 0, totalOutsourcingCost = 0;
+    let totalMaterialCost = 0, totalPurchasedCost = 0, totalLaborCost = 0, totalOutsourcingCost = 0;
 
     for (const order of orders) {
       const materialData = materialCostByOrder.get(order.order_id) || { cost: 0, hasMissing: false };
+      const purchasedCost = purchasedCostMap.get(order.order_id) || 0;
       const outsourcingCost = outsourcingCostMap.get(order.order_id) || 0;
 
       const actualLabor = actualLaborMap.get(order.order_id);
@@ -1372,7 +1383,7 @@ export class ProductionDAO {
         laborHours = 0; laborCost = 0; laborSource = 'none';
       }
 
-      const totalCost = materialData.cost + laborCost + outsourcingCost;
+      const totalCost = materialData.cost + purchasedCost + laborCost + outsourcingCost;
       const profit = order.estimated_amount != null ? order.estimated_amount - totalCost : null;
       const profitRate = order.estimated_amount != null && order.estimated_amount > 0
         ? Math.round((profit! / order.estimated_amount) * 100 * 10) / 10 : null;
@@ -1387,13 +1398,14 @@ export class ProductionDAO {
         zones.sort((a, b) => a.zone.localeCompare(b.zone));
       }
 
-      if (materialData.cost > 0 || laborCost > 0 || outsourcingCost > 0) {
+      if (materialData.cost > 0 || purchasedCost > 0 || laborCost > 0 || outsourcingCost > 0) {
         orderSummaries.push({
           order_id: order.order_id,
           factory: order.factory ?? null,
           project_title: order.project_title,
           client_name: order.client_name,
           material_cost: Math.round(materialData.cost),
+          purchased_cost: Math.round(purchasedCost),
           labor_cost: Math.round(laborCost),
           labor_hours: Math.round(laborHours * 100) / 100,
           labor_source: laborSource,
@@ -1406,6 +1418,7 @@ export class ProductionDAO {
           zones
         });
         totalMaterialCost += materialData.cost;
+        totalPurchasedCost += purchasedCost;
         totalLaborCost += laborCost;
         totalOutsourcingCost += outsourcingCost;
       }
@@ -1417,9 +1430,10 @@ export class ProductionDAO {
       orders: orderSummaries,
       labor_rate_per_hour: laborRate,
       total_material_cost: Math.round(totalMaterialCost),
+      total_purchased_cost: Math.round(totalPurchasedCost),
       total_labor_cost: Math.round(totalLaborCost),
       total_outsourcing_cost: Math.round(totalOutsourcingCost),
-      total_cost: Math.round(totalMaterialCost + totalLaborCost + totalOutsourcingCost),
+      total_cost: Math.round(totalMaterialCost + totalPurchasedCost + totalLaborCost + totalOutsourcingCost),
       unregistered_workers: [...unregisteredWorkerSet].sort()
     };
   }

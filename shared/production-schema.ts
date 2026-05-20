@@ -697,6 +697,7 @@ export interface OrderCostSummary {
   project_title: string | null;
   client_name: string | null;
   material_cost: number;        // 材料費
+  purchased_cost: number;       // 購入品費
   labor_cost: number;           // 労務費
   labor_hours: number;          // 作業時間（時間）
   labor_source: 'actual' | 'none'; // 実績 / データなし
@@ -713,6 +714,7 @@ export interface CostAggregationResponse {
   orders: OrderCostSummary[];
   labor_rate_per_hour: number;
   total_material_cost: number;
+  total_purchased_cost: number;
   total_labor_cost: number;
   total_outsourcing_cost: number;
   total_cost: number;

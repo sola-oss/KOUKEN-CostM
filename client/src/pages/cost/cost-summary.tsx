@@ -66,6 +66,7 @@ function OrderRow({
         <TableCell>{order.project_title || "-"}</TableCell>
         <TableCell>{order.client_name || "-"}</TableCell>
         <TableCell className="text-right">{formatCurrency(order.material_cost)}</TableCell>
+        <TableCell className="text-right">{formatCurrency(order.purchased_cost)}</TableCell>
         <TableCell className="text-right">
           <div className="flex items-center justify-end gap-1">
             <span>{formatCurrency(order.labor_cost)}</span>
@@ -284,7 +285,7 @@ export default function CostSummaryPage() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">材料費合計</CardTitle>
@@ -292,6 +293,16 @@ export default function CostSummaryPage() {
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-total-material-cost">
               {formatCurrency(data?.total_material_cost || 0)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">購入品合計</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-total-purchased-cost">
+              {formatCurrency(data?.total_purchased_cost || 0)}
             </div>
           </CardContent>
         </Card>
@@ -332,7 +343,7 @@ export default function CostSummaryPage() {
             <div className="text-2xl font-bold text-primary" data-testid="text-total-cost">
               {formatCurrency(data?.total_cost || 0)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">材料費 + 労務費 + 外注費</p>
+            <p className="text-xs text-muted-foreground mt-1">材料費 + 購入品 + 労務費 + 外注費</p>
           </CardContent>
         </Card>
         <Card>
@@ -378,6 +389,7 @@ export default function CostSummaryPage() {
                     </button>
                   </TableHead>
                   <TableHead className="text-right">材料費</TableHead>
+                  <TableHead className="text-right">購入品</TableHead>
                   <TableHead className="text-right">労務費</TableHead>
                   <TableHead className="text-right">外注費</TableHead>
                   <TableHead className="text-right">総原価</TableHead>
