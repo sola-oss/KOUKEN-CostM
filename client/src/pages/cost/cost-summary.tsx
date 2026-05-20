@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown, Users, List } from "lucide-react";
+import { Calculator, AlertTriangle, TrendingUp, TrendingDown, Loader2, Settings, Clock, ArrowUpDown, ArrowUp, ArrowDown, Users, List } from "lucide-react";
 import { FACTORY_LABELS } from "@/shared/api";
 
 const factoryColors: Record<string, string> = {
@@ -31,14 +31,6 @@ import { useToast } from "@/hooks/use-toast";
 
 interface CustomerGroup {
   client_name: string;
-  order_count: number;
-  material_cost: number;
-  purchased_cost: number;
-  labor_cost: number;
-  outsourcing_cost: number;
-  total_cost: number;
-  estimated_amount: number | null;
-  profit: number | null;
   orders: OrderCostSummary[];
 }
 
@@ -125,107 +117,6 @@ function OrderRow({
   );
 }
 
-function CustomerRow({
-  group,
-  expanded,
-  onToggle,
-  formatCurrency,
-  formatPercent,
-}: {
-  group: CustomerGroup;
-  expanded: boolean;
-  onToggle: () => void;
-  formatCurrency: (value: number | null) => string;
-  formatPercent: (value: number | null) => string;
-}) {
-  const profitRate = group.estimated_amount && group.estimated_amount > 0 && group.profit !== null
-    ? Math.round((group.profit / group.estimated_amount) * 100 * 10) / 10
-    : null;
-
-  return (
-    <>
-      <TableRow
-        className="cursor-pointer hover-elevate"
-        onClick={onToggle}
-        data-testid={`row-customer-${group.client_name}`}
-      >
-        <TableCell className="font-medium">
-          <div className="flex items-center gap-2">
-            {expanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}
-            <span>{group.client_name}</span>
-          </div>
-        </TableCell>
-        <TableCell className="text-center">
-          <Badge variant="secondary">{group.order_count}件</Badge>
-        </TableCell>
-        <TableCell className="text-right">{formatCurrency(group.material_cost)}</TableCell>
-        <TableCell className="text-right">{formatCurrency(group.purchased_cost)}</TableCell>
-        <TableCell className="text-right">{formatCurrency(group.labor_cost)}</TableCell>
-        <TableCell className="text-right">{formatCurrency(group.outsourcing_cost)}</TableCell>
-        <TableCell className="text-right font-bold">{formatCurrency(group.total_cost)}</TableCell>
-        <TableCell className="text-right">{formatCurrency(group.estimated_amount)}</TableCell>
-        <TableCell className="text-right">
-          {group.profit !== null ? (
-            <span className={group.profit >= 0 ? "text-green-600" : "text-red-600"}>
-              {group.profit >= 0 ? (
-                <TrendingUp className="h-4 w-4 inline mr-1" />
-              ) : (
-                <TrendingDown className="h-4 w-4 inline mr-1" />
-              )}
-              {formatCurrency(group.profit)}
-            </span>
-          ) : "-"}
-        </TableCell>
-        <TableCell className="text-right">
-          {profitRate !== null ? (
-            <Badge className={profitRate >= 0 ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}>
-              {formatPercent(profitRate)}
-            </Badge>
-          ) : "-"}
-        </TableCell>
-      </TableRow>
-      {expanded && group.orders.map((order) => (
-        <TableRow key={order.order_id} className="bg-muted/30">
-          <TableCell className="pl-10 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span>{order.order_id}</span>
-              {order.factory && (
-                <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${factoryColors[order.factory] || 'bg-gray-100 text-gray-600'}`}>
-                  {FACTORY_LABELS[order.factory] || order.factory}
-                </span>
-              )}
-            </div>
-          </TableCell>
-          <TableCell className="text-sm text-muted-foreground">{order.project_title || "-"}</TableCell>
-          <TableCell className="text-right text-sm">{formatCurrency(order.material_cost)}</TableCell>
-          <TableCell className="text-right text-sm">{formatCurrency(order.purchased_cost)}</TableCell>
-          <TableCell className="text-right text-sm">{formatCurrency(order.labor_cost)}</TableCell>
-          <TableCell className="text-right text-sm">{formatCurrency(order.outsourcing_cost)}</TableCell>
-          <TableCell className="text-right text-sm font-medium">{formatCurrency(order.total_cost)}</TableCell>
-          <TableCell className="text-right text-sm">{formatCurrency(order.estimated_amount)}</TableCell>
-          <TableCell className="text-right text-sm">
-            {order.profit !== null ? (
-              <span className={order.profit >= 0 ? "text-green-600" : "text-red-600"}>
-                {formatCurrency(order.profit)}
-              </span>
-            ) : "-"}
-          </TableCell>
-          <TableCell className="text-right text-sm">
-            {order.profit_rate !== null ? (
-              <Badge variant="outline" className={order.profit_rate >= 0 ? "text-green-600 border-green-600" : "text-red-600 border-red-600"}>
-                {formatPercent(order.profit_rate)}
-              </Badge>
-            ) : "-"}
-          </TableCell>
-        </TableRow>
-      ))}
-    </>
-  );
-}
 
 type SortKey = 'order_id' | 'client_name' | 'estimated_amount' | 'profit';
 type SortDir = 'asc' | 'desc' | null;
@@ -244,7 +135,6 @@ export default function CostSummaryPage() {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('order');
-  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
 
   const handleSort = (key: SortKey) => {
     if (sortKey !== key) {
@@ -256,15 +146,6 @@ export default function CostSummaryPage() {
       setSortKey(null);
       setSortDir(null);
     }
-  };
-
-  const toggleCustomer = (clientName: string) => {
-    setExpandedCustomers(prev => {
-      const next = new Set(prev);
-      if (next.has(clientName)) next.delete(clientName);
-      else next.add(clientName);
-      return next;
-    });
   };
 
   const { data, isLoading, error } = useQuery<CostAggregationResponse>({
@@ -345,36 +226,12 @@ export default function CostSummaryPage() {
     const map = new Map<string, CustomerGroup>();
     for (const order of orders) {
       const key = order.client_name || '（未設定）';
-      if (!map.has(key)) {
-        map.set(key, {
-          client_name: key,
-          order_count: 0,
-          material_cost: 0,
-          purchased_cost: 0,
-          labor_cost: 0,
-          outsourcing_cost: 0,
-          total_cost: 0,
-          estimated_amount: null,
-          profit: null,
-          orders: [],
-        });
-      }
-      const g = map.get(key)!;
-      g.order_count++;
-      g.material_cost += order.material_cost;
-      g.purchased_cost += order.purchased_cost;
-      g.labor_cost += order.labor_cost;
-      g.outsourcing_cost += order.outsourcing_cost;
-      g.total_cost += order.total_cost;
-      if (order.estimated_amount != null) {
-        g.estimated_amount = (g.estimated_amount ?? 0) + order.estimated_amount;
-      }
-      if (order.profit != null) {
-        g.profit = (g.profit ?? 0) + order.profit;
-      }
-      g.orders.push(order);
+      if (!map.has(key)) map.set(key, { client_name: key, orders: [] });
+      map.get(key)!.orders.push(order);
     }
-    return [...map.values()].sort((a, b) => b.total_cost - a.total_cost);
+    return [...map.values()].sort((a, b) =>
+      a.client_name.localeCompare(b.client_name, 'ja')
+    );
   }, [data?.orders]);
 
   if (isLoading) {
@@ -630,8 +487,8 @@ export default function CostSummaryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>顧客名</TableHead>
-                    <TableHead className="text-center">件数</TableHead>
+                    <TableHead>受注番号</TableHead>
+                    <TableHead>受注名</TableHead>
                     <TableHead className="text-right">材料費</TableHead>
                     <TableHead className="text-right">購入品</TableHead>
                     <TableHead className="text-right">労務費</TableHead>
@@ -644,14 +501,79 @@ export default function CostSummaryPage() {
                 </TableHeader>
                 <TableBody>
                   {customerGroups.map((group) => (
-                    <CustomerRow
-                      key={group.client_name}
-                      group={group}
-                      expanded={expandedCustomers.has(group.client_name)}
-                      onToggle={() => toggleCustomer(group.client_name)}
-                      formatCurrency={formatCurrency}
-                      formatPercent={formatPercent}
-                    />
+                    <>
+                      <TableRow key={`header-${group.client_name}`} className="bg-muted/60 border-t-2">
+                        <TableCell colSpan={10} className="py-2 font-semibold text-sm">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span>{group.client_name}</span>
+                            <Badge variant="secondary" className="font-normal">{group.orders.length}件</Badge>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {group.orders.map((order) => (
+                        <TableRow
+                          key={order.order_id}
+                          data-testid={`row-order-${order.order_id}`}
+                          className={order.factory ? (factoryRowColors[order.factory] ?? '') : ''}
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <span>{order.order_id}</span>
+                              {order.factory && (
+                                <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${factoryColors[order.factory] || 'bg-gray-100 text-gray-600'}`}>
+                                  {FACTORY_LABELS[order.factory] || order.factory}
+                                </span>
+                              )}
+                              {order.has_missing_prices && (
+                                <Badge variant="outline" className="text-amber-600 border-amber-600">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  単価未設定
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{order.project_title || "-"}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(order.material_cost)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(order.purchased_cost)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span>{formatCurrency(order.labor_cost)}</span>
+                              {order.labor_source === 'actual' && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Clock className="h-3 w-3 text-green-600" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>実績時間: {order.labor_hours}h</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">{formatCurrency(order.outsourcing_cost)}</TableCell>
+                          <TableCell className="text-right font-medium">{formatCurrency(order.total_cost)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(order.estimated_amount)}</TableCell>
+                          <TableCell className="text-right">
+                            {order.profit !== null ? (
+                              <span className={order.profit >= 0 ? "text-green-600" : "text-red-600"}>
+                                {order.profit >= 0 ? <TrendingUp className="h-4 w-4 inline mr-1" /> : <TrendingDown className="h-4 w-4 inline mr-1" />}
+                                {formatCurrency(order.profit)}
+                              </span>
+                            ) : "-"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {order.profit_rate !== null ? (
+                              <Badge className={order.profit_rate >= 0 ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}>
+                                {formatPercent(order.profit_rate)}
+                              </Badge>
+                            ) : "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </>
                   ))}
                 </TableBody>
               </Table>
