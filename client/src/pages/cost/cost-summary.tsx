@@ -246,25 +246,8 @@ export default function CostSummaryPage() {
     );
   }
 
-  const unregisteredWorkers = data?.unregistered_workers ?? [];
-
   return (
     <div className="p-6 space-y-6">
-      {unregisteredWorkers.length > 0 && (
-        <div className="flex items-start gap-3 rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-destructive">
-          <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
-          <div className="space-y-1">
-            <p className="font-medium text-sm">作業者マスタ未登録の作業者がいます</p>
-            <p className="text-sm">
-              以下の作業者は時間単価が登録されていないため、労務費の計算から除外されています。
-              作業者マスタに登録してください。
-            </p>
-            <p className="text-sm font-medium mt-1">
-              {unregisteredWorkers.join('　/　')}
-            </p>
-          </div>
-        </div>
-      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Calculator className="h-8 w-8 text-primary" />

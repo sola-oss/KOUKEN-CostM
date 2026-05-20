@@ -40,7 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Timer, Save, Pencil, Trash2, Upload, FileText } from "lucide-react";
+import { Timer, Save, Pencil, Trash2, Upload, FileText, AlertTriangle } from "lucide-react";
 
 // フォームスキーマ - 3項目のみ
 const workLogSchema = z.object({
@@ -199,6 +199,13 @@ export default function WorkResults() {
 
   const logs: WorkLog[] = workLogsData?.data || [];
 
+  // マスタ登録済み作業者名のセット
+  const registeredNames = new Set((workersData || []).map(w => w.name));
+  // 日報に存在するがマスタ未登録の作業者
+  const unregisteredInLogs = [...new Set(
+    logs.map(l => l.worker).filter(name => name && !registeredNames.has(name))
+  )].sort();
+
   return (
     <div className="p-6 space-y-6" data-testid="page-work-results">
       <div>
@@ -208,6 +215,22 @@ export default function WorkResults() {
         </h1>
         <p className="text-muted-foreground">日々の作業時間を記録します</p>
       </div>
+
+      {unregisteredInLogs.length > 0 && (
+        <div className="flex items-start gap-3 rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-destructive">
+          <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-medium text-sm">作業者マスタ未登録の作業者がいます</p>
+            <p className="text-sm">
+              以下の作業者は時間単価が登録されていないため、原価集計の労務費から除外されています。
+              作業者マスタに時間単価を登録してください。
+            </p>
+            <p className="text-sm font-medium mt-1">
+              {unregisteredInLogs.join('　/　')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* CSVアップロード */}
       <Card data-testid="card-csv-upload">
