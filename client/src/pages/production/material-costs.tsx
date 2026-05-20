@@ -67,6 +67,7 @@ export default function MaterialCostsPage() {
   const { toast } = useToast();
   const [editingRow, setEditingRow] = useState<MaterialCost | null>(null);
   const [orderComboOpen, setOrderComboOpen] = useState(false);
+  const [vendorComboOpen, setVendorComboOpen] = useState(false);
   const [filterOrderId, setFilterOrderId] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -311,30 +312,64 @@ export default function MaterialCostsPage() {
                 <FormField
                   control={form.control}
                   name="vendor_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>業者</FormLabel>
-                      <Select
-                        value={field.value != null ? String(field.value) : "none"}
-                        onValueChange={(val) => field.onChange(val === "none" ? null : Number(val))}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="業者を選択（任意）" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">指定なし</SelectItem>
-                          {vendors.map((v) => (
-                            <SelectItem key={v.id} value={String(v.id)}>
-                              {v.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const selectedVendor = vendors.find(v => v.id === field.value);
+                    return (
+                      <FormItem>
+                        <FormLabel>業者</FormLabel>
+                        <Popover open={vendorComboOpen} onOpenChange={setVendorComboOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className={cn("w-full justify-between font-normal", !field.value && "text-muted-foreground")}
+                              >
+                                <span className="truncate">
+                                  {selectedVendor ? selectedVendor.name : "業者を選択（任意）"}
+                                </span>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-0">
+                            <Command>
+                              <CommandInput placeholder="業者名で検索..." />
+                              <CommandList>
+                                <CommandEmpty>該当する業者がありません</CommandEmpty>
+                                <CommandGroup>
+                                  <CommandItem
+                                    value="__none__"
+                                    onSelect={() => {
+                                      field.onChange(null);
+                                      setVendorComboOpen(false);
+                                    }}
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4", field.value == null ? "opacity-100" : "opacity-0")} />
+                                    指定なし
+                                  </CommandItem>
+                                  {vendors.map((v) => (
+                                    <CommandItem
+                                      key={v.id}
+                                      value={v.name}
+                                      onSelect={() => {
+                                        field.onChange(v.id);
+                                        setVendorComboOpen(false);
+                                      }}
+                                    >
+                                      <Check className={cn("mr-2 h-4 w-4", field.value === v.id ? "opacity-100" : "opacity-0")} />
+                                      {v.name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
 
                 {/* 明細 */}
