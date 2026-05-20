@@ -19,7 +19,6 @@ const ProjectDetail = lazy(() => import("@/pages/production/project-detail"));
 const TaskPlanning = lazy(() => import("@/pages/production/task-planning"));
 const TaskManagement = lazy(() => import("@/pages/production/task-management"));
 const Procurement = lazy(() => import("@/pages/production/procurement"));
-const WorkResults = lazy(() => import("@/pages/production/work-results"));
 const GanttSimple = lazy(() => import("@/pages/production/gantt-simple"));
 const MaterialUsages = lazy(() => import("@/pages/production/material-usages"));
 const MaterialSummary = lazy(() => import("@/pages/production/material-summary"));
@@ -117,7 +116,6 @@ function Router() {
             <Route path="/task-planning" component={TaskPlanning} />
             <Route path="/task-management" component={TaskManagement} />
             <Route path="/procurement" component={Procurement} />
-            <Route path="/work-results" component={WorkResults} />
             <Route path="/gantt" component={GanttSimple} />
             <Route path="/material-usages" component={MaterialUsages} />
             <Route path="/material-summary" component={MaterialSummary} />
