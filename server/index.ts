@@ -9,7 +9,6 @@ import { requestLogger, healthCheckLogger } from './middleware/logging.js';
 
 const app = express();
 
-// Trust proxy for Replit environment (needed for express-rate-limit to work correctly)
 app.set('trust proxy', 1);
 
 // Security middleware
@@ -69,7 +68,6 @@ app.use('/api', apiRateLimitConfig);
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
   });
