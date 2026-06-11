@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/command";
 import {
   CheckSquare, Plus, Trash2, ChevronsUpDown, Check,
-  List, BarChart2, ChevronRight, ChevronDown,
+  List, BarChart2, ChevronRight, ChevronDown, Users,
 } from "lucide-react";
 
 // ─────────────────────────────────────────
@@ -88,6 +88,13 @@ interface WorkerTopGroup {
   orders: OrderInWorkerGroup[];
 }
 
+interface CustomerGroup {
+  client_name: string;
+  totalHours: number;
+  count: number;
+  orders: { order_id: string; totalHours: number; count: number; logs: WorkLog[] }[];
+}
+
 // ─────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────
@@ -122,11 +129,13 @@ export default function TaskManagement() {
   const [orderComboOpen, setOrderComboOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [filterOrderId, setFilterOrderId] = useState("");
-  const [viewMode, setViewMode] = useState<"list" | "grouped" | "by_worker">("list");
+  const [viewMode, setViewMode] = useState<"list" | "grouped" | "by_worker" | "by_customer">("list");
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
   const [expandedWorkerTops, setExpandedWorkerTops] = useState<Set<string>>(new Set());
   const [expandedOrdersInWorker, setExpandedOrdersInWorker] = useState<Set<string>>(new Set());
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
+  const [expandedOrdersInCustomer, setExpandedOrdersInCustomer] = useState<Set<string>>(new Set());
 
   const currentYear = dayjs().year();
   const currentMonth = dayjs().month() + 1;
@@ -235,6 +244,39 @@ export default function TaskManagement() {
     return Array.from(workerMap.values()).sort((a, b) => b.totalHours - a.totalHours);
   }, [sortedLogs]);
 
+  // グループ集計: 顧客 → 受注番号 → 明細
+  const orderClientMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of orders) {
+      m.set(o.order_id, o.client_name ?? "(顧客不明)");
+    }
+    return m;
+  }, [orders]);
+
+  const groupedByCustomer = useMemo<CustomerGroup[]>(() => {
+    const customerMap = new Map<string, CustomerGroup>();
+    for (const log of sortedLogs) {
+      const oid = log.order_id ?? "(受注なし)";
+      const clientName = orderClientMap.get(oid) ?? "(顧客不明)";
+      if (!customerMap.has(clientName)) {
+        customerMap.set(clientName, { client_name: clientName, totalHours: 0, count: 0, orders: [] });
+      }
+      const cg = customerMap.get(clientName)!;
+      cg.totalHours += log.duration_hours ?? 0;
+      cg.count += 1;
+
+      let og = cg.orders.find((o) => o.order_id === oid);
+      if (!og) {
+        og = { order_id: oid, totalHours: 0, count: 0, logs: [] };
+        cg.orders.push(og);
+      }
+      og.totalHours += log.duration_hours ?? 0;
+      og.count += 1;
+      og.logs.push(log);
+    }
+    return Array.from(customerMap.values()).sort((a, b) => b.totalHours - a.totalHours);
+  }, [sortedLogs, orderClientMap]);
+
   // ─── Toggle helpers ───────────────────
 
   const toggleOrder = (orderId: string) => {
@@ -263,6 +305,22 @@ export default function TaskManagement() {
 
   const toggleOrderInWorker = (key: string) => {
     setExpandedOrdersInWorker((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const toggleCustomer = (name: string) => {
+    setExpandedCustomers((prev) => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  };
+
+  const toggleOrderInCustomer = (key: string) => {
+    setExpandedOrdersInCustomer((prev) => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
@@ -572,6 +630,15 @@ export default function TaskManagement() {
                   <BarChart2 className="h-3.5 w-3.5" />
                   作業者別集計
                 </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "by_customer" ? "default" : "ghost"}
+                  onClick={() => setViewMode("by_customer")}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  顧客別集計
+                </Button>
               </div>
               {/* 受注番号フィルター（一覧ビューのみ） */}
               {viewMode === "list" && (
@@ -654,6 +721,82 @@ export default function TaskManagement() {
                                 <TableCell />
                                 <TableCell className="pl-8 text-xs text-muted-foreground">
                                   <span className="font-mono">{log.date}</span>
+                                  {log.task_name && (
+                                    <span className="ml-2">{log.task_name}</span>
+                                  )}
+                                  {log.memo && (
+                                    <span className="ml-2 opacity-60 truncate max-w-[200px] inline-block align-bottom">{log.memo}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell />
+                                <TableCell className="text-right text-xs font-medium">
+                                  {fmtHours(log.duration_hours ?? 0)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : viewMode === "by_customer" ? (
+            /* ─── 顧客別集計ビュー ─── */
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>顧客名 / 受注番号</TableHead>
+                  <TableHead className="text-right">件数</TableHead>
+                  <TableHead className="text-right">合計時間</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {groupedByCustomer.map((cg) => {
+                  const isCustomerExpanded = expandedCustomers.has(cg.client_name);
+                  return (
+                    <React.Fragment key={cg.client_name}>
+                      <TableRow
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => toggleCustomer(cg.client_name)}
+                      >
+                        <TableCell className="pr-0">
+                          {isCustomerExpanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </TableCell>
+                        <TableCell className="font-medium">{cg.client_name}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{cg.count}</TableCell>
+                        <TableCell className="text-right font-medium">{fmtHours(cg.totalHours)}</TableCell>
+                      </TableRow>
+
+                      {isCustomerExpanded && cg.orders.map((og) => {
+                        const orderKey = `${cg.client_name}|${og.order_id}`;
+                        const isOrderExpanded = expandedOrdersInCustomer.has(orderKey);
+                        return (
+                          <React.Fragment key={orderKey}>
+                            <TableRow
+                              className="cursor-pointer bg-muted/30 hover-elevate"
+                              onClick={() => toggleOrderInCustomer(orderKey)}
+                            >
+                              <TableCell className="pr-0 pl-6">
+                                {isOrderExpanded
+                                  ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                  : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                              </TableCell>
+                              <TableCell className="text-sm pl-4 font-mono text-foreground">{og.order_id}</TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">{og.count}</TableCell>
+                              <TableCell className="text-right text-sm font-medium">{fmtHours(og.totalHours)}</TableCell>
+                            </TableRow>
+
+                            {isOrderExpanded && og.logs.map((log) => (
+                              <TableRow key={log.id} className="bg-muted/10">
+                                <TableCell />
+                                <TableCell className="pl-8 text-xs text-muted-foreground">
+                                  <span className="font-mono">{log.date}</span>
+                                  <span className="ml-2">{log.worker}</span>
                                   {log.task_name && (
                                     <span className="ml-2">{log.task_name}</span>
                                   )}

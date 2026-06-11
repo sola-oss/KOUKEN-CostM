@@ -39,23 +39,54 @@ interface CustomerGroup {
   orders: OrderCostSummary[];
 }
 
-function OrderRow({ 
-  order, 
-  formatCurrency, 
-  formatPercent 
-}: { 
+function CostBreakdownBar({ order }: { order: OrderCostSummary }) {
+  if (order.total_cost <= 0) return null;
+  const pct = (v: number) => ((v / order.total_cost) * 100);
+  const materialPct = pct(order.material_cost);
+  const purchasedPct = pct(order.purchased_cost);
+  const laborPct = pct(order.labor_cost);
+  const outsourcingPct = pct(order.outsourcing_cost);
+  const segments = [
+    { label: '材料', pct: materialPct, color: 'bg-violet-500' },
+    { label: '購入', pct: purchasedPct, color: 'bg-amber-500' },
+    { label: '労務', pct: laborPct, color: 'bg-emerald-500' },
+    { label: '外注', pct: outsourcingPct, color: 'bg-rose-500' },
+  ].filter(s => s.pct > 0);
+
+  return (
+    <div className="flex h-5 rounded overflow-hidden text-[10px] font-medium text-white">
+      {segments.map(s => (
+        <div
+          key={s.label}
+          className={`${s.color} flex items-center justify-center`}
+          style={{ width: `${s.pct}%`, minWidth: s.pct > 3 ? undefined : '2px' }}
+        >
+          {s.pct >= 8 ? `${s.label} ${s.pct.toFixed(1)}%` : s.pct >= 4 ? `${s.pct.toFixed(0)}%` : ''}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OrderRow({
+  order,
+  formatCurrency,
+  formatPercent
+}: {
   order: OrderCostSummary;
   formatCurrency: (value: number | null) => string;
   formatPercent: (value: number | null) => string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const rowColorClass = order.factory ? (factoryRowColors[order.factory] ?? '') : '';
 
   return (
     <>
-      <TableRow 
-        key={order.order_id} 
+      <TableRow
+        key={order.order_id}
         data-testid={`row-order-${order.order_id}`}
-        className={rowColorClass}
+        className={`${rowColorClass} cursor-pointer`}
+        onClick={() => setExpanded(!expanded)}
       >
         <TableCell className="font-medium">
           <div className="flex items-center gap-2">
@@ -118,6 +149,15 @@ function OrderRow({
           ) : "-"}
         </TableCell>
       </TableRow>
+      {expanded && order.total_cost > 0 && (
+        <TableRow className={rowColorClass}>
+          <TableCell colSpan={11} className="py-1 px-4">
+            <div className="max-w-2xl">
+              <CostBreakdownBar order={order} />
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
     </>
   );
 }
