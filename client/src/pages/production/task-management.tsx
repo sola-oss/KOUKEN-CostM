@@ -143,8 +143,14 @@ export default function TaskManagement() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const yearOptions = Array.from({ length: 4 }, (_, i) => currentYear - i);
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
-  const fromDate = dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).format("YYYY-MM-DD");
-  const toDate = dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).endOf("month").format("YYYY-MM-DD");
+  const isAllFilter = selectedYear === 0 && selectedMonth === 0;
+  const isYearOnly = selectedYear !== 0 && selectedMonth === 0;
+  const fromDate = isAllFilter ? undefined : isYearOnly
+    ? dayjs(`${selectedYear}-01-01`).format("YYYY-MM-DD")
+    : dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).format("YYYY-MM-DD");
+  const toDate = isAllFilter ? undefined : isYearOnly
+    ? dayjs(`${selectedYear}-12-31`).format("YYYY-MM-DD")
+    : dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`).endOf("month").format("YYYY-MM-DD");
 
   // ─── Data fetching ────────────────────
 
@@ -167,7 +173,7 @@ export default function TaskManagement() {
 
   const { data: workLogsResponse, isLoading } = useQuery({
     queryKey: ["work-logs", selectedYear, selectedMonth],
-    queryFn: () => listWorkLogs({ from: fromDate, to: toDate, page_size: 200 }),
+    queryFn: () => listWorkLogs({ from: fromDate, to: toDate, page_size: isAllFilter ? 1000 : 200 }),
   });
 
   const orders: Order[] = ordersResponse?.data ?? [];
@@ -581,21 +587,31 @@ export default function TaskManagement() {
             <CardTitle>実績一覧</CardTitle>
             <div className="flex items-center gap-3 flex-wrap">
               {/* 年月フィルター */}
-              <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+              <Select value={String(selectedYear)} onValueChange={(v) => {
+                const year = Number(v);
+                setSelectedYear(year);
+                if (year === 0) setSelectedMonth(0);
+              }}>
                 <SelectTrigger className="w-28">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="0">全て</SelectItem>
                   {yearOptions.map((y) => (
                     <SelectItem key={y} value={String(y)}>{y}年</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+              <Select value={String(selectedMonth)} onValueChange={(v) => {
+                const month = Number(v);
+                setSelectedMonth(month);
+                if (month !== 0 && selectedYear === 0) setSelectedYear(currentYear);
+              }}>
                 <SelectTrigger className="w-24">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="0">全て</SelectItem>
                   {monthOptions.map((m) => (
                     <SelectItem key={m} value={String(m)}>{m}月</SelectItem>
                   ))}
