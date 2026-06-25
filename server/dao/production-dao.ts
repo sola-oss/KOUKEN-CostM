@@ -930,7 +930,8 @@ export class ProductionDAO {
     if (from) { countQuery = countQuery.gte('date', from); dataQuery = dataQuery.gte('date', from); }
     if (to) { countQuery = countQuery.lte('date', to); dataQuery = dataQuery.lte('date', to); }
 
-    dataQuery = dataQuery.order('date', { ascending: false }).order('start_time', { ascending: false }).range(offset, offset + pageSize - 1);
+    // 登録の新しい順（id降順）。これにより取得上限に当たっても直近登録分が必ず含まれる
+    dataQuery = dataQuery.order('id', { ascending: false }).range(offset, offset + pageSize - 1);
 
     const [{ count, error: ce }, { data, error: de }] = await Promise.all([countQuery, dataQuery]);
     if (ce) throw new Error(`[getWorkLogs count] ${ce.message}`);

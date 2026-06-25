@@ -176,7 +176,7 @@ export default function TaskManagement() {
 
   const { data: workLogsResponse, isLoading } = useQuery({
     queryKey: ["work-logs", selectedYear, selectedMonth],
-    queryFn: () => listWorkLogs({ from: fromDate, to: toDate, page_size: isAllFilter ? 1000 : 200 }),
+    queryFn: () => listWorkLogs({ from: fromDate, to: toDate, page_size: 1000 }),
   });
 
   const orders: Order[] = ordersResponse?.data ?? [];
