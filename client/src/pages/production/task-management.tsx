@@ -359,7 +359,11 @@ export default function TaskManagement() {
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["work-logs"] });
       toast({ title: `日報を保存しました（作業日 ${variables.date}）` });
-      // 登録したばかりの行が一覧の一番上に来るよう登録順に戻し、数秒ハイライト
+      // 保存直後は作業日の月に関係なく一番上で確認できるよう、
+      // 明細一覧・全期間・登録順に切り替えてから該当行を数秒ハイライト
+      setViewMode("list");
+      setSelectedYear(0);
+      setSelectedMonth(0);
       setSortMode("registered");
       if (result?.id) {
         const newId = result.id;
