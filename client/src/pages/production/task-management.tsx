@@ -40,6 +40,7 @@ import {
 import {
   CheckSquare, Plus, Trash2, ChevronsUpDown, Check,
   List, BarChart2, ChevronRight, ChevronDown, Users,
+  Clock, CalendarDays,
 } from "lucide-react";
 
 // ─────────────────────────────────────────
@@ -130,6 +131,8 @@ export default function TaskManagement() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [filterOrderId, setFilterOrderId] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grouped" | "by_worker" | "by_customer">("list");
+  const [sortMode, setSortMode] = useState<"registered" | "work_date">("registered");
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
   const [expandedWorkerTops, setExpandedWorkerTops] = useState<Set<string>>(new Set());
@@ -182,8 +185,10 @@ export default function TaskManagement() {
 
   // Sort work logs by date desc
   const sortedLogs = useMemo(
-    () => [...workLogs].sort((a, b) => b.date.localeCompare(a.date)),
-    [workLogs]
+    () => [...workLogs].sort((a, b) =>
+      sortMode === "registered" ? b.id - a.id : b.date.localeCompare(a.date)
+    ),
+    [workLogs, sortMode]
   );
 
   const filteredLogs = useMemo(() =>
@@ -351,9 +356,19 @@ export default function TaskManagement() {
 
   const createMutation = useMutation({
     mutationFn: createWorkLog,
-    onSuccess: () => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["work-logs"] });
-      toast({ title: "日報を保存しました" });
+      toast({ title: `日報を保存しました（作業日 ${variables.date}）` });
+      // 登録したばかりの行が一覧の一番上に来るよう登録順に戻し、数秒ハイライト
+      setSortMode("registered");
+      if (result?.id) {
+        const newId = result.id;
+        setHighlightedId(newId);
+        window.setTimeout(
+          () => setHighlightedId((cur) => (cur === newId ? null : cur)),
+          4000
+        );
+      }
       form.reset({
         date: form.getValues("date"),
         order_id: form.getValues("order_id"),
@@ -656,6 +671,29 @@ export default function TaskManagement() {
                   顧客別集計
                 </Button>
               </div>
+              {/* 並べ替え（一覧ビューのみ） */}
+              {viewMode === "list" && (
+                <div className="flex items-center gap-1 border rounded-md p-0.5">
+                  <Button
+                    size="sm"
+                    variant={sortMode === "registered" ? "default" : "ghost"}
+                    onClick={() => setSortMode("registered")}
+                    className="h-7 gap-1.5 text-xs"
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    登録順
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={sortMode === "work_date" ? "default" : "ghost"}
+                    onClick={() => setSortMode("work_date")}
+                    className="h-7 gap-1.5 text-xs"
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    作業日順
+                  </Button>
+                </div>
+              )}
               {/* 受注番号フィルター（一覧ビューのみ） */}
               {viewMode === "list" && (
                 <div className="flex items-center gap-2">
@@ -936,7 +974,10 @@ export default function TaskManagement() {
                   </TableHeader>
                   <TableBody>
                     {filteredLogs.map((log) => (
-                      <TableRow key={log.id}>
+                      <TableRow
+                        key={log.id}
+                        className={log.id === highlightedId ? "bg-amber-100 dark:bg-amber-950/40 transition-colors" : undefined}
+                      >
                         <TableCell className="whitespace-nowrap">{log.date}</TableCell>
                         <TableCell className="font-mono text-sm whitespace-nowrap">{log.order_id || "-"}</TableCell>
                         <TableCell className="text-sm">{log.task_name || "-"}</TableCell>
