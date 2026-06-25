@@ -51,15 +51,15 @@ export const helmetConfig = helmet({
  */
 export const rateLimitConfig = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Limit each IP to 100 requests per windowMs in production
+  max: process.env.NODE_ENV === 'production' ? 1000 : 1000, // Limit each IP per windowMs in production
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: '15 minutes'
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // Skip health checks and development static files
-  skip: (req: Request) => req.path === '/health' || (process.env.NODE_ENV === 'development' && !req.path.startsWith('/api')),
+  // 静的ファイル(JS/CSS/画像)とヘルスチェックは制限対象外。API呼び出しのみ制限する
+  skip: (req: Request) => req.path === '/health' || !req.path.startsWith('/api'),
 });
 
 /**
@@ -67,7 +67,7 @@ export const rateLimitConfig = rateLimit({
  */
 export const apiRateLimitConfig = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 50 : 500,
+  max: process.env.NODE_ENV === 'production' ? 600 : 500,
   message: {
     error: 'Too many API requests from this IP, please try again later.',
     retryAfter: '15 minutes'
