@@ -1867,8 +1867,8 @@ router.post('/api/vendors-master', async (req, res) => {
     res.status(201).json(vendor);
   } catch (error: any) {
     console.error('Create vendor master error:', error);
-    if (error.message?.includes('UNIQUE constraint failed')) {
-      return res.status(400).json({ 
+    if (error.message?.includes('UNIQUE constraint failed') || error.message?.includes('duplicate key value')) {
+      return res.status(400).json({
         error: 'Validation error',
         message: 'この外注先名は既に登録されています'
       });
@@ -1905,8 +1905,8 @@ router.put('/api/vendors-master/:id', async (req, res) => {
     res.json(vendor);
   } catch (error: any) {
     console.error('Update vendor master error:', error);
-    if (error.message?.includes('UNIQUE constraint failed')) {
-      return res.status(400).json({ 
+    if (error.message?.includes('UNIQUE constraint failed') || error.message?.includes('duplicate key value')) {
+      return res.status(400).json({
         error: 'Validation error',
         message: 'この外注先名は既に登録されています'
       });
@@ -1934,8 +1934,8 @@ router.delete('/api/vendors-master/:id', async (req, res) => {
     res.status(204).send();
   } catch (error: any) {
     console.error('Delete vendor master error:', error);
-    if (error.message?.includes('FOREIGN KEY constraint failed')) {
-      return res.status(400).json({ 
+    if (error.message?.includes('FOREIGN KEY constraint failed') || error.message?.includes('violates foreign key constraint')) {
+      return res.status(400).json({
         error: 'Deletion error',
         message: 'この外注先は外注費で使用されているため削除できません'
       });
