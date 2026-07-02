@@ -26,6 +26,53 @@ function normBool(val: any): boolean {
   return val === 1 || val === '1' || val === 'true';
 }
 
+// Supabase(PostgREST)は1リクエスト最大1000行のため、超える分はrangeで分割取得する
+const SUPABASE_MAX_ROWS = 1000;
+
+// buildQueryで作ったクエリを1000行ずつ全ページ取得する汎用ヘルパー。
+// range分割の整合性のため、buildQueryは一意なキーで安定ソートされたクエリを返すこと
+async function fetchAllRows<T>(buildQuery: () => any, context: string): Promise<T[]> {
+  const rows: T[] = [];
+  for (let start = 0; ; start += SUPABASE_MAX_ROWS) {
+    const { data, error } = await buildQuery().range(start, start + SUPABASE_MAX_ROWS - 1);
+    if (error) throw new Error(`[${context}] ${error.message}`);
+    const chunk = (data || []) as T[];
+    rows.push(...chunk);
+    if (chunk.length < SUPABASE_MAX_ROWS) break;
+  }
+  return rows;
+}
+
+// IDの集合に紐づく行を全件取得する（IN句のURL長制限と1000行上限の両方を回避）
+async function fetchAllByIds<T>(
+  table: string,
+  idColumn: string,
+  ids: (string | number)[],
+  context: string,
+  opts: { select?: string; orderBy?: string } = {}
+): Promise<T[]> {
+  const { select = '*', orderBy = 'id' } = opts;
+  const rows: T[] = [];
+  const ID_CHUNK = 200;
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const idChunk = ids.slice(i, i + ID_CHUNK);
+    const chunkRows = await fetchAllRows<T>(
+      () => supabase.from(table).select(select).in(idColumn, idChunk).order(orderBy, { ascending: true }),
+      context
+    );
+    rows.push(...chunkRows);
+  }
+  return rows;
+}
+
+async function fetchAllByOrderIds<T>(
+  table: string,
+  orderIds: string[],
+  context: string
+): Promise<T[]> {
+  return fetchAllByIds<T>(table, 'order_id', orderIds, context);
+}
+
 // ============================================================
 // KPI計算（バッチ対応・Supabase用）
 // ============================================================
@@ -193,47 +240,69 @@ export class ProductionDAO {
     const { from, to, search, page = 1, pageSize = 20 } = options;
     const offset = (page - 1) * pageSize;
 
-    let query = supabase.from('orders').select('*', { count: 'exact' });
+    const buildQuery = () => {
+      let query = supabase.from('orders').select('*', { count: 'exact' });
+      if (from) query = query.gte('order_date', from);
+      if (to) query = query.lte('order_date', to);
+      if (search) {
+        query = query.or(
+          `order_id.ilike.%${search}%,client_name.ilike.%${search}%,project_title.ilike.%${search}%,client_order_no.ilike.%${search}%`
+        );
+      }
+      return query.order('order_date', { ascending: false }).order('order_id', { ascending: false });
+    };
 
-    if (from) query = query.gte('order_date', from);
-    if (to) query = query.lte('order_date', to);
-    if (search) {
-      query = query.or(
-        `order_id.ilike.%${search}%,client_name.ilike.%${search}%,project_title.ilike.%${search}%,client_order_no.ilike.%${search}%`
-      );
+    // PostgRESTの1000行上限を超えるpageSizeにも対応するため分割取得
+    const rangeEnd = offset + pageSize - 1;
+    const orderList: Order[] = [];
+    let total = 0;
+    for (let start = offset; start <= rangeEnd; start += SUPABASE_MAX_ROWS) {
+      const chunkEnd = Math.min(start + SUPABASE_MAX_ROWS - 1, rangeEnd);
+      const { data, count, error } = await buildQuery().range(start, chunkEnd);
+      if (error) throw new Error(`[getOrders] ${error.message}`);
+      total = count ?? total;
+      const chunk = (data || []) as Order[];
+      orderList.push(...chunk);
+      if (chunk.length < chunkEnd - start + 1) break;
     }
 
-    query = query.order('order_date', { ascending: false }).order('order_id', { ascending: false });
-    query = query.range(offset, offset + pageSize - 1);
-
-    const { data: orders, count, error } = await query;
-    if (error) throw new Error(`[getOrders] ${error.message}`);
-
-    const orderList = (orders || []) as Order[];
     const orderIds = orderList.map(o => o.order_id);
 
     // KPI計算用バッチ取得
     let procurements: Procurement[] = [];
     let workerLogs: WorkerLog[] = [];
     if (orderIds.length > 0) {
-      const [procRes, wlRes] = await Promise.all([
-        supabase.from('procurements').select('*').in('order_id', orderIds),
-        supabase.from('workers_log').select('*').in('order_id', orderIds)
+      const [procs, wlogs] = await Promise.all([
+        fetchAllByOrderIds<Procurement>('procurements', orderIds, 'getOrders:procurements'),
+        fetchAllByOrderIds<WorkerLog>('workers_log', orderIds, 'getOrders:workers_log')
       ]);
-      procurements = (procRes.data || []) as Procurement[];
-      workerLogs = (wlRes.data || []) as WorkerLog[];
+      procurements = procs;
+      workerLogs = wlogs;
     }
 
-    const ordersWithKPI = orderList.map(order => {
-      const orderProcs = procurements.filter(p => p.order_id === order.order_id);
-      const orderWLogs = workerLogs.filter(w => w.order_id === order.order_id);
-      return {
-        ...order,
-        kpi: calcOrderKPIFromData(order, orderProcs, orderWLogs)
-      };
-    });
+    const procsByOrder = new Map<string, Procurement[]>();
+    for (const p of procurements) {
+      const list = procsByOrder.get(p.order_id) || [];
+      list.push(p);
+      procsByOrder.set(p.order_id, list);
+    }
+    const wlogsByOrder = new Map<string, WorkerLog[]>();
+    for (const w of workerLogs) {
+      const list = wlogsByOrder.get(w.order_id) || [];
+      list.push(w);
+      wlogsByOrder.set(w.order_id, list);
+    }
 
-    return { orders: ordersWithKPI, total: count ?? 0 };
+    const ordersWithKPI = orderList.map(order => ({
+      ...order,
+      kpi: calcOrderKPIFromData(
+        order,
+        procsByOrder.get(order.order_id) || [],
+        wlogsByOrder.get(order.order_id) || []
+      )
+    }));
+
+    return { orders: ordersWithKPI, total };
   }
 
   async getOrderById(orderId: string): Promise<{
@@ -489,14 +558,12 @@ export class ProductionDAO {
   async getDashboardKPI(options: { from?: string; to?: string } = {}): Promise<DashboardKPI> {
     const { from, to } = options;
 
-    let orderQuery = supabase.from('orders').select('*');
-    if (from) orderQuery = orderQuery.gte('due_date', from);
-    if (to) orderQuery = orderQuery.lte('due_date', to);
-
-    const { data: orders, error: oe } = await orderQuery;
-    if (oe) throw new Error(`[getDashboardKPI] ${oe.message}`);
-
-    const orderList = (orders || []) as Order[];
+    const orderList = await fetchAllRows<Order>(() => {
+      let orderQuery = supabase.from('orders').select('*');
+      if (from) orderQuery = orderQuery.gte('due_date', from);
+      if (to) orderQuery = orderQuery.lte('due_date', to);
+      return orderQuery.order('order_id', { ascending: true });
+    }, 'getDashboardKPI');
     const orderIds = orderList.map(o => o.order_id);
 
     if (orderIds.length === 0) {
@@ -507,13 +574,10 @@ export class ProductionDAO {
       };
     }
 
-    const [procRes, wlRes] = await Promise.all([
-      supabase.from('procurements').select('*').in('order_id', orderIds),
-      supabase.from('workers_log').select('*').in('order_id', orderIds)
+    const [procurements, workerLogs] = await Promise.all([
+      fetchAllByOrderIds<Procurement>('procurements', orderIds, 'getDashboardKPI:procurements'),
+      fetchAllByOrderIds<WorkerLog>('workers_log', orderIds, 'getDashboardKPI:workers_log')
     ]);
-
-    const procurements = (procRes.data || []) as Procurement[];
-    const workerLogs = (wlRes.data || []) as WorkerLog[];
 
     let totalSales = 0, totalGrossProfit = 0, totalStdHours = 0;
     let totalActualHours = 0, varianceSum = 0, validVarianceCount = 0;
@@ -544,14 +608,15 @@ export class ProductionDAO {
     const { from, to } = options;
     const events: CalendarEvent[] = [];
 
-    let orderQuery = supabase.from('orders').select('order_id,product_name,due_date');
-    if (from) orderQuery = orderQuery.gte('due_date', from);
-    if (to) orderQuery = orderQuery.lte('due_date', to);
+    const orders = await fetchAllRows<any>(() => {
+      let orderQuery = supabase.from('orders').select('order_id,product_name,due_date');
+      if (from) orderQuery = orderQuery.gte('due_date', from);
+      if (to) orderQuery = orderQuery.lte('due_date', to);
+      return orderQuery.order('order_id', { ascending: true });
+    }, 'getCalendarEvents');
+    const orderIds = orders.map((o: any) => o.order_id);
 
-    const { data: orders } = await orderQuery;
-    const orderIds = ((orders || []) as any[]).map((o: any) => o.order_id);
-
-    for (const order of (orders || []) as any[]) {
+    for (const order of orders) {
       if (!order.due_date) continue;
       const isOverdue = new Date(order.due_date) < new Date();
       events.push({
@@ -565,12 +630,12 @@ export class ProductionDAO {
     }
 
     if (orderIds.length > 0) {
-      const { data: procs } = await supabase
-        .from('procurements')
-        .select('id,order_id,item_name,eta,status')
-        .in('order_id', orderIds);
+      const procs = await fetchAllByIds<any>(
+        'procurements', 'order_id', orderIds, 'getCalendarEvents:procurements',
+        { select: 'id,order_id,item_name,eta,status' }
+      );
 
-      for (const proc of (procs || []) as any[]) {
+      for (const proc of procs) {
         if (proc.eta) {
           events.push({
             id: `proc-${proc.id}`,
@@ -591,23 +656,29 @@ export class ProductionDAO {
   async getCSVData(options: { from?: string; to?: string } = {}): Promise<OrderKPI[]> {
     const { from, to } = options;
 
-    let orderQuery = supabase.from('orders').select('*');
-    if (from) orderQuery = orderQuery.gte('due_date', from);
-    if (to) orderQuery = orderQuery.lte('due_date', to);
-    orderQuery = orderQuery.order('due_date', { ascending: true });
+    const orderList: Order[] = [];
+    for (let start = 0; ; start += SUPABASE_MAX_ROWS) {
+      let orderQuery = supabase.from('orders').select('*');
+      if (from) orderQuery = orderQuery.gte('due_date', from);
+      if (to) orderQuery = orderQuery.lte('due_date', to);
+      orderQuery = orderQuery
+        .order('due_date', { ascending: true })
+        .order('order_id', { ascending: true })
+        .range(start, start + SUPABASE_MAX_ROWS - 1);
 
-    const { data: orders } = await orderQuery;
-    const orderList = (orders || []) as Order[];
+      const { data: orders, error } = await orderQuery;
+      if (error) throw new Error(`[getCSVData] ${error.message}`);
+      const chunk = (orders || []) as Order[];
+      orderList.push(...chunk);
+      if (chunk.length < SUPABASE_MAX_ROWS) break;
+    }
     const orderIds = orderList.map(o => o.order_id);
     if (orderIds.length === 0) return [];
 
-    const [procRes, wlRes] = await Promise.all([
-      supabase.from('procurements').select('*').in('order_id', orderIds),
-      supabase.from('workers_log').select('*').in('order_id', orderIds)
+    const [procurements, workerLogs] = await Promise.all([
+      fetchAllByOrderIds<Procurement>('procurements', orderIds, 'getCSVData:procurements'),
+      fetchAllByOrderIds<WorkerLog>('workers_log', orderIds, 'getCSVData:workers_log')
     ]);
-
-    const procurements = (procRes.data || []) as Procurement[];
-    const workerLogs = (wlRes.data || []) as WorkerLog[];
 
     return orderList.map(order => {
       const orderProcs = procurements.filter(p => p.order_id === order.order_id);
@@ -619,21 +690,27 @@ export class ProductionDAO {
   // ========== Utility Methods ==========
 
   async getOrdersForDropdown(): Promise<{ order_id: string; client_name: string | null; project_title: string | null; product_name: string | null }[]> {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('order_id,client_name,project_title,product_name')
-      .order('order_id', { ascending: true });
-    if (error) throw new Error(`[getOrdersForDropdown] ${error.message}`);
-    return (data || []) as any[];
+    const results: any[] = [];
+    for (let start = 0; ; start += SUPABASE_MAX_ROWS) {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('order_id,client_name,project_title,product_name')
+        .order('order_id', { ascending: true })
+        .range(start, start + SUPABASE_MAX_ROWS - 1);
+      if (error) throw new Error(`[getOrdersForDropdown] ${error.message}`);
+      const chunk = (data || []) as any[];
+      results.push(...chunk);
+      if (chunk.length < SUPABASE_MAX_ROWS) break;
+    }
+    return results;
   }
 
   async getWorkers(): Promise<{ worker: string }[]> {
-    const { data, error } = await supabase
-      .from('workers_log')
-      .select('worker')
-      .not('worker', 'is', null);
-    if (error) throw new Error(`[getWorkers] ${error.message}`);
-    const unique = [...new Set((data || []).map((r: any) => r.worker).filter(Boolean))];
+    const data = await fetchAllRows<any>(
+      () => supabase.from('workers_log').select('id,worker').not('worker', 'is', null).order('id', { ascending: true }),
+      'getWorkers'
+    );
+    const unique = [...new Set(data.map((r: any) => r.worker).filter(Boolean))];
     return unique.sort().map(w => ({ worker: w }));
   }
 
@@ -643,26 +720,33 @@ export class ProductionDAO {
   }[]> {
     const results: any[] = [];
 
-    const [tasksRes, procsRes] = await Promise.all([
-      supabase.from('tasks').select('id,task_name,planned_start,planned_end,status,order_id')
-        .not('planned_start', 'is', null).not('planned_end', 'is', null)
-        .order('planned_start', { ascending: true }),
-      supabase.from('procurements').select('id,item_name,order_id,eta,status')
-        .not('eta', 'is', null)
-        .order('eta', { ascending: true, nullsFirst: false })
+    const [tasks, procs] = await Promise.all([
+      fetchAllRows<any>(
+        () => supabase.from('tasks').select('id,task_name,planned_start,planned_end,status,order_id')
+          .not('planned_start', 'is', null).not('planned_end', 'is', null)
+          .order('planned_start', { ascending: true }).order('id', { ascending: true }),
+        'getOrdersForGantt:tasks'
+      ),
+      fetchAllRows<any>(
+        () => supabase.from('procurements').select('id,item_name,order_id,eta,status')
+          .not('eta', 'is', null)
+          .order('eta', { ascending: true, nullsFirst: false }).order('id', { ascending: true }),
+        'getOrdersForGantt:procurements'
+      )
     ]);
 
-    const tasks = (tasksRes.data || []) as any[];
     const orderIds = [...new Set([
       ...tasks.map((t: any) => t.order_id),
-      ...(procsRes.data || []).map((p: any) => p.order_id)
+      ...procs.map((p: any) => p.order_id)
     ].filter(Boolean) as string[])];
 
     let orderNameMap = new Map<string, string>();
     if (orderIds.length > 0) {
-      const { data: orders } = await supabase
-        .from('orders').select('order_id,project_title,product_name').in('order_id', orderIds);
-      for (const o of orders || []) {
+      const orders = await fetchAllByIds<any>(
+        'orders', 'order_id', orderIds, 'getOrdersForGantt:orders',
+        { select: 'order_id,project_title,product_name', orderBy: 'order_id' }
+      );
+      for (const o of orders) {
         orderNameMap.set(o.order_id, o.project_title || o.product_name || '');
       }
     }
@@ -679,7 +763,7 @@ export class ProductionDAO {
       });
     }
 
-    for (const proc of (procsRes.data || []) as any[]) {
+    for (const proc of procs) {
       const orderDate = proc.eta;
       if (!orderDate) continue;
       const endDateObj = new Date(orderDate);
@@ -741,9 +825,9 @@ export class ProductionDAO {
 
     let orderList: OrderRowWithFactory[] = [];
 
-    const withFactory = await supabase
+    const buildOrderQuery = (select: string) => supabase
       .from('orders')
-      .select('order_id, order_date, due_date, client_name, project_title, product_name, factory')
+      .select(select)
       .not('is_delivered', 'eq', true)
       .not('due_date', 'is', null)
       .or(`order_date.is.null,order_date.lte.${monthEndUTC}`)
@@ -751,22 +835,19 @@ export class ProductionDAO {
       .order('due_date', { ascending: true })
       .order('order_id', { ascending: true });
 
-    if (withFactory.error && withFactory.error.message.includes('factory')) {
+    try {
+      orderList = await fetchAllRows<OrderRowWithFactory>(
+        () => buildOrderQuery('order_id, order_date, due_date, client_name, project_title, product_name, factory'),
+        'getGanttHierarchy'
+      );
+    } catch (e: any) {
+      if (!String(e?.message || '').includes('factory')) throw e;
       // factory column doesn't exist yet — query without it
-      const withoutFactory = await supabase
-        .from('orders')
-        .select('order_id, order_date, due_date, client_name, project_title, product_name')
-        .not('is_delivered', 'eq', true)
-        .not('due_date', 'is', null)
-        .or(`order_date.is.null,order_date.lte.${monthEndUTC}`)
-        .gte('due_date', monthStartUTC)
-        .order('due_date', { ascending: true })
-        .order('order_id', { ascending: true });
-      if (withoutFactory.error) throw new Error(`[getGanttHierarchy] ${withoutFactory.error.message}`);
-      orderList = (withoutFactory.data as OrderRowBase[] ?? []).map((r) => ({ ...r, factory: null }));
-    } else {
-      if (withFactory.error) throw new Error(`[getGanttHierarchy] ${withFactory.error.message}`);
-      orderList = (withFactory.data as OrderRowWithFactory[]) ?? [];
+      const baseRows = await fetchAllRows<OrderRowBase>(
+        () => buildOrderQuery('order_id, order_date, due_date, client_name, project_title, product_name'),
+        'getGanttHierarchy'
+      );
+      orderList = baseRows.map((r) => ({ ...r, factory: null }));
     }
 
     const orderIds = orderList.map(o => o.order_id);
@@ -774,12 +855,11 @@ export class ProductionDAO {
     // Fetch actual hours from work_logs for all orders in this view
     let actualHoursMap = new Map<string, number>();
     if (orderIds.length > 0) {
-      const { data: wlData, error: wlError } = await supabase
-        .from('work_logs')
-        .select('order_id, duration_hours')
-        .in('order_id', orderIds);
-      if (wlError) throw new Error(`[getGanttHierarchy:work_logs] ${wlError.message}`);
-      for (const row of wlData || []) {
+      const wlData = await fetchAllByIds<{ order_id: string; duration_hours: number | null }>(
+        'work_logs', 'order_id', orderIds, 'getGanttHierarchy:work_logs',
+        { select: 'id, order_id, duration_hours' }
+      );
+      for (const row of wlData) {
         const hours = (row.duration_hours as number) ?? 0;
         actualHoursMap.set(row.order_id, (actualHoursMap.get(row.order_id) ?? 0) + hours);
       }
@@ -942,10 +1022,12 @@ export class ProductionDAO {
     // product_name取得
     const orderIds = [...new Set(logs.map(l => l.order_id).filter(Boolean) as string[])];
     if (orderIds.length > 0) {
-      const { data: orders } = await supabase
-        .from('orders').select('order_id,product_name').in('order_id', orderIds);
+      const orders = await fetchAllByIds<{ order_id: string; product_name: string | null }>(
+        'orders', 'order_id', orderIds, 'getWorkLogs:orders',
+        { select: 'order_id,product_name', orderBy: 'order_id' }
+      );
       const nameMap = new Map<string, string>();
-      for (const o of orders || []) nameMap.set(o.order_id, o.product_name || '');
+      for (const o of orders) nameMap.set(o.order_id, o.product_name || '');
       logs.forEach(l => { if (l.order_id) l.product_name = nameMap.get(l.order_id) || ''; });
     }
 
@@ -1072,17 +1154,16 @@ export class ProductionDAO {
   async getMaterialUsages(options?: {
     project_id?: string; material_id?: number; area?: string; zone?: string;
   }): Promise<MaterialUsageWithMaterial[]> {
-    let muQuery = supabase.from('material_usages').select('*');
-    if (options?.project_id) muQuery = muQuery.eq('project_id', options.project_id);
-    if (options?.material_id) muQuery = muQuery.eq('material_id', options.material_id);
-    if (options?.area) muQuery = muQuery.eq('area', options.area);
-    if (options?.zone) muQuery = muQuery.eq('zone', options.zone);
-    muQuery = muQuery.order('project_id').order('area').order('zone');
+    const usages = await fetchAllRows<MaterialUsage>(() => {
+      let muQuery = supabase.from('material_usages').select('*');
+      if (options?.project_id) muQuery = muQuery.eq('project_id', options.project_id);
+      if (options?.material_id) muQuery = muQuery.eq('material_id', options.material_id);
+      if (options?.area) muQuery = muQuery.eq('area', options.area);
+      if (options?.zone) muQuery = muQuery.eq('zone', options.zone);
+      return muQuery.order('project_id').order('area').order('zone').order('id', { ascending: true });
+    }, 'getMaterialUsages');
 
-    const { data: usages, error } = await muQuery;
-    if (error) throw new Error(`[getMaterialUsages] ${error.message}`);
-
-    return this._enrichMaterialUsages((usages || []) as MaterialUsage[]);
+    return this._enrichMaterialUsages(usages);
   }
 
   async getMaterialUsageById(id: number): Promise<MaterialUsageWithMaterial | undefined> {
@@ -1240,27 +1321,45 @@ export class ProductionDAO {
     const settings = await this.getCostSettings();
     const laborRate = settings.labor_rate_per_hour;
 
-    // バッチ取得
-    const [ordersRes, muRes, wlRes, procRes, outRes, workersRes, mcRows, piRows] = await Promise.all([
-      supabase.from('orders').select('order_id,factory,project_title,client_name,estimated_amount'),
-      supabase.from('material_usages').select('*'),
-      supabase.from('work_logs').select('order_id,worker,employee_name,duration_hours')
-        .not('order_id', 'is', null).not('duration_hours', 'is', null).gt('duration_hours', 0),
-      supabase.from('procurements').select('order_id,vendor,total_amount'),
-      supabase.from('outsourcing_costs').select('project_id,amount'),
-      supabase.from('workers_master').select('name,hourly_rate'),
-      supabase.from('material_costs').select('id,order_id,description,total_amount,vendor_id'),
-      supabase.from('purchased_items').select('order_id,total_amount')
+    // バッチ取得（各テーブルとも1000行超に対応するため分割取得）
+    const [orders, materialUsages, workLogs, procurementsData, outsourcingData, workersMasterData, materialCostRows, purchasedItemRows] = await Promise.all([
+      fetchAllRows<any>(
+        () => supabase.from('orders').select('order_id,factory,project_title,client_name,estimated_amount')
+          .order('order_id', { ascending: true }),
+        'getCostAggregation:orders'
+      ),
+      fetchAllRows<MaterialUsage>(
+        () => supabase.from('material_usages').select('*').order('id', { ascending: true }),
+        'getCostAggregation:material_usages'
+      ),
+      fetchAllRows<any>(
+        () => supabase.from('work_logs').select('id,order_id,worker,employee_name,duration_hours')
+          .not('order_id', 'is', null).not('duration_hours', 'is', null).gt('duration_hours', 0)
+          .order('id', { ascending: true }),
+        'getCostAggregation:work_logs'
+      ),
+      fetchAllRows<any>(
+        () => supabase.from('procurements').select('id,order_id,vendor,total_amount').order('id', { ascending: true }),
+        'getCostAggregation:procurements'
+      ),
+      fetchAllRows<any>(
+        () => supabase.from('outsourcing_costs').select('id,project_id,amount').order('id', { ascending: true }),
+        'getCostAggregation:outsourcing_costs'
+      ),
+      fetchAllRows<any>(
+        () => supabase.from('workers_master').select('name,hourly_rate').order('name', { ascending: true }),
+        'getCostAggregation:workers_master'
+      ),
+      fetchAllRows<{ id: number; order_id: string; description: string | null; total_amount: string; }>(
+        () => supabase.from('material_costs').select('id,order_id,description,total_amount,vendor_id')
+          .order('id', { ascending: true }),
+        'getCostAggregation:material_costs'
+      ),
+      fetchAllRows<{ order_id: string; total_amount: string; }>(
+        () => supabase.from('purchased_items').select('id,order_id,total_amount').order('id', { ascending: true }),
+        'getCostAggregation:purchased_items'
+      )
     ]);
-
-    const orders = (ordersRes.data || []) as any[];
-    const materialUsages = (muRes.data || []) as MaterialUsage[];
-    const workLogs = (wlRes.data || []) as any[];
-    const procurementsData = (procRes.data || []) as any[];
-    const outsourcingData = (outRes.data || []) as any[];
-    const workersMasterData = (workersRes.data || []) as any[];
-    const materialCostRows = (mcRows.data || []) as { id: number; order_id: string; description: string | null; total_amount: string; }[];
-    const purchasedItemRows = (piRows.data || []) as { order_id: string; total_amount: string; }[];
 
     // 材料IDから材料情報を取得
     const matIds = [...new Set(materialUsages.map(u => u.material_id).filter(Boolean) as number[])];
@@ -1583,14 +1682,12 @@ export class ProductionDAO {
   }
 
   async getOutsourcingCosts(filters: { project_id?: string; vendor_id?: number }): Promise<OutsourcingCostWithVendor[]> {
-    let query = supabase.from('outsourcing_costs').select('*').order('date', { ascending: false }).order('id', { ascending: false });
-    if (filters.project_id) query = query.eq('project_id', filters.project_id);
-    if (filters.vendor_id) query = query.eq('vendor_id', filters.vendor_id);
-
-    const { data, error } = await query;
-    if (error) throw new Error(`[getOutsourcingCosts] ${error.message}`);
-
-    const costs = (data || []) as OutsourcingCost[];
+    const costs = await fetchAllRows<OutsourcingCost>(() => {
+      let query = supabase.from('outsourcing_costs').select('*').order('date', { ascending: false }).order('id', { ascending: false });
+      if (filters.project_id) query = query.eq('project_id', filters.project_id);
+      if (filters.vendor_id) query = query.eq('vendor_id', filters.vendor_id);
+      return query;
+    }, 'getOutsourcingCosts');
     const vendorIds = [...new Set(costs.map(c => c.vendor_id).filter(Boolean) as number[])];
     const vendorMap = new Map<number, string>();
     if (vendorIds.length > 0) {
@@ -1662,25 +1759,34 @@ export class ProductionDAO {
 
   async getOrderCustomerIds(orderIds: string[]): Promise<Record<string, number>> {
     if (orderIds.length === 0) return {};
-    const { data, error } = await supabase
-      .from('order_customer_map')
-      .select('order_id, customer_id')
-      .in('order_id', orderIds);
-    if (error) throw new Error(`[getOrderCustomerIds] ${error.message}`);
     const map: Record<string, number> = {};
-    for (const row of (data || []) as { order_id: string; customer_id: number }[]) {
-      map[row.order_id] = row.customer_id;
+    const ID_CHUNK = 200;
+    for (let i = 0; i < orderIds.length; i += ID_CHUNK) {
+      const { data, error } = await supabase
+        .from('order_customer_map')
+        .select('order_id, customer_id')
+        .in('order_id', orderIds.slice(i, i + ID_CHUNK));
+      if (error) throw new Error(`[getOrderCustomerIds] ${error.message}`);
+      for (const row of (data || []) as { order_id: string; customer_id: number }[]) {
+        map[row.order_id] = row.customer_id;
+      }
     }
     return map;
   }
 
   async seedOrderCustomerMappings(): Promise<void> {
     const customers = await this.getCustomersMaster(true);
-    const { data: orders } = await supabase.from('orders').select('order_id, client_name');
-    if (!orders || orders.length === 0) return;
+    const orders = await fetchAllRows<{ order_id: string; client_name: string }>(
+      () => supabase.from('orders').select('order_id, client_name').order('order_id', { ascending: true }),
+      'seedOrderCustomerMappings:orders'
+    );
+    if (orders.length === 0) return;
 
-    const { data: existingMaps } = await supabase.from('order_customer_map').select('order_id');
-    const mappedOrderIds = new Set((existingMaps || []).map((r: { order_id: string }) => r.order_id));
+    const existingMaps = await fetchAllRows<{ order_id: string }>(
+      () => supabase.from('order_customer_map').select('order_id').order('order_id', { ascending: true }),
+      'seedOrderCustomerMappings:maps'
+    );
+    const mappedOrderIds = new Set(existingMaps.map(r => r.order_id));
 
     const now = new Date().toISOString();
     let linked = 0;
@@ -2010,21 +2116,21 @@ export class ProductionDAO {
   }
 
   async getQuotes(): Promise<(Quote & { total_amount: number })[]> {
-    const { data: quotes, error } = await supabase
-      .from('quotes')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw new Error(`[getQuotes] ${error.message}`);
-    if (!quotes || quotes.length === 0) return [];
+    const quotes = await fetchAllRows<Quote>(
+      () => supabase.from('quotes').select('*')
+        .order('created_at', { ascending: false }).order('id', { ascending: false }),
+      'getQuotes'
+    );
+    if (quotes.length === 0) return [];
 
-    const quoteIds = (quotes as Quote[]).map(q => q.id);
-    const { data: items } = await supabase
-      .from('quote_items')
-      .select('quote_id, quantity, unit_price')
-      .in('quote_id', quoteIds);
+    const quoteIds = quotes.map(q => q.id);
+    const items = await fetchAllByIds<{ quote_id: number; quantity: number | null; unit_price: number | null }>(
+      'quote_items', 'quote_id', quoteIds, 'getQuotes:items',
+      { select: 'id, quote_id, quantity, unit_price' }
+    );
 
     const totalMap = new Map<number, number>();
-    for (const item of (items || []) as { quote_id: number; quantity: number | null; unit_price: number | null }[]) {
+    for (const item of items) {
       const prev = totalMap.get(item.quote_id) || 0;
       totalMap.set(item.quote_id, prev + (item.quantity || 0) * (item.unit_price || 0));
     }
