@@ -9,7 +9,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 import {
-  listWorkLogs, createWorkLog, deleteWorkLog,
+  listWorkLogs, createWorkLog, updateWorkLog, deleteWorkLog,
   type WorkLog,
 } from "@/shared/production-api";
 
@@ -38,7 +38,7 @@ import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
 import {
-  CheckSquare, Plus, Trash2, ChevronsUpDown, Check,
+  CheckSquare, Plus, Pencil, Trash2, ChevronsUpDown, Check,
   List, BarChart2, ChevronRight, ChevronDown, Users,
   Clock, CalendarDays,
 } from "lucide-react";
@@ -129,6 +129,7 @@ export default function TaskManagement() {
   const { toast } = useToast();
   const [orderComboOpen, setOrderComboOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingLog, setEditingLog] = useState<WorkLog | null>(null);
   const [filterOrderId, setFilterOrderId] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grouped" | "by_worker" | "by_customer">("list");
   const [sortMode, setSortMode] = useState<"registered" | "work_date">("registered");
@@ -387,6 +388,40 @@ export default function TaskManagement() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: WorkLogFormData }) =>
+      updateWorkLog(id, {
+        date: data.date,
+        order_id: data.order_id,
+        task_name: data.task_name,
+        worker: data.worker,
+        duration_hours: data.duration_hours,
+        memo: data.memo,
+      }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["work-logs"] });
+      toast({ title: "日報を更新しました" });
+      // 更新した行が確認しやすいよう数秒ハイライト
+      setHighlightedId(variables.id);
+      window.setTimeout(
+        () => setHighlightedId((cur) => (cur === variables.id ? null : cur)),
+        4000
+      );
+      setEditingLog(null);
+      form.reset({
+        date: TODAY,
+        order_id: "",
+        task_name: "",
+        worker: "",
+        duration_hours: 0,
+        memo: "",
+      });
+    },
+    onError: () => {
+      toast({ title: "エラー", description: "更新に失敗しました", variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteWorkLog(id),
     onSuccess: () => {
@@ -410,13 +445,43 @@ export default function TaskManagement() {
   }
 
   const onSubmit = (data: WorkLogFormData) => {
-    createMutation.mutate({
-      date: data.date,
-      order_id: data.order_id,
-      task_name: data.task_name,
-      worker: data.worker,
-      duration_hours: data.duration_hours,
-      memo: data.memo,
+    if (editingLog) {
+      updateMutation.mutate({ id: editingLog.id, data });
+    } else {
+      createMutation.mutate({
+        date: data.date,
+        order_id: data.order_id,
+        task_name: data.task_name,
+        worker: data.worker,
+        duration_hours: data.duration_hours,
+        memo: data.memo,
+      });
+    }
+  };
+
+  const handleEdit = (log: WorkLog) => {
+    setEditingLog(log);
+    form.reset({
+      date: log.date,
+      order_id: log.order_id ?? "",
+      task_name: log.task_name ?? "",
+      worker: log.worker,
+      duration_hours: log.duration_hours ?? 0,
+      memo: log.memo ?? "",
+    });
+    // フォームまでスクロールして編集しやすく
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingLog(null);
+    form.reset({
+      date: TODAY,
+      order_id: "",
+      task_name: "",
+      worker: "",
+      duration_hours: 0,
+      memo: "",
     });
   };
 
@@ -435,8 +500,8 @@ export default function TaskManagement() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            実績入力
+            {editingLog ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+            {editingLog ? "実績を編集" : "実績入力"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -589,9 +654,16 @@ export default function TaskManagement() {
                 />
               </div>
 
-              <div className="flex justify-end">
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? "保存中..." : "保存"}
+              <div className="flex justify-end gap-2">
+                {editingLog && (
+                  <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                    キャンセル
+                  </Button>
+                )}
+                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                  {editingLog
+                    ? (updateMutation.isPending ? "更新中..." : "更新")
+                    : (createMutation.isPending ? "保存中..." : "保存")}
                 </Button>
               </div>
             </form>
@@ -783,7 +855,7 @@ export default function TaskManagement() {
                                     <span className="ml-2">{log.task_name}</span>
                                   )}
                                   {log.memo && (
-                                    <span className="ml-2 opacity-60 truncate max-w-[200px] inline-block align-bottom">{log.memo}</span>
+                                    <span className="ml-2 opacity-60 break-words">{log.memo}</span>
                                   )}
                                 </TableCell>
                                 <TableCell />
@@ -859,7 +931,7 @@ export default function TaskManagement() {
                                     <span className="ml-2">{log.task_name}</span>
                                   )}
                                   {log.memo && (
-                                    <span className="ml-2 opacity-60 truncate max-w-[200px] inline-block align-bottom">{log.memo}</span>
+                                    <span className="ml-2 opacity-60 break-words">{log.memo}</span>
                                   )}
                                 </TableCell>
                                 <TableCell />
@@ -937,7 +1009,7 @@ export default function TaskManagement() {
                                     <span className="ml-2">{log.task_name}</span>
                                   )}
                                   {log.memo && (
-                                    <span className="ml-2 opacity-60 truncate max-w-[200px] inline-block align-bottom">{log.memo}</span>
+                                    <span className="ml-2 opacity-60 break-words">{log.memo}</span>
                                   )}
                                 </TableCell>
                                 <TableCell />
@@ -973,34 +1045,48 @@ export default function TaskManagement() {
                       <TableHead>作業者</TableHead>
                       <TableHead className="text-right">実績時間</TableHead>
                       <TableHead>メモ</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-24"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredLogs.map((log) => (
                       <TableRow
                         key={log.id}
-                        className={log.id === highlightedId ? "bg-amber-100 dark:bg-amber-950/40 transition-colors" : undefined}
+                        className={cn(
+                          "transition-colors",
+                          log.id === highlightedId && "bg-amber-100 dark:bg-amber-950/40",
+                          editingLog?.id === log.id && "bg-primary/10"
+                        )}
                       >
-                        <TableCell className="whitespace-nowrap">{log.date}</TableCell>
-                        <TableCell className="font-mono text-sm whitespace-nowrap">{log.order_id || "-"}</TableCell>
-                        <TableCell className="text-sm">{log.task_name || "-"}</TableCell>
-                        <TableCell>{log.worker}</TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell className="whitespace-nowrap align-top">{log.date}</TableCell>
+                        <TableCell className="font-mono text-sm whitespace-nowrap align-top">{log.order_id || "-"}</TableCell>
+                        <TableCell className="text-sm align-top">{log.task_name || "-"}</TableCell>
+                        <TableCell className="align-top">{log.worker}</TableCell>
+                        <TableCell className="text-right font-medium align-top">
                           {log.duration_hours > 0 ? fmtHours(log.duration_hours) : "-"}
                         </TableCell>
-                        <TableCell className="max-w-[200px] truncate text-muted-foreground text-sm">
+                        <TableCell className="max-w-[320px] whitespace-pre-wrap break-words text-muted-foreground text-sm align-top">
                           {log.memo || ""}
                         </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeletingId(log.id)}
-                            data-testid={`button-delete-log-${log.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                        <TableCell className="align-top">
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(log)}
+                              data-testid={`button-edit-log-${log.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeletingId(log.id)}
+                              data-testid={`button-delete-log-${log.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
