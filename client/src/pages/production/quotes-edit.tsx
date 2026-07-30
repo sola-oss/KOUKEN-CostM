@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, errorMessage } from "@/lib/utils";
+import { TAX_RATE_LABEL, taxableAmount, taxAmount, totalWithTax } from "@/lib/tax";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -759,12 +760,16 @@ export default function QuotesEdit() {
 
           <div className="mt-4 flex flex-col items-end gap-1 border-t pt-4">
             <div className="flex gap-8 text-sm">
-              <span className="text-muted-foreground">小計</span>
-              <span className="font-medium tabular-nums w-32 text-right">{formatCurrency(subtotal)}</span>
+              <span className="text-muted-foreground">小計（{TAX_RATE_LABEL}対象）</span>
+              <span className="font-medium tabular-nums w-32 text-right">{formatCurrency(taxableAmount(subtotal))}</span>
             </div>
-            <div className="flex gap-8 text-base font-bold">
-              <span>合計（消費税別）</span>
-              <span className="tabular-nums w-32 text-right">{formatCurrency(subtotal)}</span>
+            <div className="flex gap-8 text-sm">
+              <span className="text-muted-foreground">消費税（{TAX_RATE_LABEL}）</span>
+              <span className="font-medium tabular-nums w-32 text-right">{formatCurrency(taxAmount(subtotal))}</span>
+            </div>
+            <div className="flex gap-8 text-base font-bold border-t pt-1 mt-1">
+              <span>合計</span>
+              <span className="tabular-nums w-32 text-right">{formatCurrency(totalWithTax(subtotal))}</span>
             </div>
           </div>
         </CardContent>

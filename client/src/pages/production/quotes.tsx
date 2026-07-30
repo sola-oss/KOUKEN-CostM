@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { apiRequest } from "@/lib/queryClient";
 import { errorMessage } from "@/lib/utils";
+import { totalWithTax } from "@/lib/tax";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -93,7 +94,7 @@ export default function QuotesList() {
               <TableHead>見積番号</TableHead>
               <TableHead>客先名</TableHead>
               <TableHead>発行日</TableHead>
-              <TableHead className="text-right">御見積金額</TableHead>
+              <TableHead className="text-right">御見積金額（税込）</TableHead>
               <TableHead>ステータス</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
@@ -141,7 +142,7 @@ export default function QuotesList() {
                     <TableCell>{quote.client_name}</TableCell>
                     <TableCell>{formatDate(quote.issue_date)}</TableCell>
                     <TableCell className="text-right font-medium" data-testid={`col-total-${quote.id}`}>
-                      {formatCurrency(quote.total_amount ?? 0)}
+                      {formatCurrency(totalWithTax(quote.total_amount ?? 0))}
                     </TableCell>
                     <TableCell>
                       <Badge className={statusCfg.className} variant="secondary">

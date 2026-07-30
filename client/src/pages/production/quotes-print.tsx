@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import sealImage from "@assets/image_1777272205185.png";
+import { TAX_RATE_LABEL, taxableAmount, taxAmount, totalWithTax } from "@/lib/tax";
 
 interface QuoteItem {
   id?: number;
@@ -192,9 +193,9 @@ export default function QuotesPrint() {
         </div>
 
         <div style={{ border: "2px solid #000", padding: "12px 16px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "11px", marginBottom: "4px" }}>御見積金額（消費税別）</div>
+          <div style={{ fontSize: "11px", marginBottom: "4px" }}>御見積金額（税込）</div>
           <div style={{ fontSize: "22px", fontWeight: "bold" }}>
-            ¥ {new Intl.NumberFormat("ja-JP").format(Math.round(subtotal))} ―
+            ¥ {new Intl.NumberFormat("ja-JP").format(totalWithTax(subtotal))} ―
           </div>
         </div>
 
@@ -252,17 +253,25 @@ export default function QuotesPrint() {
           <table style={{ borderCollapse: "collapse", fontSize: "11px" }}>
             <tbody>
               <tr>
-                <td style={{ padding: "4px 16px", textAlign: "right", borderTop: "1px solid #ccc" }}>小　計</td>
+                <td style={{ padding: "4px 16px", textAlign: "right", borderTop: "1px solid #ccc" }}>
+                  小計（{TAX_RATE_LABEL}対象）
+                </td>
                 <td style={{ padding: "4px 16px", textAlign: "right", minWidth: "120px", borderTop: "1px solid #ccc" }}>
-                  {new Intl.NumberFormat("ja-JP").format(Math.round(subtotal))} 円
+                  {new Intl.NumberFormat("ja-JP").format(taxableAmount(subtotal))} 円
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "4px 16px", textAlign: "right" }}>消費税（{TAX_RATE_LABEL}）</td>
+                <td style={{ padding: "4px 16px", textAlign: "right" }}>
+                  {new Intl.NumberFormat("ja-JP").format(taxAmount(subtotal))} 円
                 </td>
               </tr>
               <tr>
                 <td style={{ padding: "6px 16px", textAlign: "right", fontWeight: "bold", borderTop: "2px solid #000" }}>
-                  合　計（消費税別）
+                  合　計
                 </td>
                 <td style={{ padding: "6px 16px", textAlign: "right", fontWeight: "bold", fontSize: "13px", borderTop: "2px solid #000" }}>
-                  {new Intl.NumberFormat("ja-JP").format(Math.round(subtotal))} 円
+                  {new Intl.NumberFormat("ja-JP").format(totalWithTax(subtotal))} 円
                 </td>
               </tr>
             </tbody>
