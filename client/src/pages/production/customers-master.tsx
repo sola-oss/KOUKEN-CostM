@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Users, Plus, Pencil, Trash2, Loader2, Check, X } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -28,6 +28,7 @@ export default function CustomersMasterPage() {
     defaultValues: {
       code: "",
       name: "",
+      contact_person: "",
       zip: "",
       address1: "",
       address2: "",
@@ -117,6 +118,7 @@ export default function CustomersMasterPage() {
     form.reset({
       code: "",
       name: "",
+      contact_person: "",
       zip: "",
       address1: "",
       address2: "",
@@ -132,6 +134,7 @@ export default function CustomersMasterPage() {
     form.reset({
       code: customer.code || "",
       name: customer.name,
+      contact_person: customer.contact_person || "",
       zip: customer.zip || "",
       address1: customer.address1 || "",
       address2: customer.address2 || "",
@@ -195,6 +198,7 @@ export default function CustomersMasterPage() {
                 <TableRow>
                   <TableHead>コード</TableHead>
                   <TableHead>得意先名</TableHead>
+                  <TableHead>担当者</TableHead>
                   <TableHead>郵便番号</TableHead>
                   <TableHead>住所</TableHead>
                   <TableHead>電話番号</TableHead>
@@ -207,6 +211,7 @@ export default function CustomersMasterPage() {
                   <TableRow key={customer.id} className={!customer.is_active ? "opacity-50" : ""}>
                     <TableCell className="text-sm text-muted-foreground">{customer.code || "-"}</TableCell>
                     <TableCell className="font-medium">{customer.name}</TableCell>
+                    <TableCell>{customer.contact_person || "-"}</TableCell>
                     <TableCell>{customer.zip || "-"}</TableCell>
                     <TableCell className="max-w-[200px] truncate">
                       {[customer.address1, customer.address2].filter(Boolean).join(" ") || "-"}
@@ -303,6 +308,28 @@ export default function CustomersMasterPage() {
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="contact_person"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>担当者</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value || ""}
+                        placeholder="例: 山田 太郎"
+                        data-testid="input-customer-contact-person"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      得意先側のご担当者です。見積書を作成するとき、宛名に自動で入ります。
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField

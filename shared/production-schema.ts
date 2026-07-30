@@ -510,6 +510,7 @@ export const customersMaster = sqliteTable("customers_master", {
   id: integer("id").primaryKey(),
   code: text("code"),                                 // 得意先コード
   name: text("name").notNull(),                       // 得意先名（必須）
+  contact_person: text("contact_person"),             // 得意先側の担当者名（見積書の宛名に使用）
   zip: text("zip"),                                   // 郵便番号
   address1: text("address1"),                         // 住所1
   address2: text("address2"),                         // 住所2
@@ -530,6 +531,7 @@ export const insertCustomerMasterSchema = createInsertSchema(customersMaster).om
 }).extend({
   name: z.string().min(1, "得意先名は必須です"),
   code: z.string().optional(),
+  contact_person: z.string().optional(),
   zip: z.string().optional(),
   address1: z.string().optional(),
   address2: z.string().optional(),

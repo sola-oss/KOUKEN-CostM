@@ -47,12 +47,7 @@ interface CustomerMaster {
   zip: string | null;
   address1: string | null;
   address2: string | null;
-}
-
-interface WorkerMaster {
-  id: number;
-  name: string;
-  is_active: boolean;
+  contact_person: string | null;
 }
 
 interface Material {
@@ -140,18 +135,12 @@ export default function QuotesEdit() {
     queryFn: () => fetch("/api/customers-master").then(r => r.json()),
   });
 
-  const { data: workersData } = useQuery<WorkerMaster[]>({
-    queryKey: ["/api/workers-master"],
-    queryFn: () => fetch("/api/workers-master").then(r => r.json()),
-  });
-
   const { data: materialsResponse } = useQuery<{ data: Material[] }>({
     queryKey: ["/api/materials"],
     queryFn: () => fetch("/api/materials").then(r => r.json()),
   });
 
   const customers: CustomerMaster[] = Array.isArray(customersData) ? customersData : [];
-  const workers: WorkerMaster[] = Array.isArray(workersData) ? workersData.filter(w => w.is_active) : [];
   const materials: Material[] = materialsResponse?.data || [];
 
   const quote = quoteData?.data;
@@ -167,7 +156,6 @@ export default function QuotesEdit() {
 
   // Combobox open states
   const [clientComboOpen, setClientComboOpen] = useState(false);
-  const [workerComboOpen, setWorkerComboOpen] = useState(false);
   const [materialComboOpen, setMaterialComboOpen] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
@@ -491,6 +479,8 @@ export default function QuotesEdit() {
                               value={c.name}
                               onSelect={() => {
                                 setClientName(c.name);
+                                // 得意先マスタに登録された担当者を宛名へ引き当てる
+                                setContactPerson(c.contact_person || "");
                                 setClientComboOpen(false);
                               }}
                             >
@@ -510,78 +500,19 @@ export default function QuotesEdit() {
             )}
           </div>
 
-          {/* 担当者名 combobox from 作業者マスタ */}
+          {/* 担当者名: 得意先側の担当者（得意先マスタから自動入力・直接入力も可） */}
           <div className="space-y-2">
-            <Label>担当者名</Label>
-            {isConverted ? (
-              <Input value={contactPerson} disabled data-testid="input-contact-person" />
-            ) : (
-              <Popover open={workerComboOpen} onOpenChange={setWorkerComboOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={workerComboOpen}
-                    className={cn("w-full justify-between", !contactPerson && "text-muted-foreground")}
-                    data-testid="input-contact-person"
-                  >
-                    <span className="truncate">{contactPerson || "担当者を選択..."}</span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[280px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="担当者名で検索..." />
-                    <CommandList>
-                      <CommandEmpty>
-                        <div className="py-3 px-4 space-y-2">
-                          <p className="text-sm text-muted-foreground">該当する担当者がいません</p>
-                          <p className="text-xs text-muted-foreground">直接入力することもできます：</p>
-                          <Input
-                            placeholder="担当者名を入力"
-                            value={contactPerson}
-                            onChange={(e) => setContactPerson(e.target.value)}
-                            className="h-8 text-sm"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") setWorkerComboOpen(false);
-                            }}
-                          />
-                        </div>
-                      </CommandEmpty>
-                      <CommandGroup>
-                        {contactPerson && !workers.find(w => w.name === contactPerson) && (
-                          <CommandItem
-                            value={contactPerson}
-                            onSelect={() => {
-                              setWorkerComboOpen(false);
-                            }}
-                          >
-                            <Check className="mr-2 h-4 w-4 opacity-100" />
-                            <span>{contactPerson}</span>
-                            <span className="ml-2 text-xs text-muted-foreground">（入力値）</span>
-                          </CommandItem>
-                        )}
-                        {workers.map((w) => (
-                          <CommandItem
-                            key={w.id}
-                            value={w.name}
-                            onSelect={() => {
-                              setContactPerson(w.name);
-                              setWorkerComboOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn("mr-2 h-4 w-4", contactPerson === w.name ? "opacity-100" : "opacity-0")}
-                            />
-                            <span>{w.name}</span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            )}
+            <Label>先方ご担当者</Label>
+            <Input
+              value={contactPerson}
+              onChange={(e) => setContactPerson(e.target.value)}
+              placeholder="得意先を選ぶと自動で入ります（直接入力可）"
+              disabled={isConverted}
+              data-testid="input-contact-person"
+            />
+            <p className="text-xs text-muted-foreground">
+              得意先マスタに登録した担当者が入ります。今回だけ違う方に出す場合は書き換えてください。
+            </p>
           </div>
 
           <div className="space-y-2">

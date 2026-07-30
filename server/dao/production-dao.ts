@@ -1810,6 +1810,7 @@ export class ProductionDAO {
       .insert({
         code: data.code || null,
         name: data.name,
+        contact_person: data.contact_person || null,
         zip: data.zip || null,
         address1: data.address1 || null,
         address2: data.address2 || null,
@@ -1852,6 +1853,7 @@ export class ProductionDAO {
       .update({
         code: data.code !== undefined ? (data.code || null) : existing.code,
         name: data.name !== undefined ? data.name : existing.name,
+        contact_person: data.contact_person !== undefined ? (data.contact_person || null) : existing.contact_person,
         zip: data.zip !== undefined ? (data.zip || null) : existing.zip,
         address1: data.address1 !== undefined ? (data.address1 || null) : existing.address1,
         address2: data.address2 !== undefined ? (data.address2 || null) : existing.address2,
