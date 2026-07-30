@@ -49,6 +49,7 @@ interface CustomerMaster {
   address1: string | null;
   address2: string | null;
   contact_person: string | null;
+  is_active: boolean;
 }
 
 interface Material {
@@ -131,9 +132,10 @@ export default function QuotesEdit() {
     enabled: !isNew && !!quoteId,
   });
 
+  // 非アクティブも取得する。選択候補には出さないが、同名の得意先を二重登録しないため照合に使う
   const { data: customersData } = useQuery<CustomerMaster[]>({
-    queryKey: ["/api/customers-master"],
-    queryFn: () => fetch("/api/customers-master").then(r => r.json()),
+    queryKey: ["/api/customers-master", { include_inactive: true }],
+    queryFn: () => fetch("/api/customers-master?include_inactive=true").then(r => r.json()),
   });
 
   const { data: materialsResponse } = useQuery<{ data: Material[] }>({
@@ -141,7 +143,8 @@ export default function QuotesEdit() {
     queryFn: () => fetch("/api/materials").then(r => r.json()),
   });
 
-  const customers: CustomerMaster[] = Array.isArray(customersData) ? customersData : [];
+  const allCustomers: CustomerMaster[] = Array.isArray(customersData) ? customersData : [];
+  const customers = allCustomers.filter((c) => c.is_active);
   const materials: Material[] = materialsResponse?.data || [];
 
   const quote = quoteData?.data;
@@ -295,6 +298,54 @@ export default function QuotesEdit() {
       toast({ title: "受注作成に失敗しました", description: errorMessage(error), variant: "destructive" });
     },
   });
+
+  // 入力中の客先会社名と一致する得意先マスタ（担当者をその場で登録するのに使う）
+  const trimmedClientName = clientName.trim();
+  const trimmedContact = contactPerson.trim();
+  const matchedCustomer = allCustomers.find((c) => c.name === trimmedClientName);
+  const contactAlreadySaved =
+    !!matchedCustomer && (matchedCustomer.contact_person || "").trim() === trimmedContact;
+
+  const saveContactMutation = useMutation({
+    mutationFn: async () => {
+      if (matchedCustomer) {
+        await apiRequest("PUT", `/api/customers-master/${matchedCustomer.id}`, {
+          contact_person: trimmedContact,
+        });
+        return "updated" as const;
+      }
+      await apiRequest("POST", "/api/customers-master", {
+        name: trimmedClientName,
+        contact_person: trimmedContact,
+      });
+      return "created" as const;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers-master"] });
+      toast({
+        title: result === "created" ? "得意先マスタに新規登録しました" : "得意先マスタの担当者を登録しました",
+        description: `${trimmedClientName}／${trimmedContact}`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "得意先マスタへの登録に失敗しました",
+        description: errorMessage(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveContactToMaster = () => {
+    const existing = (matchedCustomer?.contact_person || "").trim();
+    if (existing && existing !== trimmedContact) {
+      const ok = confirm(
+        `「${trimmedClientName}」の担当者を「${existing}」から「${trimmedContact}」に変更します。よろしいですか？`
+      );
+      if (!ok) return;
+    }
+    saveContactMutation.mutate();
+  };
 
   const handleSave = () => {
     if (!clientName.trim()) {
@@ -504,15 +555,50 @@ export default function QuotesEdit() {
           {/* 担当者名: 得意先側の担当者（得意先マスタから自動入力・直接入力も可） */}
           <div className="space-y-2">
             <Label>先方ご担当者</Label>
-            <Input
-              value={contactPerson}
-              onChange={(e) => setContactPerson(e.target.value)}
-              placeholder="得意先を選ぶと自動で入ります（直接入力可）"
-              disabled={isConverted}
-              data-testid="input-contact-person"
-            />
+            <div className="flex gap-1">
+              <Input
+                value={contactPerson}
+                onChange={(e) => setContactPerson(e.target.value)}
+                placeholder="得意先を選ぶと自動で入ります（直接入力可）"
+                disabled={isConverted}
+                data-testid="input-contact-person"
+                className="flex-1"
+              />
+              {!isConverted && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  disabled={
+                    !trimmedClientName ||
+                    !trimmedContact ||
+                    contactAlreadySaved ||
+                    saveContactMutation.isPending
+                  }
+                  onClick={handleSaveContactToMaster}
+                  title={
+                    matchedCustomer
+                      ? "この担当者を得意先マスタに登録します"
+                      : "この客先を得意先マスタに新規登録し、担当者も登録します"
+                  }
+                  data-testid="button-save-contact-to-master"
+                >
+                  {contactAlreadySaved ? (
+                    <>
+                      <Check className="h-4 w-4 mr-1" />
+                      登録済み
+                    </>
+                  ) : matchedCustomer ? (
+                    "マスタに登録"
+                  ) : (
+                    "得意先ごと登録"
+                  )}
+                </Button>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
-              得意先マスタに登録した担当者が入ります。今回だけ違う方に出す場合は書き換えてください。
+              得意先マスタに登録した担当者が入ります。新しい担当者は、入力して右のボタンを押せばその場でマスタに登録できます。
+              今回だけ違う方に出す場合は、書き換えるだけでマスタは変わりません。
             </p>
           </div>
 
