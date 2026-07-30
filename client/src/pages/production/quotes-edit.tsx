@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn, errorMessage } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -274,8 +274,8 @@ export default function QuotesEdit() {
         setLocation("/quotes");
       }
     },
-    onError: () => {
-      toast({ title: "作成に失敗しました", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "作成に失敗しました", description: errorMessage(error), variant: "destructive" });
     },
   });
 
@@ -286,8 +286,8 @@ export default function QuotesEdit() {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId] });
       toast({ title: "見積書を保存しました" });
     },
-    onError: () => {
-      toast({ title: "保存に失敗しました", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "保存に失敗しました", description: errorMessage(error), variant: "destructive" });
     },
   });
 
@@ -302,8 +302,8 @@ export default function QuotesEdit() {
         description: `受注番号: ${data?.data?.order_id ?? ""}`,
       });
     },
-    onError: () => {
-      toast({ title: "受注作成に失敗しました", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "受注作成に失敗しました", description: errorMessage(error), variant: "destructive" });
     },
   });
 

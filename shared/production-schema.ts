@@ -645,11 +645,11 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   created_at: true,
   updated_at: true,
 }).extend({
-  quote_number: z.string().optional(),
-  issue_date: z.string().optional(),
+  quote_number: z.string().optional().nullable(),
+  issue_date: z.string().optional().nullable(),
   client_name: z.string().min(1, "客先会社名は必須です"),
-  contact_person: z.string().optional(),
-  client_request_no: z.string().optional(),
+  contact_person: z.string().optional().nullable(),
+  client_request_no: z.string().optional().nullable(),
   status: z.enum(["draft", "issued", "accepted", "converted"]).default("draft"),
   converted_order_id: z.string().optional().nullable(),
 });
@@ -660,12 +660,12 @@ export const insertQuoteItemSchema = createInsertSchema(quoteItems).omit({
   quote_id: z.coerce.number().int().positive(),
   sort_order: z.coerce.number().int().default(0),
   material_id: z.coerce.number().int().positive().optional().nullable(),
-  product_name: z.string().optional(),
-  model_number: z.string().optional(),
+  product_name: z.string().optional().nullable(),
+  model_number: z.string().optional().nullable(),
   quantity: z.coerce.number().optional().nullable(),
-  unit: z.string().optional(),
+  unit: z.string().optional().nullable(),
   unit_price: z.coerce.number().optional().nullable(),
-  notes: z.string().optional(),
+  notes: z.string().optional().nullable(),
 });
 
 export const updateQuoteSchema = insertQuoteSchema.partial();

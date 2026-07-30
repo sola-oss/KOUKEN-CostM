@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiRequest } from "@/lib/queryClient";
+import { errorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -53,8 +54,8 @@ export default function QuotesList() {
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       toast({ title: "見積書を削除しました" });
     },
-    onError: () => {
-      toast({ title: "削除に失敗しました", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "削除に失敗しました", description: errorMessage(error), variant: "destructive" });
     },
   });
 
