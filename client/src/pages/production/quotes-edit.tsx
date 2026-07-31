@@ -112,11 +112,6 @@ function newItem(sortOrder: number): QuoteItem {
   };
 }
 
-function materialLabel(m: Material): string {
-  const parts = [m.material_type, m.name, m.size].filter(Boolean);
-  return parts.join(" / ");
-}
-
 export default function QuotesEdit() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -659,7 +654,7 @@ export default function QuotesEdit() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[40px] text-center">整番</TableHead>
-                  <TableHead className="w-[240px]">品名（材料マスタから選択）</TableHead>
+                  <TableHead className="w-[240px]">品名</TableHead>
                   <TableHead className="w-[130px]">型番</TableHead>
                   <TableHead className="w-[70px]">単位</TableHead>
                   <TableHead className="w-[120px] text-right">単価</TableHead>
@@ -671,10 +666,6 @@ export default function QuotesEdit() {
               </TableHeader>
               <TableBody>
                 {items.map((item, index) => {
-                  const selectedMaterial = item.material_id
-                    ? materials.find(m => m.id === item.material_id)
-                    : null;
-
                   return (
                     <TableRow key={index}>
                       {/* 整番 - row number */}
@@ -682,11 +673,19 @@ export default function QuotesEdit() {
                         {index + 1}
                       </TableCell>
 
-                      {/* 品名 - material picker */}
+                      {/* 品名 - フリー入力（材料マスタからの呼び出しは任意） */}
                       <TableCell>
                         {isConverted ? (
                           <span className="text-sm">{item.product_name || "—"}</span>
                         ) : (
+                          <div className="flex gap-1">
+                          <Input
+                            value={item.product_name}
+                            onChange={(e) => handleItemChange(index, "product_name", e.target.value)}
+                            placeholder="品名を入力"
+                            className="h-8 text-sm flex-1"
+                            data-testid={`input-product-name-${index}`}
+                          />
                           <Popover
                             open={materialComboOpen[index] ?? false}
                             onOpenChange={(open) =>
@@ -696,18 +695,13 @@ export default function QuotesEdit() {
                             <PopoverTrigger asChild>
                               <Button
                                 variant="outline"
-                                role="combobox"
-                                className={cn(
-                                  "w-full justify-between h-8 text-sm font-normal",
-                                  !item.product_name && "text-muted-foreground"
-                                )}
+                                size="icon"
+                                type="button"
+                                className="h-8 w-8 shrink-0"
+                                title="材料マスタから呼び出す"
+                                aria-label="材料マスタから呼び出す"
                               >
-                                <span className="truncate">
-                                  {selectedMaterial
-                                    ? materialLabel(selectedMaterial)
-                                    : item.product_name || "材料を選択..."}
-                                </span>
-                                <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                <ChevronsUpDown className="h-3 w-3 opacity-50" />
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[340px] p-0" align="start">
@@ -759,6 +753,7 @@ export default function QuotesEdit() {
                               </Command>
                             </PopoverContent>
                           </Popover>
+                          </div>
                         )}
                       </TableCell>
 
@@ -777,16 +772,43 @@ export default function QuotesEdit() {
                         )}
                       </TableCell>
 
-                      {/* 単位 - read-only from material */}
+                      {/* 単位 - free input */}
                       <TableCell>
-                        <span className="text-sm text-muted-foreground">{item.unit || "—"}</span>
+                        {isConverted ? (
+                          <span className="text-sm">{item.unit || "—"}</span>
+                        ) : (
+                          <Input
+                            value={item.unit}
+                            onChange={(e) => handleItemChange(index, "unit", e.target.value)}
+                            placeholder="式"
+                            className="h-8 text-sm"
+                            data-testid={`input-unit-${index}`}
+                          />
+                        )}
                       </TableCell>
 
-                      {/* 単価 - read-only from material */}
+                      {/* 単価 - free input */}
                       <TableCell className="text-right">
-                        <span className="text-sm text-muted-foreground tabular-nums">
-                          {item.unit_price != null ? `¥${item.unit_price.toLocaleString()}` : "—"}
-                        </span>
+                        {isConverted ? (
+                          <span className="text-sm tabular-nums">
+                            {item.unit_price != null ? `¥${item.unit_price.toLocaleString()}` : "—"}
+                          </span>
+                        ) : (
+                          <Input
+                            type="number"
+                            value={item.unit_price ?? ""}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "unit_price",
+                                e.target.value === "" ? null : parseFloat(e.target.value)
+                              )
+                            }
+                            placeholder="0"
+                            className="h-8 text-sm text-right"
+                            data-testid={`input-unit-price-${index}`}
+                          />
+                        )}
                       </TableCell>
 
                       {/* 数量 - free input */}
@@ -809,8 +831,8 @@ export default function QuotesEdit() {
 
                       {/* 金額 */}
                       <TableCell className="text-right text-sm font-medium">
-                        {(item.quantity && item.unit_price)
-                          ? formatCurrency((item.quantity || 0) * (item.unit_price || 0))
+                        {item.quantity != null && item.unit_price != null
+                          ? formatCurrency(item.quantity * item.unit_price)
                           : "—"}
                       </TableCell>
 
