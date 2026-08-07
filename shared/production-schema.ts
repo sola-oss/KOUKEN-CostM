@@ -625,6 +625,10 @@ export const quotes = sqliteTable("quotes", {
   client_request_no: text("client_request_no"),         // 貴見積依頼番号
   status: text("status").notNull().default("draft"),    // draft/issued/accepted/converted
   converted_order_id: text("converted_order_id"),       // 変換済み受注番号
+  // 帳票種別。見積書・請求書・納品書を同じテーブルの別レコードとして持つ。
+  document_kind: text("document_kind", { enum: ['quote', 'invoice', 'delivery'] })
+    .notNull().default("quote"),
+  source_quote_id: integer("source_quote_id"),          // 複製元の見積ID（請求書・納品書のみ）
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),
 });
@@ -654,6 +658,8 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   client_request_no: z.string().optional().nullable(),
   status: z.enum(["draft", "issued", "accepted", "converted"]).default("draft"),
   converted_order_id: z.string().optional().nullable(),
+  document_kind: z.enum(["quote", "invoice", "delivery"]).default("quote"),
+  source_quote_id: z.coerce.number().int().positive().optional().nullable(),
 });
 
 export const insertQuoteItemSchema = createInsertSchema(quoteItems).omit({
@@ -681,6 +687,84 @@ export type InsertQuoteItem = z.infer<typeof insertQuoteItemSchema>;
 export interface QuoteWithItems extends Quote {
   items: QuoteItem[];
 }
+
+// ========== 合計請求書 (Summary Invoices) ==========
+// 得意先ごとに、発行済みの請求書をまとめて請求する帳票。
+// 明細は作成時点の請求書の内容を写すので、あとから個別請求書を直しても発行済み分は変わらない。
+
+export const summaryInvoices = sqliteTable("summary_invoices", {
+  id: integer("id").primaryKey(),
+  summary_number: text("summary_number").notNull(),     // 合計請求番号
+  issue_date: text("issue_date"),                       // 発行年月日
+  client_name: text("client_name").notNull(),           // 得意先名
+  billing_month: text("billing_month"),                 // 請求月（YYYY-MM）
+  status: text("status").notNull().default("draft"),
+  created_at: text("created_at").notNull(),
+  updated_at: text("updated_at").notNull(),
+});
+
+export const summaryInvoiceItems = sqliteTable("summary_invoice_items", {
+  id: integer("id").primaryKey(),
+  summary_invoice_id: integer("summary_invoice_id").notNull()
+    .references(() => summaryInvoices.id, { onDelete: "cascade" }),
+  sort_order: integer("sort_order").notNull().default(0),
+  invoice_id: integer("invoice_id"),                    // もとの請求書（quotes.id）
+  order_id: text("order_id"),                           // 受注番号
+  order_date: text("order_date"),                       // 受注日
+  description: text("description"),                     // 適用
+  quantity: real("quantity"),
+  unit: text("unit"),
+  amount: real("amount"),                               // 金額（税抜）
+  notes: text("notes"),
+});
+
+export const insertSummaryInvoiceSchema = createInsertSchema(summaryInvoices).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+}).extend({
+  summary_number: z.string().optional().nullable(),
+  issue_date: z.string().optional().nullable(),
+  client_name: z.string().min(1, "得意先名は必須です"),
+  billing_month: z.string().optional().nullable(),
+  status: z.string().default("draft"),
+});
+
+export const insertSummaryInvoiceItemSchema = createInsertSchema(summaryInvoiceItems).omit({
+  id: true,
+}).extend({
+  summary_invoice_id: z.coerce.number().int().positive(),
+  sort_order: z.coerce.number().int().default(0),
+  invoice_id: z.coerce.number().int().positive().optional().nullable(),
+  order_id: z.string().optional().nullable(),
+  order_date: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  quantity: z.coerce.number().optional().nullable(),
+  unit: z.string().optional().nullable(),
+  amount: z.coerce.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export const updateSummaryInvoiceSchema = insertSummaryInvoiceSchema.partial();
+
+export type SummaryInvoice = typeof summaryInvoices.$inferSelect;
+export type SummaryInvoiceItem = typeof summaryInvoiceItems.$inferSelect;
+export type InsertSummaryInvoice = z.infer<typeof insertSummaryInvoiceSchema>;
+export type InsertSummaryInvoiceItem = z.infer<typeof insertSummaryInvoiceItemSchema>;
+
+export interface SummaryInvoiceWithItems extends SummaryInvoice {
+  items: SummaryInvoiceItem[];
+}
+
+/** 帳票種別（見積書・請求書・納品書） */
+export type DocumentKind = 'quote' | 'invoice' | 'delivery';
+
+/** 自動採番の接頭辞。帳票種別ごとに連番を分ける。 */
+export const DOCUMENT_NUMBER_PREFIX: Record<DocumentKind, string> = {
+  quote: 'QT',
+  invoice: 'IV',
+  delivery: 'DN',
+};
 
 // ========== Cost Aggregation Types (原価集計) ==========
 

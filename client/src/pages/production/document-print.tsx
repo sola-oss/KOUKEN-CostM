@@ -1,8 +1,19 @@
+// 見積書・請求書・納品書に共通の印刷帳票。
+// どの帳票を出すかはレコードの document_kind で決まり、
+// 見た目の差分は @/lib/documents の DOCUMENT_CONFIG だけで切り替える。
 import { useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import sealImage from "@assets/image_1777272205185.png";
 import { TAX_RATE_LABEL, taxableAmount, taxAmount, totalWithTax } from "@/lib/tax";
+import {
+  BANK_ACCOUNTS,
+  BANK_NOTE,
+  COMPANY_INFO,
+  DOCUMENT_CONFIG,
+  documentNumber,
+  type DocumentKind,
+} from "@/lib/documents";
 
 interface QuoteItem {
   id?: number;
@@ -24,21 +35,12 @@ interface Quote {
   client_request_no: string | null;
   status: string;
   converted_order_id: string | null;
+  document_kind: DocumentKind | null;
   items: QuoteItem[];
 }
 
-const COMPANY_INFO = {
-  registration_no: "T8250001014149",
-  name: "株式会社巧健",
-  representative: "代表取締役 深井 健広",
-  zip: "〒746-0017",
-  address: "山口県周南市浦上1丁目11番18号",
-  tel: "0834-33-9007",
-  fax: "0834-33-9008",
-};
-
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat("ja-JP").format(Math.round(n)) + "円";
+function formatNumber(n: number) {
+  return new Intl.NumberFormat("ja-JP").format(Math.round(n));
 }
 
 function formatDate(dateStr: string | null) {
@@ -48,17 +50,19 @@ function formatDate(dateStr: string | null) {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
-export default function QuotesPrint() {
+export default function DocumentPrint() {
   const params = useParams();
-  const quoteId = parseInt(params.id!, 10);
+  const documentId = parseInt(params.id!, 10);
 
   const { data: quoteData, isLoading, error } = useQuery<{ data: Quote }>({
-    queryKey: ["/api/quotes", quoteId],
-    queryFn: () => fetch(`/api/quotes/${quoteId}`).then((r) => r.json()),
-    enabled: !!quoteId,
+    queryKey: ["/api/quotes", documentId],
+    queryFn: () => fetch(`/api/quotes/${documentId}`).then((r) => r.json()),
+    enabled: !!documentId,
   });
 
   const quote = quoteData?.data;
+  const kind: DocumentKind = quote?.document_kind ?? "quote";
+  const config = DOCUMENT_CONFIG[kind];
 
   useEffect(() => {
     if (quote && !isLoading) {
@@ -70,6 +74,7 @@ export default function QuotesPrint() {
     (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
     0
   );
+  const headlineAmount = config.taxIncluded ? totalWithTax(subtotal) : taxableAmount(subtotal);
 
   if (isLoading) {
     return (
@@ -82,7 +87,7 @@ export default function QuotesPrint() {
   if (error || !quote) {
     return (
       <div style={{ padding: "40px", fontFamily: "sans-serif" }}>
-        見積書が見つかりません
+        帳票が見つかりません
       </div>
     );
   }
@@ -132,7 +137,7 @@ export default function QuotesPrint() {
       <div style={{ maxWidth: "210mm", margin: "0 auto", padding: "20px 20px", background: "#fff" }}>
         <div style={{ textAlign: "center", marginBottom: "12px" }}>
           <h1 style={{ fontSize: "20px", fontWeight: "bold", letterSpacing: "4px", margin: 0 }}>
-            御　見　積　書
+            {config.printTitle}
           </h1>
         </div>
 
@@ -146,9 +151,10 @@ export default function QuotesPrint() {
                 ご担当：{quote.contact_person}　様
               </div>
             )}
+            <div style={{ fontSize: "11px", marginTop: "8px" }}>{config.leadText}</div>
             {quote.client_request_no && (
               <div style={{ fontSize: "11px", marginTop: "8px" }}>
-                貴見積依頼番号：{quote.client_request_no}
+                {config.referenceLabel}：{quote.client_request_no}
               </div>
             )}
           </div>
@@ -176,7 +182,7 @@ export default function QuotesPrint() {
               発行年月日　{formatDate(quote.issue_date)}
             </div>
             <div style={{ fontSize: "11px", marginBottom: "2px" }}>
-              見積番号　{quote.quote_number}
+              {config.numberLabel}　{documentNumber(kind, quote)}
             </div>
             <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "6px" }}>
               {COMPANY_INFO.name}
@@ -193,9 +199,9 @@ export default function QuotesPrint() {
         </div>
 
         <div style={{ border: "2px solid #000", padding: "12px 16px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "11px", marginBottom: "4px" }}>御見積金額（税込）</div>
+          <div style={{ fontSize: "11px", marginBottom: "4px" }}>{config.amountBoxLabel}</div>
           <div style={{ fontSize: "22px", fontWeight: "bold" }}>
-            ¥ {new Intl.NumberFormat("ja-JP").format(totalWithTax(subtotal))} ―
+            ¥ {formatNumber(headlineAmount)} ―
           </div>
         </div>
 
@@ -225,10 +231,10 @@ export default function QuotesPrint() {
                   </td>
                   <td style={{ padding: "5px 8px", textAlign: "center", border: "1px solid #ccc" }}>{item.unit || ""}</td>
                   <td style={{ padding: "5px 8px", textAlign: "right", border: "1px solid #ccc" }}>
-                    {item.unit_price != null ? new Intl.NumberFormat("ja-JP").format(item.unit_price) : ""}
+                    {item.unit_price != null ? formatNumber(item.unit_price) : ""}
                   </td>
                   <td style={{ padding: "5px 8px", textAlign: "right", border: "1px solid #ccc" }}>
-                    {amount > 0 ? new Intl.NumberFormat("ja-JP").format(Math.round(amount)) : ""}
+                    {amount > 0 ? formatNumber(amount) : ""}
                   </td>
                   <td style={{ padding: "5px 8px", border: "1px solid #ccc" }}>{item.notes || ""}</td>
                 </tr>
@@ -252,31 +258,47 @@ export default function QuotesPrint() {
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <table style={{ borderCollapse: "collapse", fontSize: "11px" }}>
             <tbody>
-              <tr>
-                <td style={{ padding: "4px 16px", textAlign: "right", borderTop: "1px solid #ccc" }}>
-                  小計（{TAX_RATE_LABEL}対象）
-                </td>
-                <td style={{ padding: "4px 16px", textAlign: "right", minWidth: "120px", borderTop: "1px solid #ccc" }}>
-                  {new Intl.NumberFormat("ja-JP").format(taxableAmount(subtotal))} 円
-                </td>
-              </tr>
-              <tr>
-                <td style={{ padding: "4px 16px", textAlign: "right" }}>消費税（{TAX_RATE_LABEL}）</td>
-                <td style={{ padding: "4px 16px", textAlign: "right" }}>
-                  {new Intl.NumberFormat("ja-JP").format(taxAmount(subtotal))} 円
-                </td>
-              </tr>
+              {config.showTaxBreakdown && (
+                <>
+                  <tr>
+                    <td style={{ padding: "4px 16px", textAlign: "right", borderTop: "1px solid #ccc" }}>
+                      小計（{TAX_RATE_LABEL}対象）
+                    </td>
+                    <td style={{ padding: "4px 16px", textAlign: "right", minWidth: "120px", borderTop: "1px solid #ccc" }}>
+                      {formatNumber(taxableAmount(subtotal))} 円
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "4px 16px", textAlign: "right" }}>消費税（{TAX_RATE_LABEL}）</td>
+                    <td style={{ padding: "4px 16px", textAlign: "right" }}>
+                      {formatNumber(taxAmount(subtotal))} 円
+                    </td>
+                  </tr>
+                </>
+              )}
               <tr>
                 <td style={{ padding: "6px 16px", textAlign: "right", fontWeight: "bold", borderTop: "2px solid #000" }}>
-                  合　計
+                  {config.taxIncluded ? "合　計" : "合　計（税別）"}
                 </td>
-                <td style={{ padding: "6px 16px", textAlign: "right", fontWeight: "bold", fontSize: "13px", borderTop: "2px solid #000" }}>
-                  {new Intl.NumberFormat("ja-JP").format(totalWithTax(subtotal))} 円
+                <td style={{ padding: "6px 16px", textAlign: "right", fontWeight: "bold", fontSize: "13px", minWidth: "120px", borderTop: "2px solid #000" }}>
+                  {formatNumber(headlineAmount)} 円
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        {config.showBankAccounts && (
+          <div style={{ marginTop: "20px", fontSize: "11px" }}>
+            <div style={{ fontWeight: "bold", marginBottom: "4px" }}>【振込先】</div>
+            {BANK_ACCOUNTS.map((b) => (
+              <div key={`${b.bank}${b.branch}`} style={{ marginBottom: "2px" }}>
+                {b.bank}　{b.branch}　{b.account}
+              </div>
+            ))}
+            <div style={{ marginTop: "6px", fontSize: "10px" }}>{BANK_NOTE}</div>
+          </div>
+        )}
       </div>
     </>
   );

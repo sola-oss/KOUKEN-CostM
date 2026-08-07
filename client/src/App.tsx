@@ -30,9 +30,12 @@ const CustomersMaster = lazy(() => import("@/pages/production/customers-master")
 const MaterialCosts = lazy(() => import("@/pages/production/material-costs"));
 const PurchasedItems = lazy(() => import("@/pages/production/purchased-items"));
 const UserManagement = lazy(() => import("@/pages/user-management"));
-const QuotesList = lazy(() => import("@/pages/production/quotes"));
+const DocumentList = lazy(() => import("@/pages/production/document-list"));
+const DocumentPrint = lazy(() => import("@/pages/production/document-print"));
+const SummaryInvoicesList = lazy(() => import("@/pages/production/summary-invoices"));
+const SummaryInvoiceEdit = lazy(() => import("@/pages/production/summary-invoice-edit"));
+const SummaryInvoicePrint = lazy(() => import("@/pages/production/summary-invoice-print"));
 const QuotesEdit = lazy(() => import("@/pages/production/quotes-edit"));
-const QuotesPrint = lazy(() => import("@/pages/production/quotes-print"));
 const Prospects = lazy(() => import("@/pages/production/prospects"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
@@ -93,12 +96,13 @@ function Router() {
     );
   }
 
-  if (location.match(/^\/quotes\/\d+\/print$/)) {
+  if (location.match(/^\/(documents|summary-invoices)\/\d+\/print$/)) {
     return (
       <ProtectedRoute>
         <Suspense fallback={<PageFallback />}>
           <Switch>
-            <Route path="/quotes/:id/print" component={QuotesPrint} />
+            <Route path="/documents/:id/print" component={DocumentPrint} />
+            <Route path="/summary-invoices/:id/print" component={SummaryInvoicePrint} />
           </Switch>
         </Suspense>
       </ProtectedRoute>
@@ -127,9 +131,14 @@ function Router() {
             <Route path="/material-costs" component={MaterialCosts} />
             <Route path="/purchased-items" component={PurchasedItems} />
             <Route path="/user-management" component={UserManagement} />
-            <Route path="/quotes" component={QuotesList} />
+            <Route path="/quotes">{() => <DocumentList kind="quote" />}</Route>
             <Route path="/quotes/new" component={QuotesEdit} />
             <Route path="/quotes/:id/edit" component={QuotesEdit} />
+            <Route path="/invoices">{() => <DocumentList kind="invoice" />}</Route>
+            <Route path="/delivery-notes">{() => <DocumentList kind="delivery" />}</Route>
+            <Route path="/summary-invoices" component={SummaryInvoicesList} />
+            <Route path="/summary-invoices/new" component={SummaryInvoiceEdit} />
+            <Route path="/summary-invoices/:id/edit" component={SummaryInvoiceEdit} />
             <Route path="/prospects" component={Prospects} />
             <Route component={NotFound} />
           </Switch>

@@ -4,10 +4,11 @@ import {
   ChevronRight, ChevronDown,
   CheckSquare, ClipboardList, GanttChart, Database, FileSpreadsheet,
   Calculator, Users, Settings, Building2, Hammer, TrendingUp,
-  UserCog, LogOut, Contact, Receipt, FileText, Target, ShoppingCart
+  UserCog, LogOut, Contact, Receipt, FileText, Target, ShoppingCart,
+  ReceiptText, PackageCheck, Files, FileStack
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -27,11 +28,21 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
 
-// Section 1: 受注と計画
+// Section 1: 受注と計画（「帳票」を挟んで上下に分けて並べる）
 const orderPlanningItems = [
   { title: "受注管理", url: "/projects", icon: Package },
   { title: "受注状況管理", url: "/prospects", icon: Target },
+];
+
+// 「帳票」— 受注と計画の中の入れ子メニュー
+const documentItems = [
   { title: "見積書", url: "/quotes", icon: FileText },
+  { title: "請求書", url: "/invoices", icon: ReceiptText },
+  { title: "納品書", url: "/delivery-notes", icon: PackageCheck },
+  { title: "合計請求書", url: "/summary-invoices", icon: FileStack },
+];
+
+const planningItems = [
   { title: "日報", url: "/task-management", icon: CheckSquare },
   { title: "ガントチャート", url: "/gantt", icon: GanttChart }
 ];
@@ -41,7 +52,7 @@ const fieldWorkItems = [
   { title: "材料使用入力", url: "/material-usages", icon: FileSpreadsheet },
   { title: "材料費入力", url: "/material-costs", icon: Receipt },
   { title: "購入品入力", url: "/purchased-items", icon: ShoppingCart },
-  { title: "発注管理", url: "/procurement", icon: ClipboardList }
+  { title: "外注管理", url: "/procurement", icon: ClipboardList }
 ];
 
 // Section 3: 原価・分析
@@ -77,6 +88,15 @@ export function AppSidebar() {
   const isAdmin = user?.role === "admin";
 
   const isMasterActive = masterItems.some(item => location === item.url);
+
+  // 帳票の編集・印刷画面（/quotes/1/edit など）にいるときも親メニューを開いたままにする
+  const isDocumentsActive =
+    documentItems.some(item => location === item.url || location.startsWith(`${item.url}/`)) ||
+    location.startsWith("/documents/");
+  const [isDocumentsOpen, setIsDocumentsOpen] = useState(isDocumentsActive);
+  useEffect(() => {
+    if (isDocumentsActive) setIsDocumentsOpen(true);
+  }, [isDocumentsActive]);
 
   if (!isAdmin) {
     return (
@@ -164,7 +184,57 @@ export function AppSidebar() {
                 <SidebarMenu>
                   {orderPlanningItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
+                      <SidebarMenuButton
+                        asChild
+                        className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
+                      >
+                        <Link href={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+
+                  {/* 帳票（見積書・請求書・納品書） */}
+                  <Collapsible open={isDocumentsOpen} onOpenChange={setIsDocumentsOpen}>
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          className={isDocumentsActive ? 'bg-primary/10 text-primary font-medium' : ''}
+                        >
+                          <Files className="h-4 w-4" />
+                          <span>帳票</span>
+                          {isDocumentsOpen ? (
+                            <ChevronDown className="ml-auto h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="ml-auto h-4 w-4" />
+                          )}
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {documentItems.map((item) => (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton
+                                asChild
+                                className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
+                              >
+                                <Link href={item.url}>
+                                  <item.icon className="h-4 w-4" />
+                                  <span>{item.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+
+                  {planningItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
                         asChild
                         className={location === item.url ? 'bg-primary/10 text-primary font-medium' : ''}
                       >

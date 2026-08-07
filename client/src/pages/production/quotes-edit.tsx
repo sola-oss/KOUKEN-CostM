@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, ArrowLeft, Printer, ShoppingCart, ExternalLink, ChevronsUpDown, Check } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Printer, ShoppingCart, ExternalLink, ChevronsUpDown, Check, ReceiptText, PackageCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { cn, errorMessage } from "@/lib/utils";
 import { TAX_RATE_LABEL, taxableAmount, taxAmount, totalWithTax } from "@/lib/tax";
+import { DOCUMENT_CONFIG, printPath, type DocumentKind } from "@/lib/documents";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -74,6 +75,13 @@ interface QuoteItem {
   notes: string;
 }
 
+interface OrderOption {
+  order_id: string;
+  client_name: string | null;
+  project_title: string | null;
+  product_name: string | null;
+}
+
 interface Quote {
   id: number;
   quote_number: string;
@@ -83,6 +91,8 @@ interface Quote {
   client_request_no: string | null;
   status: "draft" | "issued" | "accepted" | "converted";
   converted_order_id: string | null;
+  document_kind: DocumentKind | null;
+  source_quote_id: number | null;
   items: QuoteItem[];
 }
 
@@ -118,6 +128,9 @@ export default function QuotesEdit() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const [convertedOrderId, setConvertedOrderId] = useState<string>("");
+  const [orderComboOpen, setOrderComboOpen] = useState(false);
+
   const isNew = !params.id || params.id === "new";
   const quoteId = isNew ? null : parseInt(params.id!, 10);
 
@@ -133,6 +146,11 @@ export default function QuotesEdit() {
     queryFn: () => fetch("/api/customers-master?include_inactive=true").then(r => r.json()),
   });
 
+  const { data: ordersResponse } = useQuery<{ data: OrderOption[] }>({
+    queryKey: ["/api/orders-dropdown"],
+    queryFn: () => fetch("/api/orders-dropdown").then(r => r.json()),
+  });
+
   const { data: materialsResponse } = useQuery<{ data: Material[] }>({
     queryKey: ["/api/materials"],
     queryFn: () => fetch("/api/materials").then(r => r.json()),
@@ -141,8 +159,14 @@ export default function QuotesEdit() {
   const allCustomers: CustomerMaster[] = Array.isArray(customersData) ? customersData : [];
   const customers = allCustomers.filter((c) => c.is_active);
   const materials: Material[] = materialsResponse?.data || [];
+  const orderOptions: OrderOption[] = ordersResponse?.data || [];
+  const selectedOrder = orderOptions.find(o => o.order_id === convertedOrderId);
 
   const quote = quoteData?.data;
+  // 請求書・納品書もこの画面で編集する。帳票種別はレコードが持つ。
+  const documentKind: DocumentKind = quote?.document_kind ?? "quote";
+  const documentConfig = DOCUMENT_CONFIG[documentKind];
+  const isQuoteDocument = documentKind === "quote";
 
   // Form state
   const [quoteNumber, setQuoteNumber] = useState("");
@@ -164,6 +188,7 @@ export default function QuotesEdit() {
       setClientName(quote.client_name || "");
       setContactPerson(quote.contact_person || "");
       setClientRequestNo(quote.client_request_no || "");
+      setConvertedOrderId(quote.converted_order_id || "");
       setStatus(quote.status || "draft");
       setItems(
         quote.items && quote.items.length > 0
@@ -234,6 +259,7 @@ export default function QuotesEdit() {
     client_name: clientName,
     contact_person: contactPerson || undefined,
     client_request_no: clientRequestNo || undefined,
+    converted_order_id: convertedOrderId || null,
     status,
     items: items.map((item, idx) => ({
       sort_order: idx,
@@ -291,6 +317,24 @@ export default function QuotesEdit() {
     },
     onError: (error) => {
       toast({ title: "受注作成に失敗しました", description: errorMessage(error), variant: "destructive" });
+    },
+  });
+
+  // 見積書から請求書・納品書を複製する。すでに作成済みならそのレコードを開く。
+  const createDocumentMutation = useMutation({
+    mutationFn: async (kind: Exclude<DocumentKind, "quote">) => {
+      const res = await apiRequest("POST", `/api/quotes/${quoteId}/documents/${kind}`);
+      return (await res.json()) as { data?: { id?: number; document_kind?: DocumentKind } };
+    },
+    onSuccess: (payload) => {
+      const created = payload?.data;
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      const label = created?.document_kind ? DOCUMENT_CONFIG[created.document_kind].label : "帳票";
+      toast({ title: `${label}を作成しました`, description: "内容はこの画面で個別に編集できます" });
+      if (created?.id) setLocation(`/quotes/${created.id}/edit`);
+    },
+    onError: (error) => {
+      toast({ title: "作成に失敗しました", description: errorMessage(error), variant: "destructive" });
     },
   });
 
@@ -373,13 +417,13 @@ export default function QuotesEdit() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-4 flex-wrap">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/quotes")}>
+        <Button variant="ghost" size="icon" onClick={() => setLocation(documentConfig.listPath)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight">
-              {isNew ? "見積書 新規作成" : `見積書 ${quote?.quote_number || ""}`}
+              {isNew ? "見積書 新規作成" : `${documentConfig.label} ${quote?.quote_number || ""}`}
             </h1>
             {!isNew && (
               <Badge className={statusCfg.className} variant="secondary">
@@ -392,14 +436,36 @@ export default function QuotesEdit() {
           {!isNew && (
             <Button
               variant="outline"
-              onClick={() => window.open(`/quotes/${quoteId}/print`, "_blank")}
+              onClick={() => quoteId && window.open(printPath(quoteId), "_blank")}
               data-testid="button-print"
             >
               <Printer className="h-4 w-4 mr-2" />
-              見積書を印刷
+              {documentConfig.label}を印刷
             </Button>
           )}
-          {!isNew && !isConverted && (
+          {!isNew && isQuoteDocument && (
+            <>
+              <Button
+                variant="outline"
+                disabled={createDocumentMutation.isPending}
+                onClick={() => createDocumentMutation.mutate("invoice")}
+                data-testid="button-create-invoice"
+              >
+                <ReceiptText className="h-4 w-4 mr-2" />
+                請求書を作成
+              </Button>
+              <Button
+                variant="outline"
+                disabled={createDocumentMutation.isPending}
+                onClick={() => createDocumentMutation.mutate("delivery")}
+                data-testid="button-create-delivery"
+              >
+                <PackageCheck className="h-4 w-4 mr-2" />
+                納品書を作成
+              </Button>
+            </>
+          )}
+          {!isNew && isQuoteDocument && !isConverted && !convertedOrderId && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -433,13 +499,15 @@ export default function QuotesEdit() {
         </div>
       </div>
 
-      {isConverted && quote?.converted_order_id && (
+      {quote?.converted_order_id && (
         <Card className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-3">
               <ShoppingCart className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               <div>
-                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">受注済み</p>
+                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                  {isConverted ? "受注済み" : "受注に紐付け済み"}
+                </p>
                 <p className="text-sm text-purple-700 dark:text-purple-300">
                   受注番号: <span className="font-mono font-semibold">{quote.converted_order_id}</span>
                 </p>
@@ -606,6 +674,63 @@ export default function QuotesEdit() {
               disabled={isConverted}
               data-testid="input-client-request-no"
             />
+          </div>
+
+          {/* 受注番号。帳票の「注文番号」と合計請求書の受注番号はここから来る */}
+          <div className="space-y-2">
+            <Label>受注番号</Label>
+            <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  disabled={isConverted}
+                  className={cn("w-full justify-between font-normal", !convertedOrderId && "text-muted-foreground")}
+                  data-testid="button-select-order"
+                >
+                  <span className="truncate">
+                    {convertedOrderId
+                      ? `${convertedOrderId}${selectedOrder?.project_title ? ` / ${selectedOrder.project_title}` : ""}`
+                      : "受注を選択（任意）"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[420px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="受注番号・得意先・件名で検索..." />
+                  <CommandList>
+                    <CommandEmpty>該当なし</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__none__"
+                        onSelect={() => { setConvertedOrderId(""); setOrderComboOpen(false); }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", !convertedOrderId ? "opacity-100" : "opacity-0")} />
+                        指定なし
+                      </CommandItem>
+                      {orderOptions.map((o) => (
+                        <CommandItem
+                          key={o.order_id}
+                          value={`${o.order_id} ${o.client_name || ""} ${o.project_title || o.product_name || ""}`}
+                          onSelect={() => { setConvertedOrderId(o.order_id); setOrderComboOpen(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", convertedOrderId === o.order_id ? "opacity-100" : "opacity-0")} />
+                          <span className="font-medium">{o.order_id}</span>
+                          {o.client_name && <span className="ml-1 text-muted-foreground text-sm">{o.client_name}</span>}
+                          {(o.project_title || o.product_name) && (
+                            <span className="ml-1 text-muted-foreground text-sm truncate">/ {o.project_title || o.product_name}</span>
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <p className="text-xs text-muted-foreground">
+              帳票の「注文番号」と合計請求書の受注番号になります
+            </p>
           </div>
           {!isNew && !isConverted && (
             <div className="space-y-2">
@@ -867,17 +992,23 @@ export default function QuotesEdit() {
           </div>
 
           <div className="mt-4 flex flex-col items-end gap-1 border-t pt-4">
-            <div className="flex gap-8 text-sm">
-              <span className="text-muted-foreground">小計（{TAX_RATE_LABEL}対象）</span>
-              <span className="font-medium tabular-nums w-32 text-right">{formatCurrency(taxableAmount(subtotal))}</span>
-            </div>
-            <div className="flex gap-8 text-sm">
-              <span className="text-muted-foreground">消費税（{TAX_RATE_LABEL}）</span>
-              <span className="font-medium tabular-nums w-32 text-right">{formatCurrency(taxAmount(subtotal))}</span>
-            </div>
-            <div className="flex gap-8 text-base font-bold border-t pt-1 mt-1">
-              <span>合計</span>
-              <span className="tabular-nums w-32 text-right">{formatCurrency(totalWithTax(subtotal))}</span>
+            {documentConfig.showTaxBreakdown && (
+              <>
+                <div className="flex gap-8 text-sm">
+                  <span className="text-muted-foreground">小計（{TAX_RATE_LABEL}対象）</span>
+                  <span className="font-medium tabular-nums w-32 text-right">{formatCurrency(taxableAmount(subtotal))}</span>
+                </div>
+                <div className="flex gap-8 text-sm">
+                  <span className="text-muted-foreground">消費税（{TAX_RATE_LABEL}）</span>
+                  <span className="font-medium tabular-nums w-32 text-right">{formatCurrency(taxAmount(subtotal))}</span>
+                </div>
+              </>
+            )}
+            <div className="flex gap-8 text-base font-bold">
+              <span>{documentConfig.taxIncluded ? "合計（税込）" : "合計（税別）"}</span>
+              <span className="tabular-nums w-32 text-right">
+                {formatCurrency(documentConfig.taxIncluded ? totalWithTax(subtotal) : taxableAmount(subtotal))}
+              </span>
             </div>
           </div>
         </CardContent>

@@ -6,8 +6,10 @@ import type {
   OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse, ZoneCostSummary,
   WorkerMaster, InsertWorkerMaster, VendorMaster, InsertVendorMaster, OutsourcingCost, InsertOutsourcingCost, OutsourcingCostWithVendor,
   CustomerMaster, InsertCustomerMaster,
-  Quote, QuoteItem, QuoteWithItems, InsertQuote, InsertQuoteItem
+  Quote, QuoteItem, QuoteWithItems, InsertQuote, InsertQuoteItem, DocumentKind,
+  SummaryInvoice, SummaryInvoiceItem, SummaryInvoiceWithItems, InsertSummaryInvoice, InsertSummaryInvoiceItem
 } from '../../shared/production-schema.js';
+import { DOCUMENT_NUMBER_PREFIX } from '../../shared/production-schema.js';
 
 // ============================================================
 // ユーティリティ
@@ -18,6 +20,19 @@ function throwIfError<T>(data: T | null, error: any, context: string): T {
   if (data === null) throw new Error(`[DAO:${context}] No data returned`);
   return data;
 }
+
+// 受注日などはUTCのISO文字列で入っている（JST 0:00 = 前日15:00Z）。
+// 帳票に出す日付はJSTのYYYY-MM-DDに直す。
+function toJstDateString(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  return new Date(d.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// 合計請求書の明細（APIからは一部項目が省略されうるので全項目optional）
+type SummaryInvoiceItemInput = Partial<Omit<InsertSummaryInvoiceItem, 'summary_invoice_id'>>;
 
 // PostgreSQL booleanを正規化（念のため）
 function normBool(val: any): boolean {
@@ -2057,11 +2072,11 @@ export class ProductionDAO {
     // テーブルはSupabase SQL Editorで作成済み — no-op
   }
 
-  private async _generateQuoteNumber(): Promise<string> {
+  private async _generateQuoteNumber(kind: DocumentKind = 'quote'): Promise<string> {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
-    const prefix = `QT-${y}${m}-`;
+    const prefix = `${DOCUMENT_NUMBER_PREFIX[kind]}-${y}${m}-`;
     const { data } = await supabase
       .from('quotes')
       .select('quote_number')
@@ -2079,7 +2094,8 @@ export class ProductionDAO {
 
   async createQuote(data: InsertQuote, items: Omit<InsertQuoteItem, 'quote_id'>[]): Promise<number> {
     const now = new Date().toISOString();
-    const quoteNumber = data.quote_number || await this._generateQuoteNumber();
+    const kind = (data.document_kind || 'quote') as DocumentKind;
+    const quoteNumber = data.quote_number || await this._generateQuoteNumber(kind);
 
     const { data: row, error } = await supabase
       .from('quotes')
@@ -2091,6 +2107,8 @@ export class ProductionDAO {
         client_request_no: data.client_request_no || null,
         status: data.status || 'draft',
         converted_order_id: data.converted_order_id || null,
+        document_kind: kind,
+        source_quote_id: data.source_quote_id ?? null,
         created_at: now,
         updated_at: now,
       })
@@ -2117,10 +2135,13 @@ export class ProductionDAO {
     return quoteId;
   }
 
-  async getQuotes(): Promise<(Quote & { total_amount: number })[]> {
+  async getQuotes(kind?: DocumentKind): Promise<(Quote & { total_amount: number })[]> {
     const quotes = await fetchAllRows<Quote>(
-      () => supabase.from('quotes').select('*')
-        .order('created_at', { ascending: false }).order('id', { ascending: false }),
+      () => {
+        const q = supabase.from('quotes').select('*');
+        return (kind ? q.eq('document_kind', kind) : q)
+          .order('created_at', { ascending: false }).order('id', { ascending: false });
+      },
       'getQuotes'
     );
     if (quotes.length === 0) return [];
@@ -2154,6 +2175,53 @@ export class ProductionDAO {
       .order('sort_order')
       .order('id');
     return { ...(quote as Quote), items: (items || []) as QuoteItem[] };
+  }
+
+  /**
+   * 見積書から請求書・納品書を複製する。
+   * 明細ごとコピーした独立レコードを作るので、以降は元の見積と別々に編集できる。
+   * 同じ見積から同じ種別の帳票を二重に作らないよう、既存があればそれを返す。
+   */
+  async duplicateQuoteAs(sourceQuoteId: number, kind: DocumentKind): Promise<number> {
+    if (kind === 'quote') throw new Error('見積書は複製できません');
+
+    const source = await this.getQuoteById(sourceQuoteId);
+    if (!source) throw new Error('複製元の見積書が見つかりません');
+    if (source.document_kind !== 'quote') throw new Error('見積書からのみ作成できます');
+
+    const { data: existing, error: ee } = await supabase
+      .from('quotes')
+      .select('id')
+      .eq('source_quote_id', sourceQuoteId)
+      .eq('document_kind', kind)
+      .maybeSingle();
+    if (ee) throw new Error(`[duplicateQuoteAs lookup] ${ee.message}`);
+    if (existing) return (existing as { id: number }).id;
+
+    return this.createQuote(
+      {
+        // 番号は帳票種別ごとに自動採番させる
+        quote_number: null,
+        issue_date: new Date().toISOString().slice(0, 10),
+        client_name: source.client_name,
+        contact_person: source.contact_person,
+        client_request_no: source.client_request_no,
+        status: 'draft',
+        converted_order_id: source.converted_order_id,
+        document_kind: kind,
+        source_quote_id: sourceQuoteId,
+      } as InsertQuote,
+      source.items.map((item, i) => ({
+        sort_order: item.sort_order ?? i,
+        material_id: item.material_id,
+        product_name: item.product_name,
+        model_number: item.model_number,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.unit_price,
+        notes: item.notes,
+      })) as Omit<InsertQuoteItem, 'quote_id'>[]
+    );
   }
 
   async getQuoteByOrderId(orderId: string): Promise<Quote | null> {
@@ -2300,6 +2368,204 @@ export class ProductionDAO {
     });
 
     return orderId;
+  }
+
+  // ========== 合計請求書 (Summary Invoices) ==========
+
+  private async _generateSummaryNumber(): Promise<string> {
+    const now = new Date();
+    const prefix = `SI-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-`;
+    const { data } = await supabase
+      .from('summary_invoices')
+      .select('summary_number')
+      .like('summary_number', `${prefix}%`)
+      .order('summary_number', { ascending: false })
+      .limit(1);
+    let seq = 1;
+    if (data && data.length > 0) {
+      const num = parseInt((data[0] as { summary_number: string }).summary_number.slice(prefix.length), 10);
+      if (!isNaN(num)) seq = num + 1;
+    }
+    return `${prefix}${String(seq).padStart(3, '0')}`;
+  }
+
+  /**
+   * 合計請求書に載せられる請求書の候補。
+   * 指定した得意先の請求書のうち、まだどの合計請求書にも載っていないものを返す。
+   * 受注日は請求書が持つ受注番号から引く。
+   */
+  async getSummaryInvoiceCandidates(clientName: string, from?: string, to?: string): Promise<{
+    invoice_id: number;
+    quote_number: string;
+    issue_date: string | null;
+    order_id: string | null;
+    order_date: string | null;
+    description: string | null;
+    amount: number;
+  }[]> {
+    let query = supabase.from('quotes').select('*')
+      .eq('document_kind', 'invoice')
+      .eq('client_name', clientName);
+    if (from) query = query.gte('issue_date', from);
+    if (to) query = query.lte('issue_date', to);
+    const { data: invoices, error } = await query.order('issue_date', { ascending: true });
+    if (error) throw new Error(`[getSummaryInvoiceCandidates] ${error.message}`);
+
+    const rows = (invoices || []) as Quote[];
+    if (rows.length === 0) return [];
+
+    // すでに合計請求書に載っている請求書は候補から外す
+    const { data: used, error: ue } = await supabase
+      .from('summary_invoice_items')
+      .select('invoice_id')
+      .in('invoice_id', rows.map(r => r.id));
+    if (ue) throw new Error(`[getSummaryInvoiceCandidates used] ${ue.message}`);
+    const usedIds = new Set((used || []).map((u: any) => u.invoice_id));
+    const available = rows.filter(r => !usedIds.has(r.id));
+    if (available.length === 0) return [];
+
+    const items = await fetchAllByIds<{ quote_id: number; quantity: number | null; unit_price: number | null }>(
+      'quote_items', 'quote_id', available.map(r => r.id), 'getSummaryInvoiceCandidates:items',
+      { select: 'id, quote_id, quantity, unit_price' }
+    );
+    const totalMap = new Map<number, number>();
+    for (const item of items) {
+      totalMap.set(item.quote_id, (totalMap.get(item.quote_id) || 0) + (item.quantity || 0) * (item.unit_price || 0));
+    }
+
+    // 受注日・件名は受注データから引く
+    const orderIds = available.map(r => r.converted_order_id).filter(Boolean) as string[];
+    const orderMap = new Map<string, { order_date: string | null; project_title: string | null }>();
+    if (orderIds.length > 0) {
+      const orders = await fetchAllByIds<any>(
+        'orders', 'order_id', orderIds, 'getSummaryInvoiceCandidates:orders',
+        { select: 'order_id, order_date, project_title', orderBy: 'order_id' }
+      );
+      orders.forEach(o => orderMap.set(o.order_id, { order_date: o.order_date ?? null, project_title: o.project_title ?? null }));
+    }
+
+    return available.map(r => {
+      const order = r.converted_order_id ? orderMap.get(r.converted_order_id) : undefined;
+      return {
+        invoice_id: r.id,
+        quote_number: r.quote_number,
+        issue_date: r.issue_date ?? null,
+        order_id: r.converted_order_id ?? null,
+        order_date: order?.order_date ? toJstDateString(order.order_date) : (r.issue_date ?? null),
+        description: order?.project_title ?? null,
+        amount: totalMap.get(r.id) || 0,
+      };
+    });
+  }
+
+  async createSummaryInvoice(
+    data: InsertSummaryInvoice,
+    items: SummaryInvoiceItemInput[]
+  ): Promise<number> {
+    const now = new Date().toISOString();
+    const number = data.summary_number || await this._generateSummaryNumber();
+
+    const { data: row, error } = await supabase
+      .from('summary_invoices')
+      .insert({
+        summary_number: number,
+        issue_date: data.issue_date || null,
+        client_name: data.client_name,
+        billing_month: data.billing_month || null,
+        status: data.status || 'draft',
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id')
+      .single();
+    if (error) throw new Error(`[createSummaryInvoice] ${error.message}`);
+    const id = (row as { id: number }).id;
+
+    await this._replaceSummaryInvoiceItems(id, items);
+    return id;
+  }
+
+  private async _replaceSummaryInvoiceItems(
+    summaryInvoiceId: number,
+    items: SummaryInvoiceItemInput[]
+  ): Promise<void> {
+    const { error: de } = await supabase
+      .from('summary_invoice_items')
+      .delete()
+      .eq('summary_invoice_id', summaryInvoiceId);
+    if (de) throw new Error(`[_replaceSummaryInvoiceItems delete] ${de.message}`);
+    if (items.length === 0) return;
+
+    const rows = items.map((item, i) => ({
+      summary_invoice_id: summaryInvoiceId,
+      sort_order: item.sort_order ?? i,
+      invoice_id: item.invoice_id ?? null,
+      order_id: item.order_id || null,
+      order_date: item.order_date || null,
+      description: item.description || null,
+      quantity: item.quantity ?? null,
+      unit: item.unit || null,
+      amount: item.amount ?? null,
+      notes: item.notes || null,
+    }));
+    const { error } = await supabase.from('summary_invoice_items').insert(rows);
+    if (error) throw new Error(`[_replaceSummaryInvoiceItems insert] ${error.message}`);
+  }
+
+  async getSummaryInvoices(): Promise<(SummaryInvoice & { total_amount: number })[]> {
+    const list = await fetchAllRows<SummaryInvoice>(
+      () => supabase.from('summary_invoices').select('*')
+        .order('created_at', { ascending: false }).order('id', { ascending: false }),
+      'getSummaryInvoices'
+    );
+    if (list.length === 0) return [];
+
+    const items = await fetchAllByIds<{ summary_invoice_id: number; amount: number | null }>(
+      'summary_invoice_items', 'summary_invoice_id', list.map(s => s.id), 'getSummaryInvoices:items',
+      { select: 'id, summary_invoice_id, amount' }
+    );
+    const totalMap = new Map<number, number>();
+    for (const item of items) {
+      totalMap.set(item.summary_invoice_id, (totalMap.get(item.summary_invoice_id) || 0) + (item.amount || 0));
+    }
+    return list.map(s => ({ ...s, total_amount: totalMap.get(s.id) || 0 }));
+  }
+
+  async getSummaryInvoiceById(id: number): Promise<SummaryInvoiceWithItems | null> {
+    const { data: row, error } = await supabase
+      .from('summary_invoices').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(`[getSummaryInvoiceById] ${error.message}`);
+    if (!row) return null;
+    const { data: items } = await supabase
+      .from('summary_invoice_items').select('*')
+      .eq('summary_invoice_id', id)
+      .order('sort_order').order('id');
+    return { ...(row as SummaryInvoice), items: (items || []) as SummaryInvoiceItem[] };
+  }
+
+  async updateSummaryInvoice(
+    id: number,
+    data: Partial<InsertSummaryInvoice>,
+    items?: SummaryInvoiceItemInput[]
+  ): Promise<boolean> {
+    const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (data.summary_number !== undefined) updates.summary_number = data.summary_number;
+    if (data.issue_date !== undefined) updates.issue_date = data.issue_date || null;
+    if (data.client_name !== undefined) updates.client_name = data.client_name;
+    if (data.billing_month !== undefined) updates.billing_month = data.billing_month || null;
+    if (data.status !== undefined) updates.status = data.status;
+
+    const { error } = await supabase.from('summary_invoices').update(updates).eq('id', id);
+    if (error) throw new Error(`[updateSummaryInvoice] ${error.message}`);
+
+    if (items) await this._replaceSummaryInvoiceItems(id, items);
+    return true;
+  }
+
+  async deleteSummaryInvoice(id: number): Promise<boolean> {
+    const { error } = await supabase.from('summary_invoices').delete().eq('id', id);
+    if (error) throw new Error(`[deleteSummaryInvoice] ${error.message}`);
+    return true;
   }
 
   close(): void {

@@ -15,10 +15,21 @@ dao.ensureQuotesTablesCreated()
   .then(() => console.log('✓ Quotes tables ready (quotes-api)'))
   .catch((err: Error) => console.error('✗ Quotes table init error:', err.message));
 
-// GET /quotes - 見積書一覧
+const DOCUMENT_KINDS = ['quote', 'invoice', 'delivery'] as const;
+type DocumentKindParam = (typeof DOCUMENT_KINDS)[number];
+
+function parseKind(value: unknown): DocumentKindParam | undefined {
+  return DOCUMENT_KINDS.includes(value as DocumentKindParam) ? (value as DocumentKindParam) : undefined;
+}
+
+// GET /quotes - 帳票一覧（?kind=quote|invoice|delivery で絞り込み）
 router.get('/', async (req, res) => {
   try {
-    const quotes = await dao.getQuotes();
+    const kind = parseKind(req.query.kind);
+    if (req.query.kind && !kind) {
+      return res.status(400).json({ error: 'Bad request', message: 'kind が不正です' });
+    }
+    const quotes = await dao.getQuotes(kind);
     res.json({ data: quotes });
   } catch (error: unknown) {
     console.error('Get quotes error:', error);
@@ -119,6 +130,26 @@ router.post('/:id/convert', async (req, res) => {
     const msg = error instanceof Error ? error.message : 'Failed to convert quote';
     const status = msg.includes('すでに受注済み') ? 409 : 500;
     res.status(status).json({ error: 'Conversion failed', message: msg });
+  }
+});
+
+// POST /quotes/:id/documents/:kind - 見積書から請求書・納品書を作成
+router.post('/:id/documents/:kind', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid quote ID' });
+    const kind = parseKind(req.params.kind);
+    if (!kind || kind === 'quote') {
+      return res.status(400).json({ error: 'Bad request', message: 'invoice か delivery を指定してください' });
+    }
+    const newId = await dao.duplicateQuoteAs(id, kind);
+    const document = await dao.getQuoteById(newId);
+    res.status(201).json({ data: document });
+  } catch (error: unknown) {
+    console.error('Create document error:', error);
+    const msg = error instanceof Error ? error.message : 'Failed to create document';
+    const status = msg.includes('見つかりません') ? 404 : 500;
+    res.status(status).json({ error: 'Creation failed', message: msg });
   }
 });
 
