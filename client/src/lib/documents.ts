@@ -46,6 +46,8 @@ interface DocumentConfig {
   showTaxBreakdown: boolean;
   /** 振込先を記載するか */
   showBankAccounts: boolean;
+  /** 社印の画像を印字するか。請求書は実際に刻印を押すので印字しない（場所だけ空ける） */
+  showSeal: boolean;
   /** 一覧ページのパス */
   listPath: string;
 }
@@ -73,6 +75,7 @@ export const DOCUMENT_CONFIG: Record<DocumentKind, DocumentConfig> = {
     taxIncluded: false,
     showTaxBreakdown: false,
     showBankAccounts: false,
+    showSeal: true,
     listPath: "/quotes",
   },
   invoice: {
@@ -87,6 +90,7 @@ export const DOCUMENT_CONFIG: Record<DocumentKind, DocumentConfig> = {
     taxIncluded: true,
     showTaxBreakdown: true,
     showBankAccounts: true,
+    showSeal: false,
     listPath: "/invoices",
   },
   delivery: {
@@ -101,6 +105,7 @@ export const DOCUMENT_CONFIG: Record<DocumentKind, DocumentConfig> = {
     taxIncluded: false,
     showTaxBreakdown: false,
     showBankAccounts: false,
+    showSeal: true,
     listPath: "/delivery-notes",
   },
 };

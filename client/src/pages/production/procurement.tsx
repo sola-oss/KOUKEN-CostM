@@ -264,11 +264,13 @@ export default function ProcurementManagement() {
                             <Button
                               variant="outline"
                               role="combobox"
-                              className={cn("w-full justify-between font-normal", !field.value && "text-muted-foreground")}
+                              className={cn("w-full justify-between font-normal overflow-hidden", !field.value && "text-muted-foreground")}
                             >
-                              {field.value
-                                ? `${field.value}${selectedOrder?.client_name ? ` / ${selectedOrder.client_name}` : ""}${(selectedOrder?.project_title || selectedOrder?.product_name) ? ` / ${selectedOrder?.project_title || selectedOrder?.product_name}` : ""}`
-                                : "受注番号を選択"}
+                              <span className="min-w-0 truncate text-left">
+                                {field.value
+                                  ? `${field.value}${selectedOrder?.client_name ? ` / ${selectedOrder.client_name}` : ""}${(selectedOrder?.project_title || selectedOrder?.product_name) ? ` / ${selectedOrder?.project_title || selectedOrder?.product_name}` : ""}`
+                                  : "受注番号を選択"}
+                              </span>
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>
@@ -325,9 +327,9 @@ export default function ProcurementManagement() {
                               <Button
                                 variant="outline"
                                 role="combobox"
-                                className={cn("w-full justify-between font-normal", !field.value && "text-muted-foreground")}
+                                className={cn("w-full justify-between font-normal overflow-hidden", !field.value && "text-muted-foreground")}
                               >
-                                <span className="truncate">
+                                <span className="min-w-0 truncate text-left">
                                   {selectedVendor ? selectedVendor.name : "業者を選択（任意）"}
                                 </span>
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />

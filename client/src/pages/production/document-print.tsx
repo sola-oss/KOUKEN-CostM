@@ -160,20 +160,25 @@ export default function DocumentPrint() {
           </div>
 
           <div style={{ textAlign: "right" }}>
-            {/* 印鑑を右列の最上部に配置 */}
+            {/* 印鑑を右列の最上部に配置。
+                請求書は実際に刻印を押すので画像は出さず、押す場所だけ空けておく。 */}
             <div style={{ marginBottom: "6px" }}>
-              <img
-                src={sealImage}
-                alt="印鑑"
-                style={{
-                  display: "block",
-                  marginLeft: "auto",
-                  width: "76px",
-                  height: "76px",
-                  objectFit: "contain",
-                  opacity: 0.85,
-                }}
-              />
+              {config.showSeal ? (
+                <img
+                  src={sealImage}
+                  alt="印鑑"
+                  style={{
+                    display: "block",
+                    marginLeft: "auto",
+                    width: "76px",
+                    height: "76px",
+                    objectFit: "contain",
+                    opacity: 0.85,
+                  }}
+                />
+              ) : (
+                <div style={{ width: "76px", height: "76px", marginLeft: "auto" }} />
+              )}
             </div>
             <div style={{ fontSize: "10px", color: "#555", marginBottom: "2px" }}>
               登録番号　{COMPANY_INFO.registration_no}

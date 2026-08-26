@@ -1098,12 +1098,14 @@ export default function Projects() {
                                   variant="outline"
                                   role="combobox"
                                   aria-expanded={customerComboOpen}
-                                  className="flex-1 justify-between font-normal"
+                                  className="flex-1 justify-between font-normal overflow-hidden"
                                   data-testid="combobox-customer"
                                 >
-                                  {selectedCustomerId
-                                    ? customers.find(c => c.id === selectedCustomerId)?.name || field.value || "得意先を選択"
-                                    : field.value || "得意先を選択"}
+                                  <span className="min-w-0 truncate text-left">
+                                    {selectedCustomerId
+                                      ? customers.find(c => c.id === selectedCustomerId)?.name || field.value || "得意先を選択"
+                                      : field.value || "得意先を選択"}
+                                  </span>
                                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
                               </PopoverTrigger>

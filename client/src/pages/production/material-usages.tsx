@@ -317,17 +317,19 @@ export default function MaterialUsages() {
                               role="combobox"
                               aria-expanded={orderComboOpen}
                               className={cn(
-                                "w-full justify-between",
+                                "w-full justify-between overflow-hidden",
                                 !field.value && "text-muted-foreground"
                               )}
                               data-testid="select-project-id"
                             >
-                              {field.value
-                                ? (() => {
-                                    const order = orders.find(o => o.order_id === field.value);
-                                    return order ? `${order.order_id}${order.client_name ? ` / ${order.client_name}` : ""}${(order.project_title || order.product_name) ? ` / ${order.project_title || order.product_name}` : ""}` : field.value;
-                                  })()
-                                : "受注を検索..."}
+                              <span className="min-w-0 truncate text-left">
+                                {field.value
+                                  ? (() => {
+                                      const order = orders.find(o => o.order_id === field.value);
+                                      return order ? `${order.order_id}${order.client_name ? ` / ${order.client_name}` : ""}${(order.project_title || order.product_name) ? ` / ${order.project_title || order.product_name}` : ""}` : field.value;
+                                    })()
+                                  : "受注を検索..."}
+                              </span>
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>
@@ -606,17 +608,19 @@ export default function MaterialUsages() {
                               role="combobox"
                               aria-expanded={editOrderComboOpen}
                               className={cn(
-                                "w-full justify-between",
+                                "w-full justify-between overflow-hidden",
                                 !field.value && "text-muted-foreground"
                               )}
                               data-testid="edit-select-project-id"
                             >
-                              {field.value
-                                ? (() => {
-                                    const order = orders.find(o => o.order_id === field.value);
-                                    return order ? `${order.order_id}${order.client_name ? ` / ${order.client_name}` : ""}${(order.project_title || order.product_name) ? ` / ${order.project_title || order.product_name}` : ""}` : field.value;
-                                  })()
-                                : "受注を検索..."}
+                              <span className="min-w-0 truncate text-left">
+                                {field.value
+                                  ? (() => {
+                                      const order = orders.find(o => o.order_id === field.value);
+                                      return order ? `${order.order_id}${order.client_name ? ` / ${order.client_name}` : ""}${(order.project_title || order.product_name) ? ` / ${order.project_title || order.product_name}` : ""}` : field.value;
+                                    })()
+                                  : "受注を検索..."}
+                              </span>
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>
