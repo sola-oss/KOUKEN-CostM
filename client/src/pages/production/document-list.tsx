@@ -37,6 +37,8 @@ interface Quote {
   client_request_no: string | null;
   status: "draft" | "issued" | "accepted" | "converted";
   converted_order_id: string | null;
+  source_quote_number: string | null;
+  source_order_id: string | null;
   total_amount: number;
   created_at: string;
   updated_at: string;
@@ -153,7 +155,7 @@ export default function DocumentList({ kind }: { kind: DocumentKind }) {
         disabled={deleteMutation.isPending}
         onClick={(e) => {
           e.stopPropagation();
-          if (confirm(`「${quote.quote_number}」を削除しますか？`)) {
+          if (confirm(`「${documentNumber(kind, quote)}」を削除しますか？`)) {
             deleteMutation.mutate(quote.id);
           }
         }}

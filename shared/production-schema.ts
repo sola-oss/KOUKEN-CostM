@@ -688,6 +688,17 @@ export interface QuoteWithItems extends Quote {
   items: QuoteItem[];
 }
 
+/**
+ * 複製元の見積書から引いてきた番号。請求書・納品書にだけ入る。
+ * 帳票に印字する「受注番号/見積番号」を決めるのに使う。
+ */
+export interface SourceNumbers {
+  /** 複製元の見積番号（実運用では受注番号がそのまま入っている） */
+  source_quote_number: string | null;
+  /** 複製元の見積書に紐づく受注番号 */
+  source_order_id: string | null;
+}
+
 // ========== 合計請求書 (Summary Invoices) ==========
 // 得意先ごとに、発行済みの請求書をまとめて請求する帳票。
 // 明細は作成時点の請求書の内容を写すので、あとから個別請求書を直しても発行済み分は変わらない。

@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/select";
 import { cn, errorMessage } from "@/lib/utils";
 import { TAX_RATE_LABEL, taxableAmount, taxAmount, totalWithTax } from "@/lib/tax";
-import { DOCUMENT_CONFIG, printPath, type DocumentKind } from "@/lib/documents";
+import { DOCUMENT_CONFIG, documentNumber, printPath, type DocumentKind } from "@/lib/documents";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -91,6 +91,8 @@ interface Quote {
   client_request_no: string | null;
   status: "draft" | "issued" | "accepted" | "converted";
   converted_order_id: string | null;
+  source_quote_number: string | null;
+  source_order_id: string | null;
   document_kind: DocumentKind | null;
   source_quote_id: number | null;
   items: QuoteItem[];
@@ -254,7 +256,6 @@ export default function QuotesEdit() {
   };
 
   const buildPayload = () => ({
-    quote_number: quoteNumber || undefined,
     issue_date: issueDate || undefined,
     client_name: clientName,
     contact_person: contactPerson || undefined,
@@ -423,7 +424,7 @@ export default function QuotesEdit() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight">
-              {isNew ? "見積書 新規作成" : `${documentConfig.label} ${quote?.quote_number || ""}`}
+              {isNew ? "見積書 新規作成" : `${documentConfig.label} ${quote ? documentNumber(documentKind, quote) : ""}`}
             </h1>
             {!isNew && (
               <Badge className={statusCfg.className} variant="secondary">
@@ -531,15 +532,70 @@ export default function QuotesEdit() {
           <CardTitle>基本情報</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
+          {/* 帳票に印字する番号。巧健さんは3帳票とも受注番号（ko…）で呼ぶので、ここを先頭に置く。 */}
           <div className="space-y-2">
-            <Label>見積番号</Label>
-            <Input
-              value={quoteNumber}
-              onChange={(e) => setQuoteNumber(e.target.value)}
-              placeholder="自動採番（空欄で自動生成）"
-              disabled={isConverted}
-              data-testid="input-quote-number"
-            />
+            <Label>受注番号/見積番号</Label>
+            <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  disabled={isConverted}
+                  className={cn("w-full justify-between font-normal", !convertedOrderId && "text-muted-foreground")}
+                  data-testid="button-select-order"
+                >
+                  <span className="truncate">
+                    {convertedOrderId
+                      ? `${convertedOrderId}${selectedOrder?.project_title ? ` / ${selectedOrder.project_title}` : ""}`
+                      : "受注を選択（任意）"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[420px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="受注番号・得意先・件名で検索..." />
+                  <CommandList>
+                    <CommandEmpty>該当なし</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__none__"
+                        onSelect={() => { setConvertedOrderId(""); setOrderComboOpen(false); }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", !convertedOrderId ? "opacity-100" : "opacity-0")} />
+                        指定なし
+                      </CommandItem>
+                      {orderOptions.map((o) => (
+                        <CommandItem
+                          key={o.order_id}
+                          value={`${o.order_id} ${o.client_name || ""} ${o.project_title || o.product_name || ""}`}
+                          onSelect={() => { setConvertedOrderId(o.order_id); setOrderComboOpen(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", convertedOrderId === o.order_id ? "opacity-100" : "opacity-0")} />
+                          <span className="font-medium">{o.order_id}</span>
+                          {o.client_name && <span className="ml-1 text-muted-foreground text-sm">{o.client_name}</span>}
+                          {(o.project_title || o.product_name) && (
+                            <span className="ml-1 text-muted-foreground text-sm truncate">/ {o.project_title || o.product_name}</span>
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <p className="text-xs text-muted-foreground">
+              見積書・納品書・請求書に印字する番号です。合計請求書の受注番号にもなります。
+              空のままだと自動採番した見積番号が出ます。
+            </p>
+            {!isNew && quote && (
+              <p className="text-xs">
+                いま印字される番号：
+                <span className="font-mono font-semibold" data-testid="text-printed-number">
+                  {documentNumber(documentKind, quote)}
+                </span>
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>発行日</Label>
@@ -676,62 +732,6 @@ export default function QuotesEdit() {
             />
           </div>
 
-          {/* 受注番号。帳票の「注文番号」と合計請求書の受注番号はここから来る */}
-          <div className="space-y-2">
-            <Label>受注番号</Label>
-            <Popover open={orderComboOpen} onOpenChange={setOrderComboOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  disabled={isConverted}
-                  className={cn("w-full justify-between font-normal", !convertedOrderId && "text-muted-foreground")}
-                  data-testid="button-select-order"
-                >
-                  <span className="truncate">
-                    {convertedOrderId
-                      ? `${convertedOrderId}${selectedOrder?.project_title ? ` / ${selectedOrder.project_title}` : ""}`
-                      : "受注を選択（任意）"}
-                  </span>
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[420px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="受注番号・得意先・件名で検索..." />
-                  <CommandList>
-                    <CommandEmpty>該当なし</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="__none__"
-                        onSelect={() => { setConvertedOrderId(""); setOrderComboOpen(false); }}
-                      >
-                        <Check className={cn("mr-2 h-4 w-4", !convertedOrderId ? "opacity-100" : "opacity-0")} />
-                        指定なし
-                      </CommandItem>
-                      {orderOptions.map((o) => (
-                        <CommandItem
-                          key={o.order_id}
-                          value={`${o.order_id} ${o.client_name || ""} ${o.project_title || o.product_name || ""}`}
-                          onSelect={() => { setConvertedOrderId(o.order_id); setOrderComboOpen(false); }}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4", convertedOrderId === o.order_id ? "opacity-100" : "opacity-0")} />
-                          <span className="font-medium">{o.order_id}</span>
-                          {o.client_name && <span className="ml-1 text-muted-foreground text-sm">{o.client_name}</span>}
-                          {(o.project_title || o.product_name) && (
-                            <span className="ml-1 text-muted-foreground text-sm truncate">/ {o.project_title || o.product_name}</span>
-                          )}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            <p className="text-xs text-muted-foreground">
-              帳票の「注文番号」と合計請求書の受注番号になります
-            </p>
-          </div>
           {!isNew && !isConverted && (
             <div className="space-y-2">
               <Label>ステータス</Label>

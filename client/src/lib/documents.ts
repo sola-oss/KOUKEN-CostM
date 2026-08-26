@@ -67,7 +67,7 @@ export const DOCUMENT_CONFIG: Record<DocumentKind, DocumentConfig> = {
     printTitle: "御　見　積　書",
     label: "見積書",
     listDescription: "見積書の作成・管理",
-    numberLabel: "見積番号",
+    numberLabel: "受注番号/見積番号",
     leadText: "下記のとおり御見積申し上げます。",
     amountBoxLabel: "御見積金額（税別）",
     listAmountLabel: "御見積金額（税別）",
@@ -82,7 +82,7 @@ export const DOCUMENT_CONFIG: Record<DocumentKind, DocumentConfig> = {
     printTitle: "御　請　求　書",
     label: "請求書",
     listDescription: "見積データをもとに請求書を発行",
-    numberLabel: "注文番号",
+    numberLabel: "受注番号/見積番号",
     leadText: "下記のとおり御請求申し上げます。",
     amountBoxLabel: "御請求金額（税込）",
     listAmountLabel: "御請求金額（税込）",
@@ -97,7 +97,7 @@ export const DOCUMENT_CONFIG: Record<DocumentKind, DocumentConfig> = {
     printTitle: "納　品　書",
     label: "納品書",
     listDescription: "見積データをもとに納品書を発行",
-    numberLabel: "注文番号",
+    numberLabel: "受注番号/見積番号",
     leadText: "下記のとおり納品いたします。",
     amountBoxLabel: "合計金額（税別）",
     listAmountLabel: "合計金額（税別）",
@@ -110,14 +110,32 @@ export const DOCUMENT_CONFIG: Record<DocumentKind, DocumentConfig> = {
   },
 };
 
+/** 帳票の番号を決めるのに使う項目。請求書・納品書は複製元の見積書の分も持つ。 */
+export interface DocumentNumberSource {
+  quote_number: string;
+  converted_order_id?: string | null;
+  /** 複製元の見積番号（請求書・納品書のみ） */
+  source_quote_number?: string | null;
+  /** 複製元の見積書に紐づく受注番号（請求書・納品書のみ） */
+  source_order_id?: string | null;
+}
+
 /**
- * 帳票に印字する番号。
- * 見積書は見積番号、請求書・納品書は受注番号（未受注なら見積番号で代替）。
+ * 帳票に印字する「受注番号/見積番号」。
+ *
+ * 巧健さんは3帳票とも受注番号（ko…）で呼ぶので、受注番号を最優先で出す。
+ * 請求書・納品書は見積書の複製で、複製した「時点」の受注番号しか持たない。
+ * あとから見積書を受注に紐付けた分は複製側が空のままなので、複製元をたどって補う。
+ * 実運用では見積書の見積番号欄にもko番号が手入力されているため、
+ * 最後の代替として複製元の見積番号を出せば、たいていは正しい受注番号になる。
+ * どれも無ければ自動採番した自分の番号（QT-… / IV-… / DN-…）を出す。
  */
-export function documentNumber(
-  kind: DocumentKind,
-  quote: { quote_number: string; converted_order_id?: string | null }
-): string {
-  if (kind === "quote") return quote.quote_number;
-  return quote.converted_order_id || quote.quote_number;
+export function documentNumber(kind: DocumentKind, doc: DocumentNumberSource): string {
+  if (kind === "quote") return doc.converted_order_id || doc.quote_number;
+  return (
+    doc.converted_order_id ||
+    doc.source_order_id ||
+    doc.source_quote_number ||
+    doc.quote_number
+  );
 }

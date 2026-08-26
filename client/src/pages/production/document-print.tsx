@@ -35,6 +35,8 @@ interface Quote {
   client_request_no: string | null;
   status: string;
   converted_order_id: string | null;
+  source_quote_number: string | null;
+  source_order_id: string | null;
   document_kind: DocumentKind | null;
   items: QuoteItem[];
 }

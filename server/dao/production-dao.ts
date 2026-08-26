@@ -6,7 +6,7 @@ import type {
   OrderKPI, DashboardKPI, CalendarEvent, CostSettings, OrderCostSummary, CostAggregationResponse, ZoneCostSummary,
   WorkerMaster, InsertWorkerMaster, VendorMaster, InsertVendorMaster, OutsourcingCost, InsertOutsourcingCost, OutsourcingCostWithVendor,
   CustomerMaster, InsertCustomerMaster,
-  Quote, QuoteItem, QuoteWithItems, InsertQuote, InsertQuoteItem, DocumentKind,
+  Quote, QuoteItem, QuoteWithItems, InsertQuote, InsertQuoteItem, DocumentKind, SourceNumbers,
   SummaryInvoice, SummaryInvoiceItem, SummaryInvoiceWithItems, InsertSummaryInvoice, InsertSummaryInvoiceItem
 } from '../../shared/production-schema.js';
 import { DOCUMENT_NUMBER_PREFIX } from '../../shared/production-schema.js';
@@ -2135,7 +2135,39 @@ export class ProductionDAO {
     return quoteId;
   }
 
-  async getQuotes(kind?: DocumentKind): Promise<(Quote & { total_amount: number })[]> {
+  /**
+   * 帳票に印字する番号のもとになる、複製元の見積書の番号を引いてくる。
+   * 請求書・納品書は見積書の複製なので、複製した「時点」の受注番号しか持っていない。
+   * あとから見積書を受注に紐付けても複製側は空のままなので、ここで元をたどって補う。
+   */
+  private async _attachSourceNumbers<T extends Quote>(quotes: T[]): Promise<(T & SourceNumbers)[]> {
+    const sourceIds = Array.from(new Set(
+      quotes
+        .filter(q => q.document_kind !== 'quote' && q.source_quote_id)
+        .map(q => q.source_quote_id as number)
+    ));
+    const sourceMap = new Map<number, { quote_number: string; converted_order_id: string | null }>();
+    if (sourceIds.length > 0) {
+      const sources = await fetchAllByIds<{ id: number; quote_number: string; converted_order_id: string | null }>(
+        'quotes', 'id', sourceIds, '_attachSourceNumbers',
+        { select: 'id, quote_number, converted_order_id' }
+      );
+      sources.forEach(s => sourceMap.set(s.id, {
+        quote_number: s.quote_number,
+        converted_order_id: s.converted_order_id ?? null,
+      }));
+    }
+    return quotes.map(q => {
+      const source = q.source_quote_id ? sourceMap.get(q.source_quote_id) : undefined;
+      return {
+        ...q,
+        source_quote_number: source?.quote_number ?? null,
+        source_order_id: source?.converted_order_id ?? null,
+      };
+    });
+  }
+
+  async getQuotes(kind?: DocumentKind): Promise<(Quote & { total_amount: number } & SourceNumbers)[]> {
     const quotes = await fetchAllRows<Quote>(
       () => {
         const q = supabase.from('quotes').select('*');
@@ -2157,10 +2189,12 @@ export class ProductionDAO {
       const prev = totalMap.get(item.quote_id) || 0;
       totalMap.set(item.quote_id, prev + (item.quantity || 0) * (item.unit_price || 0));
     }
-    return (quotes as Quote[]).map(q => ({ ...q, total_amount: totalMap.get(q.id) || 0 }));
+    return this._attachSourceNumbers(
+      (quotes as Quote[]).map(q => ({ ...q, total_amount: totalMap.get(q.id) || 0 }))
+    );
   }
 
-  async getQuoteById(id: number): Promise<QuoteWithItems | null> {
+  async getQuoteById(id: number): Promise<(QuoteWithItems & SourceNumbers) | null> {
     const { data: quote, error } = await supabase
       .from('quotes')
       .select('*')
@@ -2174,7 +2208,8 @@ export class ProductionDAO {
       .eq('quote_id', id)
       .order('sort_order')
       .order('id');
-    return { ...(quote as Quote), items: (items || []) as QuoteItem[] };
+    const [withSource] = await this._attachSourceNumbers([quote as Quote]);
+    return { ...withSource, items: (items || []) as QuoteItem[] };
   }
 
   /**
@@ -2225,10 +2260,14 @@ export class ProductionDAO {
   }
 
   async getQuoteByOrderId(orderId: string): Promise<Quote | null> {
+    // 同じ受注番号は見積書・請求書・納品書が揃って持つ。ここで欲しいのは元の見積書だけ。
     const { data, error } = await supabase
       .from('quotes')
       .select('*')
       .eq('converted_order_id', orderId)
+      .eq('document_kind', 'quote')
+      .order('id', { ascending: true })
+      .limit(1)
       .maybeSingle();
     if (error) throw new Error(`[getQuoteByOrderId] ${error.message}`);
     return data as Quote | null;
