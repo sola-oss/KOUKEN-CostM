@@ -623,7 +623,7 @@ export const quotes = sqliteTable("quotes", {
   client_name: text("client_name").notNull(),           // 客先会社名
   contact_person: text("contact_person"),               // 担当者名
   client_request_no: text("client_request_no"),         // 貴見積依頼番号
-  status: text("status").notNull().default("draft"),    // draft/issued/accepted/converted
+  status: text("status").notNull().default("draft"),    // draft/issued/invoiced/converted
   converted_order_id: text("converted_order_id"),       // 変換済み受注番号
   // 帳票種別。見積書・請求書・納品書を同じテーブルの別レコードとして持つ。
   document_kind: text("document_kind", { enum: ['quote', 'invoice', 'delivery'] })
@@ -656,7 +656,7 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   client_name: z.string().min(1, "客先会社名は必須です"),
   contact_person: z.string().optional().nullable(),
   client_request_no: z.string().optional().nullable(),
-  status: z.enum(["draft", "issued", "accepted", "converted"]).default("draft"),
+  status: z.enum(["draft", "issued", "invoiced", "converted"]).default("draft"),
   converted_order_id: z.string().optional().nullable(),
   document_kind: z.enum(["quote", "invoice", "delivery"]).default("quote"),
   source_quote_id: z.coerce.number().int().positive().optional().nullable(),

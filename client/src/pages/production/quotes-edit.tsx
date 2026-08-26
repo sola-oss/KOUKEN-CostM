@@ -38,7 +38,10 @@ import {
 } from "@/components/ui/select";
 import { cn, errorMessage } from "@/lib/utils";
 import { TAX_RATE_LABEL, taxableAmount, taxAmount, totalWithTax } from "@/lib/tax";
-import { DOCUMENT_CONFIG, documentNumber, printPath, type DocumentKind } from "@/lib/documents";
+import {
+  DOCUMENT_CONFIG, documentNumber, printPath, statusConfig, SELECTABLE_STATUSES, STATUS_CONFIG,
+  type DocumentKind, type DocumentStatus,
+} from "@/lib/documents";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -89,7 +92,7 @@ interface Quote {
   client_name: string;
   contact_person: string | null;
   client_request_no: string | null;
-  status: "draft" | "issued" | "accepted" | "converted";
+  status: DocumentStatus;
   converted_order_id: string | null;
   source_quote_number: string | null;
   source_order_id: string | null;
@@ -98,18 +101,10 @@ interface Quote {
   items: QuoteItem[];
 }
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-  draft: { label: "下書き", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
-  issued: { label: "発行済", className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
-  accepted: { label: "承認済", className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
-  converted: { label: "受注済", className: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" },
-};
-
-const statusOptions = [
-  { value: "draft", label: "下書き" },
-  { value: "issued", label: "発行済" },
-  { value: "accepted", label: "承認済" },
-];
+const statusOptions = SELECTABLE_STATUSES.map((value) => ({
+  value,
+  label: STATUS_CONFIG[value].label,
+}));
 
 function newItem(sortOrder: number): QuoteItem {
   return {
@@ -176,7 +171,7 @@ export default function QuotesEdit() {
   const [clientName, setClientName] = useState("");
   const [contactPerson, setContactPerson] = useState("");
   const [clientRequestNo, setClientRequestNo] = useState("");
-  const [status, setStatus] = useState<"draft" | "issued" | "accepted" | "converted">("draft");
+  const [status, setStatus] = useState<DocumentStatus>("draft");
   const [items, setItems] = useState<QuoteItem[]>([newItem(0)]);
 
   // Combobox open states
@@ -413,7 +408,7 @@ export default function QuotesEdit() {
   }
 
   const currentStatus = isNew ? "draft" : (quote?.status || status);
-  const statusCfg = statusConfig[currentStatus] || statusConfig.draft;
+  const statusCfg = statusConfig(currentStatus);
 
   return (
     <div className="p-6 space-y-6">

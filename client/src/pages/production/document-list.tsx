@@ -24,7 +24,10 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { errorMessage } from "@/lib/utils";
 import { taxableAmount, totalWithTax } from "@/lib/tax";
-import { DOCUMENT_CONFIG, documentNumber, editPath, printPath, type DocumentKind } from "@/lib/documents";
+import {
+  DOCUMENT_CONFIG, documentNumber, editPath, printPath, statusConfig,
+  type DocumentKind, type DocumentStatus,
+} from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -35,7 +38,7 @@ interface Quote {
   client_name: string;
   contact_person: string | null;
   client_request_no: string | null;
-  status: "draft" | "issued" | "accepted" | "converted";
+  status: DocumentStatus;
   converted_order_id: string | null;
   source_quote_number: string | null;
   source_order_id: string | null;
@@ -43,13 +46,6 @@ interface Quote {
   created_at: string;
   updated_at: string;
 }
-
-const statusConfig: Record<string, { label: string; className: string }> = {
-  draft: { label: "下書き", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
-  issued: { label: "発行済", className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
-  accepted: { label: "承認済", className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
-  converted: { label: "受注済", className: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" },
-};
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return "—";
@@ -291,11 +287,11 @@ export default function DocumentList({ kind }: { kind: DocumentKind }) {
 
                         {isExpanded &&
                           group.docs.map((quote) => {
-                            const statusCfg = statusConfig[quote.status] ?? statusConfig.draft;
+                            const statusCfg = statusConfig(quote.status);
                             return (
                               <TableRow
                                 key={quote.id}
-                                className="bg-muted/40 cursor-pointer hover-elevate"
+                                className={`${statusCfg.rowClassName || "bg-muted/40"} cursor-pointer hover-elevate`}
                                 onClick={() => setLocation(editPath(quote.id))}
                                 data-testid={`row-quote-${quote.id}`}
                               >
@@ -340,11 +336,11 @@ export default function DocumentList({ kind }: { kind: DocumentKind }) {
               {!hasRows
                 ? emptyState(6)
                 : filteredQuotes.map((quote) => {
-                    const statusCfg = statusConfig[quote.status] ?? statusConfig.draft;
+                    const statusCfg = statusConfig(quote.status);
                     return (
                       <TableRow
                         key={quote.id}
-                        className="cursor-pointer hover-elevate"
+                        className={`${statusCfg.rowClassName} cursor-pointer hover-elevate`}
                         onClick={() => setLocation(editPath(quote.id))}
                         data-testid={`row-quote-${quote.id}`}
                       >

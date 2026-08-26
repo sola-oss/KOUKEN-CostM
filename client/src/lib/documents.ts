@@ -6,6 +6,51 @@
 
 export type DocumentKind = "quote" | "invoice" | "delivery";
 
+/**
+ * 帳票のステータス。
+ * 「承認済」は使われていなかったので廃止し、代わりに「請求済」を置いた。
+ * 「受注済」は見積書から受注を作ったときに自動で付く。
+ */
+export type DocumentStatus = "draft" | "issued" | "invoiced" | "converted";
+
+interface StatusConfig {
+  label: string;
+  /** バッジの色 */
+  className: string;
+  /** 一覧の行の色。下書きは色を付けない。 */
+  rowClassName: string;
+}
+
+export const STATUS_CONFIG: Record<DocumentStatus, StatusConfig> = {
+  draft: {
+    label: "下書き",
+    className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+    rowClassName: "",
+  },
+  issued: {
+    label: "発行済",
+    className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+    rowClassName: "bg-blue-50 dark:bg-blue-950/30",
+  },
+  invoiced: {
+    label: "請求済",
+    className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+    rowClassName: "bg-green-50 dark:bg-green-950/30",
+  },
+  converted: {
+    label: "受注済",
+    className: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
+    rowClassName: "bg-purple-50 dark:bg-purple-950/30",
+  },
+};
+
+/** 画面から手で選べるステータス。「受注済」は受注を作ったときに自動で付くので入れない。 */
+export const SELECTABLE_STATUSES: DocumentStatus[] = ["draft", "issued", "invoiced"];
+
+export function statusConfig(status: string): StatusConfig {
+  return STATUS_CONFIG[status as DocumentStatus] ?? STATUS_CONFIG.draft;
+}
+
 export const COMPANY_INFO = {
   registration_no: "T8250001014149",
   name: "株式会社巧健",
