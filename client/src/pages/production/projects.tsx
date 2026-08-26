@@ -63,45 +63,58 @@ type OrderFormValues = z.infer<typeof orderFormSchema>;
 
 // ========== HELPER COMPONENTS ==========
 
-/**
- * StatusIconCluster: Displays status flags as Japanese labeled badges
- * Only shows badges for true values, making it easy to see active statuses at a glance
- */
-interface StatusIconClusterProps {
-  is_delivered: boolean | null;
-  has_shipping_fee: boolean | null;
-  is_amount_confirmed: boolean | null;
-  is_invoiced: boolean | null;
+/** 請求月（YYYY-MM）を「8月分」の形にする。 */
+function formatInvoiceMonth(value: string | null | undefined) {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!m) return value;
+  return `${parseInt(m[2], 10)}月分`;
 }
 
-function StatusIconCluster({ is_delivered, has_shipping_fee, is_amount_confirmed, is_invoiced }: StatusIconClusterProps) {
-  const statuses = [
-    { value: is_delivered, label: "納品済み", testId: "badge-delivered" },
-    { value: has_shipping_fee, label: "送料あり", testId: "badge-shipping" },
-    { value: is_amount_confirmed, label: "金額確定", testId: "badge-amount-confirmed" },
-    { value: is_invoiced, label: "請求済み", testId: "badge-invoiced" },
-  ];
-
-  const activeStatuses = statuses.filter(status => status.value === true);
-
-  if (activeStatuses.length === 0) {
-    return <span className="text-muted-foreground text-sm">-</span>;
-  }
-
+/** 請求月のセル。年をまたぐので、月の下に年を小さく出す。 */
+function InvoiceMonthCell({ value }: { value: string | null | undefined }) {
+  const label = formatInvoiceMonth(value);
+  if (!label) return <span className="text-muted-foreground text-sm">-</span>;
   return (
-    <div className="flex flex-col items-start gap-0.5" data-testid="status-badge-cluster">
-      {activeStatuses.map((status) => (
-        <Badge 
-          key={status.label}
-          variant="default"
-          className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/40 text-xs"
-          data-testid={status.testId}
-        >
-          <Check className="h-3 w-3 mr-1" />
-          {status.label}
-        </Badge>
-      ))}
+    <div className="leading-tight" data-testid="cell-invoice-month-value">
+      <div className="text-sm">{label}</div>
+      <div className="text-xs text-muted-foreground">{value?.slice(0, 4)}年</div>
     </div>
+  );
+}
+
+/** 請求のステータス。請求済みかどうかがひと目で分かるようにする。 */
+function InvoiceStatusBadge({ value }: { value: boolean | null }) {
+  if (value === true) {
+    return (
+      <Badge
+        variant="default"
+        className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/40 text-xs"
+        data-testid="badge-invoiced"
+      >
+        <Check className="h-3 w-3 mr-1" />
+        請求済
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="secondary" className="text-xs text-muted-foreground" data-testid="badge-not-invoiced">
+      未請求
+    </Badge>
+  );
+}
+
+/** 送料あり。以前はステータスの塊に混ざっていたが、他は独立した列になったのでこれだけ残した。 */
+function ShippingFeeBadge({ value }: { value: boolean | null }) {
+  if (value !== true) return <span className="text-muted-foreground text-sm">-</span>;
+  return (
+    <Badge
+      variant="default"
+      className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 text-xs"
+      data-testid="badge-shipping"
+    >
+      あり
+    </Badge>
   );
 }
 
@@ -114,6 +127,8 @@ function YearMonthFolderView({
   onDelete,
   togglingDeliveredId,
   onToggleDelivered,
+  togglingAmountConfirmedId,
+  onToggleAmountConfirmed,
   newlyCreatedOrderId,
   formatCurrency,
 }: {
@@ -123,6 +138,8 @@ function YearMonthFolderView({
   onDelete: (id: string, e: React.MouseEvent) => void;
   togglingDeliveredId: string | null;
   onToggleDelivered: (id: string, value: boolean) => void;
+  togglingAmountConfirmedId: string | null;
+  onToggleAmountConfirmed: (id: string, value: boolean) => void;
   newlyCreatedOrderId: string | null;
   formatCurrency: (v: number | null) => string;
 }) {
@@ -216,8 +233,11 @@ function YearMonthFolderView({
                                 <TableHead>品名</TableHead>
                                 <TableHead>納期</TableHead>
                                 <TableHead className="text-right">受注金額</TableHead>
+                                <TableHead className="w-[86px] whitespace-nowrap">請求月分</TableHead>
+                                <TableHead className="w-[80px] whitespace-nowrap">請求</TableHead>
                                 <TableHead>工事</TableHead>
-                                <TableHead className="text-center w-[60px]">納品</TableHead>
+                                <TableHead className="text-center w-[64px] whitespace-nowrap">納品</TableHead>
+                                <TableHead className="text-center w-[88px] whitespace-nowrap">金額確定</TableHead>
                                 <TableHead className="text-right w-[80px]">操作</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -240,6 +260,8 @@ function YearMonthFolderView({
                                   <TableCell>{order.project_title || order.product_name || '-'}</TableCell>
                                   <TableCell>{formatDate(order.due_date)}</TableCell>
                                   <TableCell className="text-right">{formatCurrency(order.estimated_amount)}</TableCell>
+                                  <TableCell><InvoiceMonthCell value={order.invoice_month} /></TableCell>
+                                  <TableCell><InvoiceStatusBadge value={order.is_invoiced} /></TableCell>
                                   <TableCell>
                                     {order.factory ? (
                                       <Badge variant="secondary" className={
@@ -259,6 +281,15 @@ function YearMonthFolderView({
                                       disabled={togglingDeliveredId === order.order_id}
                                       onCheckedChange={(v) => onToggleDelivered(order.order_id, v === true)}
                                       onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Checkbox
+                                      checked={!!order.is_amount_confirmed}
+                                      disabled={togglingAmountConfirmedId === order.order_id}
+                                      onCheckedChange={(v) => onToggleAmountConfirmed(order.order_id, v === true)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      data-testid={`checkbox-amount-confirmed-${order.order_id}`}
                                     />
                                   </TableCell>
                                   <TableCell className="text-right">
@@ -291,7 +322,7 @@ function YearMonthFolderView({
 
 // ========== MAIN COMPONENT ==========
 
-type SortField = 'order_id' | 'due_date' | 'estimated_amount';
+type SortField = 'order_id' | 'due_date' | 'estimated_amount' | 'invoice_month';
 type SortOrder = 'asc' | 'desc';
 
 interface SortConfig {
@@ -311,6 +342,7 @@ export default function Projects() {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [togglingAmountConfirmedId, setTogglingAmountConfirmedId] = useState<string | null>(null);
   
   // Form Dialog state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -455,6 +487,16 @@ export default function Projects() {
         const aAmount = a.estimated_amount ?? nullSentinel;
         const bAmount = b.estimated_amount ?? nullSentinel;
         compareValue = aAmount - bAmount;
+      } else if (sortConfig.field === 'invoice_month') {
+        // 請求月はYYYY-MMの文字列なのでそのまま比較できる。
+        // 未入力は昇順・降順どちらでも最後に置く（納期の並べ替えと同じ考え方）。
+        const aMonth = a.invoice_month || '';
+        const bMonth = b.invoice_month || '';
+        const sinkLast = sortConfig.order === 'asc' ? 1 : -1;
+        if (!aMonth && !bMonth) compareValue = 0;
+        else if (!aMonth) compareValue = sinkLast;
+        else if (!bMonth) compareValue = -sinkLast;
+        else compareValue = aMonth.localeCompare(bMonth);
       }
 
       return sortConfig.order === 'asc' ? compareValue : -compareValue;
@@ -487,6 +529,27 @@ export default function Projects() {
         variant: "destructive",
         title: "エラー",
         description: error.message || "納品の更新に失敗しました",
+      });
+    }
+  });
+
+  // 金額確定を一覧から直接チェックできるようにする（納品と同じ作り）
+  const toggleAmountConfirmedMutation = useMutation({
+    mutationFn: async ({ orderId, is_amount_confirmed }: { orderId: string; is_amount_confirmed: boolean }) => {
+      setTogglingAmountConfirmedId(orderId);
+      const response = await apiRequest('PATCH', `/api/production/orders/${orderId}`, { is_amount_confirmed });
+      return await response.json() as Order;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setTogglingAmountConfirmedId(null);
+    },
+    onError: (error: any) => {
+      setTogglingAmountConfirmedId(null);
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error.message || "金額確定の更新に失敗しました",
       });
     }
   });
@@ -816,6 +879,8 @@ export default function Projects() {
               onDelete={handleDelete}
               togglingDeliveredId={togglingDeliveredId}
               onToggleDelivered={(id, v) => toggleDeliveredMutation.mutate({ orderId: id, is_delivered: v })}
+              togglingAmountConfirmedId={togglingAmountConfirmedId}
+              onToggleAmountConfirmed={(id, v) => toggleAmountConfirmedMutation.mutate({ orderId: id, is_amount_confirmed: v })}
               newlyCreatedOrderId={newlyCreatedOrderId}
               formatCurrency={formatCurrency}
             />
@@ -864,16 +929,30 @@ export default function Projects() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
+              <TableHead className="w-[112px] whitespace-nowrap">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSort('invoice_month')}
+                  className="hover-elevate -ml-3 h-8"
+                  data-testid="button-sort-invoice-month"
+                >
+                  請求月分
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead className="w-[80px] whitespace-nowrap">請求</TableHead>
               <TableHead>工事</TableHead>
-              <TableHead className="text-center w-[80px]">納品</TableHead>
-              <TableHead className="text-center">ステータス</TableHead>
+              <TableHead className="text-center w-[64px] whitespace-nowrap">納品</TableHead>
+              <TableHead className="text-center w-[88px] whitespace-nowrap">金額確定</TableHead>
+              <TableHead className="text-center w-[70px] whitespace-nowrap">送料</TableHead>
               <TableHead className="text-right w-[100px]">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredAndSortedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-32 text-center">
+                <TableCell colSpan={14} className="h-32 text-center">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <Package className="h-8 w-8 mb-2" />
                     <p>該当する受注がありません</p>
@@ -929,6 +1008,16 @@ export default function Projects() {
                     {formatCurrency(order.estimated_amount)}
                   </TableCell>
 
+                  {/* Invoice Month */}
+                  <TableCell data-testid={`cell-invoice-month-${order.order_id}`}>
+                    <InvoiceMonthCell value={order.invoice_month} />
+                  </TableCell>
+
+                  {/* Invoice Status */}
+                  <TableCell data-testid={`cell-invoice-status-${order.order_id}`}>
+                    <InvoiceStatusBadge value={order.is_invoiced} />
+                  </TableCell>
+
                   {/* Factory */}
                   <TableCell data-testid={`cell-factory-${order.order_id}`}>
                     {order.factory ? (
@@ -965,14 +1054,25 @@ export default function Projects() {
                     />
                   </TableCell>
 
-                  {/* Status Icon Cluster */}
-                  <TableCell data-testid={`cell-status-${order.order_id}`}>
-                    <StatusIconCluster
-                      is_delivered={order.is_delivered}
-                      has_shipping_fee={order.has_shipping_fee}
-                      is_amount_confirmed={order.is_amount_confirmed}
-                      is_invoiced={order.is_invoiced}
+                  {/* Amount Confirmed Checkbox */}
+                  <TableCell className="text-center" data-testid={`cell-amount-confirmed-${order.order_id}`}>
+                    <Checkbox
+                      checked={!!order.is_amount_confirmed}
+                      disabled={togglingAmountConfirmedId === order.order_id}
+                      onCheckedChange={(checked) => {
+                        toggleAmountConfirmedMutation.mutate({
+                          orderId: order.order_id,
+                          is_amount_confirmed: checked === true,
+                        });
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid={`checkbox-amount-confirmed-${order.order_id}`}
                     />
+                  </TableCell>
+
+                  {/* Shipping Fee（納品・金額確定・請求が独立した列になったので、残ったのはこれだけ） */}
+                  <TableCell className="text-center" data-testid={`cell-shipping-${order.order_id}`}>
+                    <ShippingFeeBadge value={order.has_shipping_fee} />
                   </TableCell>
 
                   {/* Actions */}
