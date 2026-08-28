@@ -381,6 +381,9 @@ function YearMonthFolderView({
 
 // ========== MAIN COMPONENT ==========
 
+/** 受注一覧のクエリが持っている形。チェックの即時反映でこの中身を直接書き換える。 */
+type OrdersResponse = { data: Order[]; meta: any };
+
 type SortField = 'order_id' | 'due_date' | 'estimated_amount' | 'invoice_month';
 type SortOrder = 'asc' | 'desc';
 
@@ -573,67 +576,53 @@ export default function Projects() {
   }, [searchQuery]);
 
   // Toggle is_delivered mutation (inline checkbox in list)
-  const toggleDeliveredMutation = useMutation({
-    mutationFn: async ({ orderId, is_delivered }: { orderId: string; is_delivered: boolean }) => {
-      setTogglingDeliveredId(orderId);
-      const response = await apiRequest('PATCH', `/api/production/orders/${orderId}`, { is_delivered });
+  // 一覧のチェックと請求バッジは、押した瞬間に表示を変えて裏で保存する。
+  // 以前は保存のあとに受注を全件取り直していたので、1000件を超えた今は
+  // 押してから5秒ほど待たされていた。失敗したときだけ元の表示に戻す。
+  const buildToggleOptions = (
+    field: 'is_delivered' | 'is_amount_confirmed' | 'is_invoiced',
+    label: string,
+    setPendingId: (id: string | null) => void,
+  ) => ({
+    mutationFn: async ({ orderId, value }: { orderId: string; value: boolean }) => {
+      const response = await apiRequest('PATCH', `/api/production/orders/${orderId}`, { [field]: value });
       return await response.json() as Order;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      setTogglingDeliveredId(null);
+    onMutate: async ({ orderId, value }: { orderId: string; value: boolean }) => {
+      setPendingId(orderId);
+      // 取得中のものがあると、あとから古い内容で上書きされてしまう
+      await queryClient.cancelQueries({ queryKey: ['orders'] });
+      const snapshot = queryClient.getQueriesData<OrdersResponse>({ queryKey: ['orders'] });
+      queryClient.setQueriesData<OrdersResponse>({ queryKey: ['orders'] }, (old) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: old.data.map((o) => (o.order_id === orderId ? { ...o, [field]: value } : o)),
+        };
+      });
+      return { snapshot };
     },
-    onError: (error: any) => {
-      setTogglingDeliveredId(null);
+    onError: (error: any, _vars: { orderId: string; value: boolean }, context?: { snapshot: [readonly unknown[], OrdersResponse | undefined][] }) => {
+      // key は QueryKey なので、そのままだと setQueryData が型を決められない
+      context?.snapshot.forEach(([key, data]) => (queryClient.setQueryData as any)(key, data));
       toast({
         variant: "destructive",
         title: "エラー",
-        description: error.message || "納品の更新に失敗しました",
+        description: error.message || `${label}の更新に失敗しました`,
       });
-    }
+    },
+    onSettled: () => setPendingId(null),
   });
 
-  // 金額確定を一覧から直接チェックできるようにする（納品と同じ作り）
-  const toggleAmountConfirmedMutation = useMutation({
-    mutationFn: async ({ orderId, is_amount_confirmed }: { orderId: string; is_amount_confirmed: boolean }) => {
-      setTogglingAmountConfirmedId(orderId);
-      const response = await apiRequest('PATCH', `/api/production/orders/${orderId}`, { is_amount_confirmed });
-      return await response.json() as Order;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      setTogglingAmountConfirmedId(null);
-    },
-    onError: (error: any) => {
-      setTogglingAmountConfirmedId(null);
-      toast({
-        variant: "destructive",
-        title: "エラー",
-        description: error.message || "金額確定の更新に失敗しました",
-      });
-    }
-  });
-
-  // 請求のステータスを一覧のバッジから直接切り替えられるようにする
-  const toggleInvoicedMutation = useMutation({
-    mutationFn: async ({ orderId, is_invoiced }: { orderId: string; is_invoiced: boolean }) => {
-      setTogglingInvoicedId(orderId);
-      const response = await apiRequest('PATCH', `/api/production/orders/${orderId}`, { is_invoiced });
-      return await response.json() as Order;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      setTogglingInvoicedId(null);
-    },
-    onError: (error: any) => {
-      setTogglingInvoicedId(null);
-      toast({
-        variant: "destructive",
-        title: "エラー",
-        description: error.message || "請求ステータスの更新に失敗しました",
-      });
-    }
-  });
+  const toggleDeliveredMutation = useMutation(
+    buildToggleOptions('is_delivered', '納品', setTogglingDeliveredId)
+  );
+  const toggleAmountConfirmedMutation = useMutation(
+    buildToggleOptions('is_amount_confirmed', '金額確定', setTogglingAmountConfirmedId)
+  );
+  const toggleInvoicedMutation = useMutation(
+    buildToggleOptions('is_invoiced', '請求ステータス', setTogglingInvoicedId)
+  );
 
   // Delete order mutation
   const deleteOrderMutation = useMutation({
@@ -959,11 +948,11 @@ export default function Projects() {
               onEdit={handleEditOrder}
               onDelete={handleDelete}
               togglingDeliveredId={togglingDeliveredId}
-              onToggleDelivered={(id, v) => toggleDeliveredMutation.mutate({ orderId: id, is_delivered: v })}
+              onToggleDelivered={(id, v) => toggleDeliveredMutation.mutate({ orderId: id, value: v })}
               togglingAmountConfirmedId={togglingAmountConfirmedId}
-              onToggleAmountConfirmed={(id, v) => toggleAmountConfirmedMutation.mutate({ orderId: id, is_amount_confirmed: v })}
+              onToggleAmountConfirmed={(id, v) => toggleAmountConfirmedMutation.mutate({ orderId: id, value: v })}
               togglingInvoicedId={togglingInvoicedId}
-              onToggleInvoiced={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, is_invoiced: v })}
+              onToggleInvoiced={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, value: v })}
               newlyCreatedOrderId={newlyCreatedOrderId}
               sortConfig={sortConfig}
               onSort={handleSort}
@@ -1067,7 +1056,7 @@ export default function Projects() {
                       orderId={order.order_id}
                       value={order.is_invoiced}
                       disabled={togglingInvoicedId === order.order_id}
-                      onToggle={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, is_invoiced: v })}
+                      onToggle={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, value: v })}
                     />
                   </TableCell>
 
@@ -1099,7 +1088,7 @@ export default function Projects() {
                       onCheckedChange={(checked) => {
                         toggleDeliveredMutation.mutate({
                           orderId: order.order_id,
-                          is_delivered: checked === true,
+                          value: checked === true,
                         });
                       }}
                       onClick={(e) => e.stopPropagation()}
@@ -1115,7 +1104,7 @@ export default function Projects() {
                       onCheckedChange={(checked) => {
                         toggleAmountConfirmedMutation.mutate({
                           orderId: order.order_id,
-                          is_amount_confirmed: checked === true,
+                          value: checked === true,
                         });
                       }}
                       onClick={(e) => e.stopPropagation()}
