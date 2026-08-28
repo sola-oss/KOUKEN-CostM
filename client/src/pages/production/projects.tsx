@@ -90,25 +90,21 @@ function InvoiceMonthCell({ value }: { value: string | null | undefined }) {
 function InvoiceStatusBadge({
   orderId,
   value,
-  disabled,
   onToggle,
 }: {
   orderId: string;
   value: boolean | null;
-  disabled: boolean;
   onToggle: (id: string, value: boolean) => void;
 }) {
   const invoiced = value === true;
   return (
     <button
       type="button"
-      disabled={disabled}
       title={invoiced ? "押すと未請求に戻します" : "押すと請求済にします"}
       onClick={(e) => {
         e.stopPropagation();
         onToggle(orderId, !invoiced);
       }}
-      className="disabled:opacity-50"
       data-testid={`button-toggle-invoiced-${orderId}`}
     >
       <Badge
@@ -161,11 +157,8 @@ function YearMonthFolderView({
   onRowClick,
   onEdit,
   onDelete,
-  togglingDeliveredId,
   onToggleDelivered,
-  togglingAmountConfirmedId,
   onToggleAmountConfirmed,
-  togglingInvoicedId,
   onToggleInvoiced,
   newlyCreatedOrderId,
   formatCurrency,
@@ -176,11 +169,8 @@ function YearMonthFolderView({
   onRowClick: (id: string) => void;
   onEdit: (order: Order, e: React.MouseEvent) => void;
   onDelete: (id: string, e: React.MouseEvent) => void;
-  togglingDeliveredId: string | null;
   onToggleDelivered: (id: string, value: boolean) => void;
-  togglingAmountConfirmedId: string | null;
   onToggleAmountConfirmed: (id: string, value: boolean) => void;
-  togglingInvoicedId: string | null;
   onToggleInvoiced: (id: string, value: boolean) => void;
   newlyCreatedOrderId: string | null;
   formatCurrency: (v: number | null) => string;
@@ -317,7 +307,6 @@ function YearMonthFolderView({
                                     <InvoiceStatusBadge
                                       orderId={order.order_id}
                                       value={order.is_invoiced}
-                                      disabled={togglingInvoicedId === order.order_id}
                                       onToggle={onToggleInvoiced}
                                     />
                                   </TableCell>
@@ -337,7 +326,6 @@ function YearMonthFolderView({
                                   <TableCell className="text-center">
                                     <Checkbox
                                       checked={!!order.is_delivered}
-                                      disabled={togglingDeliveredId === order.order_id}
                                       onCheckedChange={(v) => onToggleDelivered(order.order_id, v === true)}
                                       onClick={(e) => e.stopPropagation()}
                                     />
@@ -345,7 +333,6 @@ function YearMonthFolderView({
                                   <TableCell className="text-center">
                                     <Checkbox
                                       checked={!!order.is_amount_confirmed}
-                                      disabled={togglingAmountConfirmedId === order.order_id}
                                       onCheckedChange={(v) => onToggleAmountConfirmed(order.order_id, v === true)}
                                       onClick={(e) => e.stopPropagation()}
                                       data-testid={`checkbox-amount-confirmed-${order.order_id}`}
@@ -404,8 +391,6 @@ export default function Projects() {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
-  const [togglingAmountConfirmedId, setTogglingAmountConfirmedId] = useState<string | null>(null);
-  const [togglingInvoicedId, setTogglingInvoicedId] = useState<string | null>(null);
   
   // Form Dialog state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -413,7 +398,6 @@ export default function Projects() {
   
   const [customerComboOpen, setCustomerComboOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
-  const [togglingDeliveredId, setTogglingDeliveredId] = useState<string | null>(null);
 
   // Fetch customers master for combobox
   const { data: customers = [] } = useQuery<CustomerMaster[]>({
@@ -579,17 +563,17 @@ export default function Projects() {
   // 一覧のチェックと請求バッジは、押した瞬間に表示を変えて裏で保存する。
   // 以前は保存のあとに受注を全件取り直していたので、1000件を超えた今は
   // 押してから5秒ほど待たされていた。失敗したときだけ元の表示に戻す。
+  // 保存の間も押せるままにしてある。表示はもう変わっているので止める理由がなく、
+  // 本番の保存は1秒前後かかるため、その間押せないと反応が鈍く見える。
   const buildToggleOptions = (
     field: 'is_delivered' | 'is_amount_confirmed' | 'is_invoiced',
     label: string,
-    setPendingId: (id: string | null) => void,
   ) => ({
     mutationFn: async ({ orderId, value }: { orderId: string; value: boolean }) => {
       const response = await apiRequest('PATCH', `/api/production/orders/${orderId}`, { [field]: value });
       return await response.json() as Order;
     },
     onMutate: async ({ orderId, value }: { orderId: string; value: boolean }) => {
-      setPendingId(orderId);
       // 取得中のものがあると、あとから古い内容で上書きされてしまう
       await queryClient.cancelQueries({ queryKey: ['orders'] });
       const snapshot = queryClient.getQueriesData<OrdersResponse>({ queryKey: ['orders'] });
@@ -611,17 +595,16 @@ export default function Projects() {
         description: error.message || `${label}の更新に失敗しました`,
       });
     },
-    onSettled: () => setPendingId(null),
   });
 
   const toggleDeliveredMutation = useMutation(
-    buildToggleOptions('is_delivered', '納品', setTogglingDeliveredId)
+    buildToggleOptions('is_delivered', '納品')
   );
   const toggleAmountConfirmedMutation = useMutation(
-    buildToggleOptions('is_amount_confirmed', '金額確定', setTogglingAmountConfirmedId)
+    buildToggleOptions('is_amount_confirmed', '金額確定')
   );
   const toggleInvoicedMutation = useMutation(
-    buildToggleOptions('is_invoiced', '請求ステータス', setTogglingInvoicedId)
+    buildToggleOptions('is_invoiced', '請求ステータス')
   );
 
   // Delete order mutation
@@ -947,11 +930,8 @@ export default function Projects() {
               onRowClick={handleRowClick}
               onEdit={handleEditOrder}
               onDelete={handleDelete}
-              togglingDeliveredId={togglingDeliveredId}
               onToggleDelivered={(id, v) => toggleDeliveredMutation.mutate({ orderId: id, value: v })}
-              togglingAmountConfirmedId={togglingAmountConfirmedId}
               onToggleAmountConfirmed={(id, v) => toggleAmountConfirmedMutation.mutate({ orderId: id, value: v })}
-              togglingInvoicedId={togglingInvoicedId}
               onToggleInvoiced={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, value: v })}
               newlyCreatedOrderId={newlyCreatedOrderId}
               sortConfig={sortConfig}
@@ -1055,7 +1035,6 @@ export default function Projects() {
                     <InvoiceStatusBadge
                       orderId={order.order_id}
                       value={order.is_invoiced}
-                      disabled={togglingInvoicedId === order.order_id}
                       onToggle={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, value: v })}
                     />
                   </TableCell>
@@ -1084,7 +1063,6 @@ export default function Projects() {
                   <TableCell className="text-center" data-testid={`cell-delivered-${order.order_id}`}>
                     <Checkbox
                       checked={!!order.is_delivered}
-                      disabled={togglingDeliveredId === order.order_id}
                       onCheckedChange={(checked) => {
                         toggleDeliveredMutation.mutate({
                           orderId: order.order_id,
@@ -1100,7 +1078,6 @@ export default function Projects() {
                   <TableCell className="text-center" data-testid={`cell-amount-confirmed-${order.order_id}`}>
                     <Checkbox
                       checked={!!order.is_amount_confirmed}
-                      disabled={togglingAmountConfirmedId === order.order_id}
                       onCheckedChange={(checked) => {
                         toggleAmountConfirmedMutation.mutate({
                           orderId: order.order_id,
