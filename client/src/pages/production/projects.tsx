@@ -516,13 +516,16 @@ export default function Projects() {
     if (dueTo) {
       filtered = filtered.filter(o => o.due_date && o.due_date.slice(0, 10) <= dueTo);
     }
-    // 請求月は YYYY-MM の文字列なので、そのまま大小を比べられる。
+    // 入力欄は納期と同じ日付だが、請求月は YYYY-MM なので月どうしで比べる。
+    // 日は見ないので、7/1でも7/31でも「7月から」と同じ結果になる。
     // 請求月が未入力の受注は、期間を指定したら対象から外す。
     if (invoiceMonthFrom) {
-      filtered = filtered.filter(o => o.invoice_month && o.invoice_month >= invoiceMonthFrom);
+      const from = invoiceMonthFrom.slice(0, 7);
+      filtered = filtered.filter(o => o.invoice_month && o.invoice_month >= from);
     }
     if (invoiceMonthTo) {
-      filtered = filtered.filter(o => o.invoice_month && o.invoice_month <= invoiceMonthTo);
+      const to = invoiceMonthTo.slice(0, 7);
+      filtered = filtered.filter(o => o.invoice_month && o.invoice_month <= to);
     }
 
     // Apply sorting with null-safe comparators (nulls always sort to bottom)
@@ -926,12 +929,13 @@ export default function Projects() {
           </div>
         </div>
 
-        {/* 請求月の期間で絞り込む。納期と同じ形だが、横に並べると画面が狭いとき
-            はみ出すので独立した行にしている。 */}
+        {/* 請求月の期間で絞り込む。見た目をそろえるため入力は納期と同じ日付欄にし、
+            中では月どうしで比べている。横に並べると画面が狭いときはみ出すので
+            独立した行にしている。 */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-muted-foreground whitespace-nowrap">請求月：</span>
           <Input
-            type="month"
+            type="date"
             value={invoiceMonthFrom}
             onChange={(e) => setInvoiceMonthFrom(e.target.value)}
             className="w-[150px]"
@@ -939,7 +943,7 @@ export default function Projects() {
           />
           <span className="text-sm text-muted-foreground">〜</span>
           <Input
-            type="month"
+            type="date"
             value={invoiceMonthTo}
             onChange={(e) => setInvoiceMonthTo(e.target.value)}
             className="w-[150px]"
