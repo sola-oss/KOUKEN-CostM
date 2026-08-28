@@ -564,7 +564,13 @@ export default function QuotesEdit() {
                         <CommandItem
                           key={o.order_id}
                           value={`${o.order_id} ${o.client_name || ""} ${o.project_title || o.product_name || ""}`}
-                          onSelect={() => { setConvertedOrderId(o.order_id); setOrderComboOpen(false); }}
+                          onSelect={() => {
+                            setConvertedOrderId(o.order_id);
+                            // 受注を選んだら客先会社名も一緒に入れる。
+                            // 受注側に客先名が無いときは、いま入っているものを消さない。
+                            if (o.client_name) setClientName(o.client_name);
+                            setOrderComboOpen(false);
+                          }}
                         >
                           <Check className={cn("mr-2 h-4 w-4", convertedOrderId === o.order_id ? "opacity-100" : "opacity-0")} />
                           <span className="font-medium">{o.order_id}</span>
@@ -581,7 +587,7 @@ export default function QuotesEdit() {
             </Popover>
             <p className="text-xs text-muted-foreground">
               見積書・納品書・請求書に印字する番号です。合計請求書の受注番号にもなります。
-              空のままだと自動採番した見積番号が出ます。
+              空のままだと自動採番した見積番号が出ます。受注を選ぶと客先会社名も自動で入ります。
             </p>
             {!isNew && quote && (
               <p className="text-xs">

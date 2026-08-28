@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Printer, Trash2, Plus, Loader2 } from "lucide-react";
+import { ArrowLeft, Printer, Trash2, Plus, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,15 +19,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command";
 import { apiRequest } from "@/lib/queryClient";
-import { errorMessage } from "@/lib/utils";
+import { cn, errorMessage } from "@/lib/utils";
 import { TAX_RATE_LABEL, taxableAmount, taxAmount, totalWithTax } from "@/lib/tax";
 import { useToast } from "@/hooks/use-toast";
 
@@ -90,6 +87,9 @@ export default function SummaryInvoiceEdit() {
   const [issueDate, setIssueDate] = useState(todayJst());
   const [items, setItems] = useState<SummaryItem[]>([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<number>>(new Set());
+  const [clientComboOpen, setClientComboOpen] = useState(false);
+  // 請求月を手で直したかどうか。直したあとは自動で上書きしない。
+  const [billingMonthTouched, setBillingMonthTouched] = useState(false);
 
   const { data: customersData } = useQuery<CustomerMaster[]>({
     queryKey: ["/api/customers-master"],
@@ -129,6 +129,25 @@ export default function SummaryInvoiceEdit() {
     enabled: isNew && !!clientName,
   });
   const candidates = candidatesData?.data || [];
+
+  // 請求月は、選んだ請求書の発行月に合わせる。
+  // 以前は作成した日の月が初期値だったので、月をまたいで作業すると実態とずれていた。
+  // 手で直したあとは触らない。
+  useEffect(() => {
+    if (!isNew || billingMonthTouched) return;
+    const months = candidates
+      .filter((c) => selectedInvoiceIds.has(c.invoice_id))
+      .map((c) => c.issue_date?.slice(0, 7))
+      .filter((m): m is string => !!m);
+    if (months.length === 0) return;
+    // 一番多い発行月にする。同数なら新しいほう。
+    const tally: Record<string, number> = {};
+    months.forEach((m) => { tally[m] = (tally[m] ?? 0) + 1; });
+    const best = Object.entries(tally).sort(
+      (a, b) => b[1] - a[1] || b[0].localeCompare(a[0])
+    )[0][0];
+    setBillingMonth(best);
+  }, [candidates, selectedInvoiceIds, isNew, billingMonthTouched]);
 
   const toggleCandidate = (invoiceId: number) => {
     setSelectedInvoiceIds((prev) => {
@@ -285,23 +304,55 @@ export default function SummaryInvoiceEdit() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>得意先 *</Label>
-              <Select value={clientName} onValueChange={(v) => { setClientName(v); setSelectedInvoiceIds(new Set()); }}>
-                <SelectTrigger data-testid="select-client">
-                  <SelectValue placeholder="得意先を選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={clientComboOpen} onOpenChange={setClientComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full justify-between font-normal overflow-hidden",
+                      !clientName && "text-muted-foreground"
+                    )}
+                    data-testid="select-client"
+                  >
+                    <span className="min-w-0 truncate text-left">
+                      {clientName || "得意先を選択"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="得意先名で検索..." />
+                    <CommandList>
+                      <CommandEmpty>該当する得意先がありません</CommandEmpty>
+                      <CommandGroup>
+                        {customers.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => {
+                              setClientName(c.name);
+                              setSelectedInvoiceIds(new Set());
+                              setClientComboOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", clientName === c.name ? "opacity-100" : "opacity-0")} />
+                            <span className="truncate">{c.name}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label>請求月</Label>
               <Input
                 type="month"
                 value={billingMonth}
-                onChange={(e) => setBillingMonth(e.target.value)}
+                onChange={(e) => { setBillingMonth(e.target.value); setBillingMonthTouched(true); }}
                 data-testid="input-billing-month"
               />
             </div>

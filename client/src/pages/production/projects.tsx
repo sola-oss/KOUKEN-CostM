@@ -127,6 +127,33 @@ function InvoiceStatusBadge({
   );
 }
 
+/** 見出しの並べ替えボタン。フォルダ表示とリスト表示で同じものを使う。 */
+function SortHeaderButton({
+  field,
+  label,
+  sortConfig,
+  onSort,
+}: {
+  field: SortField;
+  label: string;
+  sortConfig: SortConfig;
+  onSort: (field: SortField) => void;
+}) {
+  const active = sortConfig.field === field;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={(e) => { e.stopPropagation(); onSort(field); }}
+      className="hover-elevate -ml-3 h-8"
+      data-testid={`button-sort-${field.replace(/_/g, '-')}`}
+    >
+      {label}
+      <ArrowUpDown className={`ml-2 h-4 w-4 ${active ? 'opacity-100' : 'opacity-40'}`} />
+    </Button>
+  );
+}
+
 // ========== YEAR/MONTH FOLDER VIEW ==========
 
 function YearMonthFolderView({
@@ -142,6 +169,8 @@ function YearMonthFolderView({
   onToggleInvoiced,
   newlyCreatedOrderId,
   formatCurrency,
+  sortConfig,
+  onSort,
 }: {
   orders: Order[];
   onRowClick: (id: string) => void;
@@ -155,6 +184,8 @@ function YearMonthFolderView({
   onToggleInvoiced: (id: string, value: boolean) => void;
   newlyCreatedOrderId: string | null;
   formatCurrency: (v: number | null) => string;
+  sortConfig: SortConfig;
+  onSort: (field: SortField) => void;
 }) {
   const grouped = useMemo(() => {
     const map: Record<string, Record<string, Order[]>> = {};
@@ -240,13 +271,21 @@ function YearMonthFolderView({
                           <Table>
                             <TableHeader className="bg-muted/50">
                               <TableRow>
-                                <TableHead className="w-[110px]">受注番号</TableHead>
+                                <TableHead className="w-[110px]">
+                                  <SortHeaderButton field="order_id" label="受注番号" sortConfig={sortConfig} onSort={onSort} />
+                                </TableHead>
                                 <TableHead>受注日</TableHead>
                                 <TableHead>得意先</TableHead>
                                 <TableHead>品名</TableHead>
-                                <TableHead>納期</TableHead>
-                                <TableHead className="text-right">受注金額</TableHead>
-                                <TableHead className="w-[86px] whitespace-nowrap">請求月分</TableHead>
+                                <TableHead className="whitespace-nowrap">
+                                  <SortHeaderButton field="due_date" label="納期" sortConfig={sortConfig} onSort={onSort} />
+                                </TableHead>
+                                <TableHead className="text-right whitespace-nowrap">
+                                  <SortHeaderButton field="estimated_amount" label="受注金額" sortConfig={sortConfig} onSort={onSort} />
+                                </TableHead>
+                                <TableHead className="w-[112px] whitespace-nowrap">
+                                  <SortHeaderButton field="invoice_month" label="請求月分" sortConfig={sortConfig} onSort={onSort} />
+                                </TableHead>
                                 <TableHead className="w-[80px] whitespace-nowrap">請求</TableHead>
                                 <TableHead>工事</TableHead>
                                 <TableHead className="text-center w-[64px] whitespace-nowrap">納品</TableHead>
@@ -255,7 +294,7 @@ function YearMonthFolderView({
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {[...monthOrders].sort((a, b) => b.order_id.localeCompare(a.order_id, 'ja')).map((order) => (
+                              {monthOrders.map((order) => (
                                 <TableRow
                                   key={order.order_id}
                                   className={[
@@ -926,6 +965,8 @@ export default function Projects() {
               togglingInvoicedId={togglingInvoicedId}
               onToggleInvoiced={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, is_invoiced: v })}
               newlyCreatedOrderId={newlyCreatedOrderId}
+              sortConfig={sortConfig}
+              onSort={handleSort}
               formatCurrency={formatCurrency}
             />
           </div>
@@ -934,56 +975,20 @@ export default function Projects() {
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-[120px]">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleSort('order_id')}
-                  className="hover-elevate -ml-3 h-8"
-                  data-testid="button-sort-order-id"
-                >
-                  受注番号
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
+                <SortHeaderButton field="order_id" label="受注番号" sortConfig={sortConfig} onSort={handleSort} />
               </TableHead>
               <TableHead>受注日</TableHead>
               <TableHead>得意先</TableHead>
               <TableHead>担当者</TableHead>
               <TableHead>品名</TableHead>
-              <TableHead>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleSort('due_date')}
-                  className="hover-elevate -ml-3 h-8"
-                  data-testid="button-sort-due-date"
-                >
-                  納期
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
+              <TableHead className="whitespace-nowrap">
+                <SortHeaderButton field="due_date" label="納期" sortConfig={sortConfig} onSort={handleSort} />
               </TableHead>
-              <TableHead className="text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleSort('estimated_amount')}
-                  className="hover-elevate -ml-3 h-8"
-                  data-testid="button-sort-estimated-amount"
-                >
-                  受注金額
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
+              <TableHead className="text-right whitespace-nowrap">
+                <SortHeaderButton field="estimated_amount" label="受注金額" sortConfig={sortConfig} onSort={handleSort} />
               </TableHead>
               <TableHead className="w-[112px] whitespace-nowrap">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleSort('invoice_month')}
-                  className="hover-elevate -ml-3 h-8"
-                  data-testid="button-sort-invoice-month"
-                >
-                  請求月分
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
+                <SortHeaderButton field="invoice_month" label="請求月分" sortConfig={sortConfig} onSort={handleSort} />
               </TableHead>
               <TableHead className="w-[80px] whitespace-nowrap">請求</TableHead>
               <TableHead>工事</TableHead>
