@@ -387,6 +387,9 @@ export default function Projects() {
   const [factoryFilter, setFactoryFilter] = useState<string>("all");
   const [dueFrom, setDueFrom] = useState("");
   const [dueTo, setDueTo] = useState("");
+  // 請求月の期間。納期と同じく「〜から〜まで」で絞り込む。YYYY-MM で比べる。
+  const [invoiceMonthFrom, setInvoiceMonthFrom] = useState("");
+  const [invoiceMonthTo, setInvoiceMonthTo] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "folder">("folder");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
@@ -513,6 +516,14 @@ export default function Projects() {
     if (dueTo) {
       filtered = filtered.filter(o => o.due_date && o.due_date.slice(0, 10) <= dueTo);
     }
+    // 請求月は YYYY-MM の文字列なので、そのまま大小を比べられる。
+    // 請求月が未入力の受注は、期間を指定したら対象から外す。
+    if (invoiceMonthFrom) {
+      filtered = filtered.filter(o => o.invoice_month && o.invoice_month >= invoiceMonthFrom);
+    }
+    if (invoiceMonthTo) {
+      filtered = filtered.filter(o => o.invoice_month && o.invoice_month <= invoiceMonthTo);
+    }
 
     // Apply sorting with null-safe comparators (nulls always sort to bottom)
     const sorted = [...filtered].sort((a, b) => {
@@ -550,7 +561,7 @@ export default function Projects() {
     });
 
     return sorted;
-  }, [orders, sortConfig, factoryFilter, dueFrom, dueTo]);
+  }, [orders, sortConfig, factoryFilter, dueFrom, dueTo, invoiceMonthFrom, invoiceMonthTo]);
 
   // Clear highlight when search query changes
   useEffect(() => {
@@ -887,6 +898,34 @@ export default function Projects() {
               size="sm"
               onClick={() => { setDueFrom(""); setDueTo(""); }}
               data-testid="button-clear-due-filter"
+            >
+              <Filter className="h-3 w-3 mr-1" />
+              クリア
+            </Button>
+          )}
+
+          <span className="text-sm text-muted-foreground whitespace-nowrap ml-2">請求月：</span>
+          <Input
+            type="month"
+            value={invoiceMonthFrom}
+            onChange={(e) => setInvoiceMonthFrom(e.target.value)}
+            className="w-[150px]"
+            data-testid="input-invoice-month-from"
+          />
+          <span className="text-sm text-muted-foreground">〜</span>
+          <Input
+            type="month"
+            value={invoiceMonthTo}
+            onChange={(e) => setInvoiceMonthTo(e.target.value)}
+            className="w-[150px]"
+            data-testid="input-invoice-month-to"
+          />
+          {(invoiceMonthFrom || invoiceMonthTo) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setInvoiceMonthFrom(""); setInvoiceMonthTo(""); }}
+              data-testid="button-clear-invoice-month-filter"
             >
               <Filter className="h-3 w-3 mr-1" />
               クリア
