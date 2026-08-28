@@ -40,6 +40,7 @@ const documentItems = [
   { title: "請求書", url: "/invoices", icon: ReceiptText },
   { title: "納品書", url: "/delivery-notes", icon: PackageCheck },
   { title: "合計請求書", url: "/summary-invoices", icon: FileStack },
+  { title: "請求集計", url: "/invoice-summary", icon: BarChart3 },
 ];
 
 const planningItems = [

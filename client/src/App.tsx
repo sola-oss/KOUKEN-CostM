@@ -33,6 +33,7 @@ const UserManagement = lazy(() => import("@/pages/user-management"));
 const DocumentList = lazy(() => import("@/pages/production/document-list"));
 const DocumentPrint = lazy(() => import("@/pages/production/document-print"));
 const SummaryInvoicesList = lazy(() => import("@/pages/production/summary-invoices"));
+const InvoiceSummary = lazy(() => import("@/pages/production/invoice-summary"));
 const SummaryInvoiceEdit = lazy(() => import("@/pages/production/summary-invoice-edit"));
 const SummaryInvoicePrint = lazy(() => import("@/pages/production/summary-invoice-print"));
 const QuotesEdit = lazy(() => import("@/pages/production/quotes-edit"));
@@ -137,6 +138,7 @@ function Router() {
             <Route path="/invoices">{() => <DocumentList kind="invoice" />}</Route>
             <Route path="/delivery-notes">{() => <DocumentList kind="delivery" />}</Route>
             <Route path="/summary-invoices" component={SummaryInvoicesList} />
+            <Route path="/invoice-summary" component={InvoiceSummary} />
             <Route path="/summary-invoices/new" component={SummaryInvoiceEdit} />
             <Route path="/summary-invoices/:id/edit" component={SummaryInvoiceEdit} />
             <Route path="/prospects" component={Prospects} />
