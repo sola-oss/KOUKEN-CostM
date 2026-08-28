@@ -903,8 +903,33 @@ export default function Projects() {
               クリア
             </Button>
           )}
+          {/* View mode toggle */}
+          <div className="ml-auto flex items-center gap-1 rounded-md border p-1">
+            <Button
+              variant={viewMode === "folder" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("folder")}
+              data-testid="button-view-folder"
+            >
+              <FolderOpen className="h-4 w-4 mr-1" />
+              年月フォルダ
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+              data-testid="button-view-list"
+            >
+              <List className="h-4 w-4 mr-1" />
+              リスト
+            </Button>
+          </div>
+        </div>
 
-          <span className="text-sm text-muted-foreground whitespace-nowrap ml-2">請求月：</span>
+        {/* 請求月の期間で絞り込む。納期と同じ形だが、横に並べると画面が狭いとき
+            はみ出すので独立した行にしている。 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">請求月：</span>
           <Input
             type="month"
             value={invoiceMonthFrom}
@@ -931,27 +956,6 @@ export default function Projects() {
               クリア
             </Button>
           )}
-          {/* View mode toggle */}
-          <div className="ml-auto flex items-center gap-1 rounded-md border p-1">
-            <Button
-              variant={viewMode === "folder" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("folder")}
-              data-testid="button-view-folder"
-            >
-              <FolderOpen className="h-4 w-4 mr-1" />
-              年月フォルダ
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-              data-testid="button-view-list"
-            >
-              <List className="h-4 w-4 mr-1" />
-              リスト
-            </Button>
-          </div>
         </div>
       </div>
 
