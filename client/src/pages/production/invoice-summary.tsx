@@ -27,6 +27,7 @@ interface Invoice {
   source_quote_number: string | null;
   source_order_id: string | null;
   total_amount: number;
+  project_title: string | null;
 }
 
 const currency = (n: number) =>
@@ -295,8 +296,11 @@ export default function InvoiceSummary() {
                           group.docs.map((v) => (
                             <TableRow key={v.id} className="bg-muted/40">
                               <TableCell />
-                              <TableCell className="font-mono text-sm pl-6">
-                                {documentNumber("invoice", v)}
+                              <TableCell className="text-sm pl-6">
+                                <span className="font-mono">{documentNumber("invoice", v)}</span>
+                                {v.project_title && (
+                                  <span className="ml-3 text-muted-foreground">{v.project_title}</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-right text-sm text-muted-foreground">
                                 {formatDate(v.issue_date)}

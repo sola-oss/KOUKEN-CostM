@@ -2167,7 +2167,7 @@ export class ProductionDAO {
     });
   }
 
-  async getQuotes(kind?: DocumentKind): Promise<(Quote & { total_amount: number } & SourceNumbers)[]> {
+  async getQuotes(kind?: DocumentKind): Promise<(Quote & { total_amount: number; project_title: string | null } & SourceNumbers)[]> {
     const quotes = await fetchAllRows<Quote>(
       () => {
         const q = supabase.from('quotes').select('*');
@@ -2189,9 +2189,26 @@ export class ProductionDAO {
       const prev = totalMap.get(item.quote_id) || 0;
       totalMap.set(item.quote_id, prev + (item.quantity || 0) * (item.unit_price || 0));
     }
-    return this._attachSourceNumbers(
+    const withSource = await this._attachSourceNumbers(
       (quotes as Quote[]).map(q => ({ ...q, total_amount: totalMap.get(q.id) || 0 }))
     );
+
+    // 一覧で受注番号の横に工事名（受注の件名）を出すため、受注から引いてくる。
+    // 番号の選び方は画面の documentNumber と同じ順番にそろえる。
+    const orderNumberOf = (q: Quote & SourceNumbers) =>
+      q.document_kind === 'quote'
+        ? q.converted_order_id || q.quote_number
+        : q.converted_order_id || q.source_order_id || q.source_quote_number || q.quote_number;
+    const orderIds = Array.from(new Set(withSource.map(orderNumberOf).filter(Boolean)));
+    const titleMap = new Map<string, string>();
+    if (orderIds.length > 0) {
+      const orders = await fetchAllByIds<{ order_id: string; project_title: string | null; product_name: string | null }>(
+        'orders', 'order_id', orderIds, 'getQuotes:orders',
+        { select: 'order_id,project_title,product_name', orderBy: 'order_id' }
+      );
+      orders.forEach(o => titleMap.set(o.order_id, o.project_title || o.product_name || ''));
+    }
+    return withSource.map(q => ({ ...q, project_title: titleMap.get(orderNumberOf(q)) || null }));
   }
 
   async getQuoteById(id: number): Promise<(QuoteWithItems & SourceNumbers) | null> {
