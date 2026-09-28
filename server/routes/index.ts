@@ -6,8 +6,16 @@ import salesOrdersRouter from './sales-orders-sqlite.js';
 import authRouter from './auth.js';
 import quotesRouter from './quotes-api.js';
 import summaryInvoicesRouter from './summary-invoices-api.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
+
+// Auth routes (user management via Supabase Admin API)
+// 自前でトークンを確かめるので、下の関所より先に置く。
+router.use(authRouter);
+
+// ここから下の /api はログインしていないと使えない。
+router.use('/api', requireAuth);
 
 // Quotes API - mounted explicitly at /api/quotes for reliable routing
 router.use('/api/quotes', quotesRouter);
@@ -20,8 +28,5 @@ router.use(productionApiRouter);
 
 // Use sales orders API routes
 router.use('/api', salesOrdersRouter);
-
-// Auth routes (user management via Supabase Admin API)
-router.use(authRouter);
 
 export default router;
