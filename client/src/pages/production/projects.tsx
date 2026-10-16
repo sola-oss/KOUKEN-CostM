@@ -84,43 +84,73 @@ function InvoiceMonthCell({ value }: { value: string | null | undefined }) {
 }
 
 /**
- * 請求のステータス。押すたびに未請求と請求済が入れ替わる。
- * 納品・金額確定のチェックと同じで、押し間違えてももう一度押せば戻せるので確認は挟まない。
+ * 押すたびに「未〜」と「〜済」が入れ替わるバッジ。納品と請求で使う。
+ * 押し間違えてももう一度押せば戻せるので確認は挟まない。
  */
-function InvoiceStatusBadge({
+function StatusToggleBadge({
   orderId,
   value,
   onToggle,
+  doneLabel,
+  notDoneLabel,
+  testId,
 }: {
   orderId: string;
   value: boolean | null;
   onToggle: (id: string, value: boolean) => void;
+  doneLabel: string;
+  notDoneLabel: string;
+  testId: string;
 }) {
-  const invoiced = value === true;
+  const done = value === true;
   return (
     <button
       type="button"
-      title={invoiced ? "押すと未請求に戻します" : "押すと請求済にします"}
+      title={done ? `押すと${notDoneLabel}に戻します` : `押すと${doneLabel}にします`}
       onClick={(e) => {
         e.stopPropagation();
-        onToggle(orderId, !invoiced);
+        onToggle(orderId, !done);
       }}
-      data-testid={`button-toggle-invoiced-${orderId}`}
+      data-testid={`button-toggle-${testId}-${orderId}`}
     >
       <Badge
-        variant={invoiced ? "default" : "secondary"}
+        variant={done ? "default" : "secondary"}
         className={
-          invoiced
-            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/40 text-xs cursor-pointer"
-            : "text-xs text-muted-foreground hover:bg-muted cursor-pointer"
+          done
+            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/40 text-xs cursor-pointer whitespace-nowrap"
+            : "text-xs text-muted-foreground hover:bg-muted cursor-pointer whitespace-nowrap"
         }
-        data-testid={invoiced ? "badge-invoiced" : "badge-not-invoiced"}
+        data-testid={done ? `badge-${testId}` : `badge-not-${testId}`}
       >
-        {invoiced && <Check className="h-3 w-3 mr-1" />}
-        {invoiced ? "請求済" : "未請求"}
+        {done && <Check className="h-3 w-3 mr-1" />}
+        {done ? doneLabel : notDoneLabel}
       </Badge>
     </button>
   );
+}
+
+function InvoiceStatusBadge(props: {
+  orderId: string;
+  value: boolean | null;
+  onToggle: (id: string, value: boolean) => void;
+}) {
+  return <StatusToggleBadge {...props} doneLabel="請求済" notDoneLabel="未請求" testId="invoiced" />;
+}
+
+function DeliveryStatusBadge(props: {
+  orderId: string;
+  value: boolean | null;
+  onToggle: (id: string, value: boolean) => void;
+}) {
+  return <StatusToggleBadge {...props} doneLabel="納品済" notDoneLabel="未納品" testId="delivered" />;
+}
+
+/** 納品・請求の絞り込み。all はそのまま、done は済のみ、notDone は未のみ。 */
+type StatusFilter = "all" | "done" | "notDone";
+
+function matchesStatusFilter(value: boolean | null | undefined, filter: StatusFilter) {
+  if (filter === "all") return true;
+  return filter === "done" ? value === true : value !== true;
 }
 
 /** 見出しの並べ替えボタン。フォルダ表示とリスト表示で同じものを使う。 */
@@ -270,6 +300,7 @@ function YearMonthFolderView({
                                 <TableHead className="whitespace-nowrap">
                                   <SortHeaderButton field="due_date" label="納期" sortConfig={sortConfig} onSort={onSort} />
                                 </TableHead>
+                                <TableHead className="w-[80px] whitespace-nowrap">納品</TableHead>
                                 <TableHead className="text-right whitespace-nowrap">
                                   <SortHeaderButton field="estimated_amount" label="受注金額" sortConfig={sortConfig} onSort={onSort} />
                                 </TableHead>
@@ -278,7 +309,6 @@ function YearMonthFolderView({
                                 </TableHead>
                                 <TableHead className="w-[80px] whitespace-nowrap">請求</TableHead>
                                 <TableHead>工事</TableHead>
-                                <TableHead className="text-center w-[64px] whitespace-nowrap">納品</TableHead>
                                 <TableHead className="text-center w-[88px] whitespace-nowrap">金額確定</TableHead>
                                 <TableHead className="text-right w-[80px]">操作</TableHead>
                               </TableRow>
@@ -301,6 +331,13 @@ function YearMonthFolderView({
                                   <TableCell>{order.client_name || '-'}</TableCell>
                                   <TableCell>{order.project_title || order.product_name || '-'}</TableCell>
                                   <TableCell>{formatDate(order.due_date)}</TableCell>
+                                  <TableCell>
+                                    <DeliveryStatusBadge
+                                      orderId={order.order_id}
+                                      value={order.is_delivered ?? null}
+                                      onToggle={onToggleDelivered}
+                                    />
+                                  </TableCell>
                                   <TableCell className="text-right">{formatCurrency(order.estimated_amount)}</TableCell>
                                   <TableCell><InvoiceMonthCell value={order.invoice_month} /></TableCell>
                                   <TableCell>
@@ -322,13 +359,6 @@ function YearMonthFolderView({
                                         {FACTORY_LABELS[order.factory] || order.factory}
                                       </Badge>
                                     ) : <span className="text-muted-foreground text-sm">-</span>}
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <Checkbox
-                                      checked={!!order.is_delivered}
-                                      onCheckedChange={(v) => onToggleDelivered(order.order_id, v === true)}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
                                   </TableCell>
                                   <TableCell className="text-center">
                                     <Checkbox
@@ -385,6 +415,8 @@ export default function Projects() {
   const [inputValue, setInputValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [factoryFilter, setFactoryFilter] = useState<string>("all");
+  const [deliveredFilter, setDeliveredFilter] = useState<StatusFilter>("all");
+  const [invoicedFilter, setInvoicedFilter] = useState<StatusFilter>("all");
   const [dueFrom, setDueFrom] = useState("");
   const [dueTo, setDueTo] = useState("");
   // 請求月の期間。納期と同じく「〜から〜まで」で絞り込む。YYYY-MM で比べる。
@@ -509,6 +541,12 @@ export default function Projects() {
       ? orders
       : orders.filter(o => (o.factory ?? null) === (factoryFilter === "none" ? null : factoryFilter));
 
+    // 納品・請求の絞り込み。組み合わせると「納品済だが未請求」のような請求漏れを探せる。
+    filtered = filtered.filter(o =>
+      matchesStatusFilter(o.is_delivered, deliveredFilter) &&
+      matchesStatusFilter(o.is_invoiced, invoicedFilter)
+    );
+
     // Apply due date filter client-side
     if (dueFrom) {
       filtered = filtered.filter(o => o.due_date && o.due_date.slice(0, 10) >= dueFrom);
@@ -564,7 +602,7 @@ export default function Projects() {
     });
 
     return sorted;
-  }, [orders, sortConfig, factoryFilter, dueFrom, dueTo, invoiceMonthFrom, invoiceMonthTo]);
+  }, [orders, sortConfig, factoryFilter, deliveredFilter, invoicedFilter, dueFrom, dueTo, invoiceMonthFrom, invoiceMonthTo]);
 
   // Clear highlight when search query changes
   useEffect(() => {
@@ -876,6 +914,26 @@ export default function Projects() {
               <SelectItem value="none">未設定</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={deliveredFilter} onValueChange={(v) => setDeliveredFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-[140px]" data-testid="select-delivered-filter">
+              <SelectValue placeholder="納品" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">納品：すべて</SelectItem>
+              <SelectItem value="done">納品済</SelectItem>
+              <SelectItem value="notDone">未納品</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={invoicedFilter} onValueChange={(v) => setInvoicedFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-[140px]" data-testid="select-invoiced-filter">
+              <SelectValue placeholder="請求" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">請求：すべて</SelectItem>
+              <SelectItem value="done">請求済</SelectItem>
+              <SelectItem value="notDone">未請求</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         {/* Due Date Filter Row */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -1000,6 +1058,7 @@ export default function Projects() {
               <TableHead className="whitespace-nowrap">
                 <SortHeaderButton field="due_date" label="納期" sortConfig={sortConfig} onSort={handleSort} />
               </TableHead>
+              <TableHead className="w-[80px] whitespace-nowrap">納品</TableHead>
               <TableHead className="text-right whitespace-nowrap">
                 <SortHeaderButton field="estimated_amount" label="受注金額" sortConfig={sortConfig} onSort={handleSort} />
               </TableHead>
@@ -1008,7 +1067,6 @@ export default function Projects() {
               </TableHead>
               <TableHead className="w-[80px] whitespace-nowrap">請求</TableHead>
               <TableHead>工事</TableHead>
-              <TableHead className="text-center w-[64px] whitespace-nowrap">納品</TableHead>
               <TableHead className="text-center w-[88px] whitespace-nowrap">金額確定</TableHead>
               <TableHead className="text-right w-[100px]">操作</TableHead>
             </TableRow>
@@ -1067,6 +1125,15 @@ export default function Projects() {
                     {formatDate(order.due_date)}
                   </TableCell>
 
+                  {/* Delivered Status */}
+                  <TableCell data-testid={`cell-delivered-${order.order_id}`}>
+                    <DeliveryStatusBadge
+                      orderId={order.order_id}
+                      value={order.is_delivered ?? null}
+                      onToggle={(id, v) => toggleDeliveredMutation.mutate({ orderId: id, value: v })}
+                    />
+                  </TableCell>
+
                   {/* Estimated Amount */}
                   <TableCell className="text-right font-medium" data-testid={`cell-estimated-amount-${order.order_id}`}>
                     {formatCurrency(order.estimated_amount)}
@@ -1106,22 +1173,7 @@ export default function Projects() {
                     )}
                   </TableCell>
 
-                  {/* Delivered Checkbox */}
-                  <TableCell className="text-center" data-testid={`cell-delivered-${order.order_id}`}>
-                    <Checkbox
-                      checked={!!order.is_delivered}
-                      onCheckedChange={(checked) => {
-                        toggleDeliveredMutation.mutate({
-                          orderId: order.order_id,
-                          value: checked === true,
-                        });
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      data-testid={`checkbox-delivered-${order.order_id}`}
-                    />
-                  </TableCell>
-
-                  {/* Amount Confirmed Checkbox */}
+                    {/* Amount Confirmed Checkbox */}
                   <TableCell className="text-center" data-testid={`cell-amount-confirmed-${order.order_id}`}>
                     <Checkbox
                       checked={!!order.is_amount_confirmed}

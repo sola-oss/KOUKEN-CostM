@@ -1,9 +1,13 @@
-// 請求集計。月を選ぶと、その月に発行した請求書を客先ごとにまとめて出す。
+// 請求集計。年を選ぶと、その年の月ごとの請求額を客先別の積み上げグラフで出す。
+// 月を選ぶと、その月に発行した請求書を客先ごとにまとめて表に出す。
 // 数えるのは個別の請求書だけで、合計請求書は数えない。
 // 合計請求書は個別の請求書をまとめたものなので、両方数えると同じ金額が二重になる。
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 import {
   BarChart3, ChevronRight, ChevronDown, Printer, FileStack, ChevronLeft,
 } from "lucide-react";
@@ -60,6 +64,53 @@ const shiftMonth = (m: string, diff: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
+/** グラフで会社名を出す社数。残りは「その他」にまとめる。 */
+const TOP_CLIENTS = 5;
+const OTHERS_KEY = "その他";
+// 上位から順に固定で割り当てる（色覚の違いでも隣どうしが見分けられる組み合わせ）。
+const SERIES_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"];
+const OTHERS_COLOR = "#a3a29c";
+
+const manYen = (n: number) => `${Math.round(n / 10000).toLocaleString("ja-JP")}万`;
+
+type ChartRow = { month: string; label: string } & Record<string, number | string>;
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { name: string; value: number; color: string }[];
+  label?: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const rows = payload.filter((p) => (p.value ?? 0) > 0);
+  const total = rows.reduce((s, p) => s + (p.value ?? 0), 0);
+  return (
+    <div className="rounded-md border bg-popover px-3 py-2 text-xs shadow-md">
+      <div className="font-medium mb-1">{label}</div>
+      {rows.length === 0 ? (
+        <div className="text-muted-foreground">請求なし</div>
+      ) : (
+        <>
+          {[...rows].reverse().map((p) => (
+            <div key={p.name} className="flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: p.color }} />
+              <span className="flex-1">{p.name}</span>
+              <span className="tabular-nums">{currency(p.value)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between gap-4 border-t mt-1 pt-1 font-medium">
+            <span>合計</span>
+            <span className="tabular-nums">{currency(total)}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function InvoiceSummary() {
   const [, setLocation] = useLocation();
   const [month, setMonth] = useState(currentMonth());
@@ -103,24 +154,155 @@ export default function InvoiceSummary() {
   const grandSubtotal = groups.reduce((sum, g) => sum + g.subtotal, 0);
   const invoiceCount = groups.reduce((sum, g) => sum + g.docs.length, 0);
 
-  // 発行実績のある月。月を選ぶ手がかりとして出す。
+  // 年は選んでいる月から決める。月を年またぎで動かせば年も一緒に変わる。
+  const year = month.slice(0, 4);
+
+  // 発行実績のある月（選んでいる年の分だけ）。月を選ぶ手がかりとして出す。
   const monthsWithData = useMemo(() => {
     const set = new Set<string>();
     invoices.forEach((v) => {
       const m = (v.issue_date || "").slice(0, 7);
-      if (m) set.add(m);
+      if (m.startsWith(`${year}-`)) set.add(m);
     });
     return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [invoices]);
+  }, [invoices, year]);
+
+  // 年を切り替えたら、その年の発行がある一番新しい月を開く。無ければ同じ月のまま。
+  const shiftYear = (diff: number) => {
+    const nextYear = String(Number(year) + diff);
+    const months = invoices
+      .map((v) => (v.issue_date || "").slice(0, 7))
+      .filter((m) => m.startsWith(`${nextYear}-`))
+      .sort((a, b) => b.localeCompare(a));
+    setMonth(months[0] ?? `${nextYear}-${month.slice(5, 7)}`);
+  };
+
+  // グラフ用。その年の請求額（税込）が大きい順に上位の客先を出し、残りは「その他」にまとめる。
+  const chart = useMemo(() => {
+    const inYear = invoices.filter((v) => (v.issue_date || "").startsWith(`${year}-`));
+    const byClient = new Map<string, number>();
+    for (const v of inYear) {
+      const name = v.client_name || "（客先未設定）";
+      byClient.set(name, (byClient.get(name) ?? 0) + (v.total_amount ?? 0));
+    }
+    const ranked = Array.from(byClient.entries()).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    const top = ranked.slice(0, TOP_CLIENTS);
+    const hasOthers = ranked.length > TOP_CLIENTS;
+
+    const rows: ChartRow[] = Array.from({ length: 12 }, (_, i) => {
+      const m = `${year}-${String(i + 1).padStart(2, "0")}`;
+      const row: ChartRow = { month: m, label: `${i + 1}月` };
+      for (const name of top) row[name] = 0;
+      if (hasOthers) row[OTHERS_KEY] = 0;
+      return row;
+    });
+    for (const v of inYear) {
+      const idx = Number((v.issue_date || "").slice(5, 7)) - 1;
+      if (idx < 0 || idx > 11) continue;
+      const name = v.client_name || "（客先未設定）";
+      const key = top.includes(name) ? name : OTHERS_KEY;
+      rows[idx][key] = (rows[idx][key] as number) + totalWithTax(v.total_amount ?? 0);
+    }
+    const series = [
+      ...top.map((name, i) => ({ key: name, color: SERIES_COLORS[i] })),
+      ...(hasOthers ? [{ key: OTHERS_KEY, color: OTHERS_COLOR }] : []),
+    ];
+    const yearTotal = inYear.reduce((s, v) => s + totalWithTax(v.total_amount ?? 0), 0);
+    return { rows, series, yearTotal, count: inYear.length };
+  }, [invoices, year]);
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">請求集計</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          その月に発行した請求書を客先ごとに集計します
+          その年・その月に発行した請求書を客先ごとに集計します
         </p>
       </div>
+
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => shiftYear(-1)}
+          title="前の年"
+          data-testid="button-prev-year"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="w-[96px] text-center text-lg font-semibold" data-testid="text-year">
+          {year}年
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => shiftYear(1)}
+          title="次の年"
+          data-testid="button-next-year"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-baseline justify-between flex-wrap gap-2 mb-4">
+            <div className="text-sm font-medium">{year}年の請求額の推移（税込）</div>
+            <div className="text-sm text-muted-foreground">
+              年間 <span className="font-semibold text-foreground" data-testid="stat-year-total">{currency(chart.yearTotal)}</span>
+              <span className="ml-2">{chart.count}件</span>
+            </div>
+          </div>
+          {chart.count === 0 ? (
+            <div className="h-[280px] flex flex-col items-center justify-center text-muted-foreground text-sm">
+              <BarChart3 className="h-10 w-10 mb-2 opacity-30" />
+              {year}年に発行した請求書はありません
+            </div>
+          ) : (
+            <div className="h-[300px]" data-testid="chart-yearly">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chart.rows}
+                  margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                  onClick={(e) => {
+                    const row = e?.activePayload?.[0]?.payload as ChartRow | undefined;
+                    if (row) setMonth(row.month);
+                  }}
+                >
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis tickFormatter={manYen} tickLine={false} axisLine={false} fontSize={12} width={56} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.6 }} />
+                  <Legend
+                    wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                    iconType="square"
+                    iconSize={10}
+                    formatter={(value: string) => (
+                      <span className="text-foreground whitespace-nowrap mr-2">{value}</span>
+                    )}
+                  />
+                  {chart.series.map((s) => (
+                    <Bar
+                      key={s.key}
+                      dataKey={s.key}
+                      name={s.key}
+                      stackId="total"
+                      fill={s.color}
+                      stroke="hsl(var(--card))"
+                      strokeWidth={1}
+                      maxBarSize={48}
+                      className="cursor-pointer"
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-2">
+            上位{TOP_CLIENTS}社は会社ごと、それ以外は「その他」にまとめています。棒を押すとその月の内訳が下の表に出ます。
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div className="flex items-end gap-2">

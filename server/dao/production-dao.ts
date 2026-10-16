@@ -2250,7 +2250,7 @@ export class ProductionDAO {
     if (ee) throw new Error(`[duplicateQuoteAs lookup] ${ee.message}`);
     if (existing) return (existing as { id: number }).id;
 
-    return this.createQuote(
+    const newId = await this.createQuote(
       {
         // 番号は帳票種別ごとに自動採番させる
         quote_number: null,
@@ -2274,6 +2274,21 @@ export class ProductionDAO {
         notes: item.notes,
       })) as Omit<InsertQuoteItem, 'quote_id'>[]
     );
+
+    // 請求書を作った時点で請求済にする（見積書のステータスと、紐づく受注の「請求」の両方）。
+    // 受注番号が紐づいていない見積書は、どの受注か分からないので見積書だけ変える。
+    if (kind === 'invoice') {
+      const { error: qe } = await supabase
+        .from('quotes')
+        .update({ status: 'invoiced', updated_at: new Date().toISOString() })
+        .eq('id', sourceQuoteId);
+      if (qe) throw new Error(`[duplicateQuoteAs mark quote invoiced] ${qe.message}`);
+      if (source.converted_order_id) {
+        await this.updateOrder(source.converted_order_id, { is_invoiced: true });
+      }
+    }
+
+    return newId;
   }
 
   async getQuoteByOrderId(orderId: string): Promise<Quote | null> {

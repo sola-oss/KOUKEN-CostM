@@ -325,6 +325,8 @@ export default function QuotesEdit() {
     onSuccess: (payload) => {
       const created = payload?.data;
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      // 請求書を作ると見積書と受注が請求済に変わるので、受注一覧も取り直す
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       const label = created?.document_kind ? DOCUMENT_CONFIG[created.document_kind].label : "帳票";
       toast({ title: `${label}を作成しました`, description: "内容はこの画面で個別に編集できます" });
       if (created?.id) setLocation(`/quotes/${created.id}/edit`);
