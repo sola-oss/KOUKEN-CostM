@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronsUpDown, FolderOpen, List, ChevronRight, ChevronDown, Filter } from "lucide-react";
+import { Package, Search, Plus, ArrowUpDown, Edit, Trash2, Check, ChevronsUpDown, FolderOpen, List, ChevronRight, ChevronDown, Filter, FileText } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { listOrders, type Order } from "@/shared/production-api";
@@ -195,6 +195,7 @@ function YearMonthFolderView({
   sortConfig,
   onSort,
   masterContact,
+  onCreateQuote,
 }: {
   orders: Order[];
   onRowClick: (id: string) => void;
@@ -208,6 +209,7 @@ function YearMonthFolderView({
   sortConfig: SortConfig;
   onSort: (field: SortField) => void;
   masterContact: (order: Order) => string | null;
+  onCreateQuote: (orderId: string, e: React.MouseEvent) => void;
 }) {
   const grouped = useMemo(() => {
     const map: Record<string, Record<string, Order[]>> = {};
@@ -392,6 +394,9 @@ function YearMonthFolderView({
                                     <div className="flex items-center justify-end gap-1">
                                       <Button variant="ghost" size="sm" className="h-7 px-2" onClick={(e) => onEdit(order, e)}>
                                         <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button variant="ghost" size="sm" className="h-7 px-2" title="見積書作成" onClick={(e) => onCreateQuote(order.order_id, e)}>
+                                        <FileText className="h-4 w-4" />
                                       </Button>
                                       <Button variant="ghost" size="sm" className="h-7 px-2" onClick={(e) => { onRowClick(order.order_id); e.stopPropagation(); }}>
                                         <Search className="h-4 w-4" />
@@ -758,6 +763,12 @@ export default function Projects() {
     }
   };
 
+  // この受注の中身を入れた状態で見積書の新規作成を開く
+  const handleCreateQuote = (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLocation(`/quotes/new?order=${encodeURIComponent(orderId)}`);
+  };
+
   const handleRowClick = (orderId: string) => {
     setNewlyCreatedOrderId(null);
     setLocation(`/project/${orderId}`);
@@ -1108,6 +1119,7 @@ export default function Projects() {
               onToggleInvoiced={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, value: v })}
               newlyCreatedOrderId={newlyCreatedOrderId}
               masterContact={masterContact}
+              onCreateQuote={handleCreateQuote}
               sortConfig={sortConfig}
               onSort={handleSort}
               formatCurrency={formatCurrency}
@@ -1270,6 +1282,17 @@ export default function Projects() {
                         data-testid={`button-edit-${order.order_id}`}
                       >
                         <Edit className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        title="見積書作成"
+                        onClick={(e) => handleCreateQuote(order.order_id, e)}
+                        data-testid={`button-create-quote-${order.order_id}`}
+                      >
+                        <FileText className="h-4 w-4" />
                       </Button>
 
                       <Button

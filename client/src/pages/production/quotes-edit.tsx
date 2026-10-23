@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, ArrowLeft, Printer, ShoppingCart, ExternalLink, ChevronsUpDown, Check, ReceiptText, PackageCheck } from "lucide-react";
@@ -85,6 +85,21 @@ interface OrderOption {
   product_name: string | null;
 }
 
+/** 受注管理の「見積書作成」から開いた時に、見積書へ写す受注の中身 */
+interface OrderForQuote {
+  order: {
+    order_id: string;
+    client_name: string | null;
+    customer_code: string | null;
+    manager: string | null;
+    client_order_no: string | null;
+    project_title: string | null;
+    product_name: string | null;
+    estimated_amount: number | null;
+  };
+  source_quote: { id: number; quote_number: string } | null;
+}
+
 interface Quote {
   id: number;
   quote_number: string;
@@ -130,6 +145,8 @@ export default function QuotesEdit() {
 
   const isNew = !params.id || params.id === "new";
   const quoteId = isNew ? null : parseInt(params.id!, 10);
+  // 受注管理の「見積書作成」ボタンから来た時は /quotes/new?order=受注番号
+  const fromOrderId = isNew ? new URLSearchParams(window.location.search).get("order") : null;
 
   const { data: quoteData, isLoading } = useQuery<{ data: Quote }>({
     queryKey: ["/api/quotes", quoteId],
@@ -146,6 +163,12 @@ export default function QuotesEdit() {
   const { data: ordersResponse } = useQuery<{ data: OrderOption[] }>({
     queryKey: ["/api/orders-dropdown"],
     queryFn: () => fetch("/api/orders-dropdown").then(r => r.json()),
+  });
+
+  const { data: fromOrderData } = useQuery<OrderForQuote>({
+    queryKey: ["/api/production/orders", fromOrderId],
+    queryFn: () => fetch(`/api/production/orders/${encodeURIComponent(fromOrderId!)}`).then(r => r.json()),
+    enabled: !!fromOrderId,
   });
 
   const { data: materialsResponse } = useQuery<{ data: Material[] }>({
@@ -201,6 +224,28 @@ export default function QuotesEdit() {
       );
     }
   }, [quote]);
+
+  // 受注の中身を見積書に入れる。担当者を得意先マスタから引くので、マスタが届いてから一度だけ
+  const prefilledFromOrder = useRef(false);
+  useEffect(() => {
+    const order = fromOrderData?.order;
+    if (!order || !customersData || prefilledFromOrder.current) return;
+    prefilledFromOrder.current = true;
+    const master =
+      allCustomers.find((c) => order.customer_code && c.code === order.customer_code) ??
+      allCustomers.find((c) => c.name === order.client_name);
+    setConvertedOrderId(order.order_id);
+    setClientName(order.client_name || "");
+    setContactPerson(order.manager || master?.contact_person || "");
+    setClientRequestNo(order.client_order_no || "");
+    // これまでの見積書と同じく「1式 × 受注金額」で1行入れる
+    setItems([{
+      ...newItem(0),
+      product_name: order.project_title || order.product_name || "",
+      quantity: 1,
+      unit_price: order.estimated_amount ?? null,
+    }]);
+  }, [fromOrderData, customersData]);
 
   const subtotal = items.reduce((sum, item) => {
     return sum + (item.quantity || 0) * (item.unit_price || 0);
@@ -496,6 +541,31 @@ export default function QuotesEdit() {
           </Button>
         </div>
       </div>
+
+      {fromOrderId && (!fromOrderData || !customersData) && (
+        <p className="text-sm text-muted-foreground">受注 {fromOrderId} の内容を読み込み中...</p>
+      )}
+
+      {fromOrderData?.source_quote && (
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                この受注の見積書はすでにあります（{fromOrderData.source_quote.quote_number}）。保存すると、もう1枚作られます。
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+                onClick={() => setLocation(`/quotes/${fromOrderData.source_quote!.id}/edit`)}
+              >
+                <ExternalLink className="h-4 w-4 mr-1" />
+                既存の見積書を開く
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {quote?.converted_order_id && (
         <Card className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
