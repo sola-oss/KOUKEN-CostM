@@ -102,10 +102,16 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        // 登録したばかりの受注の行を目立たせる
+        "new-row-flash": {
+          "0%, 100%": { backgroundColor: "rgb(253 224 71 / 0.15)" },
+          "50%": { backgroundColor: "rgb(253 224 71 / 0.9)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "new-row-flash": "new-row-flash 0.8s ease-in-out 5",
       },
     },
   },

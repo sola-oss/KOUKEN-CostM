@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { AuthContext, AuthUser } from "./auth-context";
@@ -73,6 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const cachedUser = getCachedProfile();
   const [user, setUser] = useState<AuthUser | null>(cachedUser);
   const [loading, setLoading] = useState(cachedUser === null);
+  const userRef = useRef<AuthUser | null>(cachedUser);
+  userRef.current = user;
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -132,7 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (session?.user) {
-        if (event === "SIGNED_IN") {
+        // Supabase はタブに戻るたびに SIGNED_IN を出す。ログイン中に loading にすると
+        // 画面ごと作り直され、入力途中の内容が消えるので、未ログインからの時だけにする
+        if (event === "SIGNED_IN" && !userRef.current) {
           setLoading(true);
         }
         try {

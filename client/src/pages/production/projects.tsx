@@ -1,6 +1,6 @@
 // Production Management MVP - Orders Management (受注管理)
 // Stage 2: Full CRUD with 19-field form support
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -245,6 +245,20 @@ function YearMonthFolderView({
     setOpenMonths(newLatestYear && newLatestMonth ? { [`${newLatestYear}-${newLatestMonth}`]: true } : {});
   }, [grouped]);
 
+  // 登録したばかりの受注が最新月以外に入った時も、その月を開いて見えるようにする
+  useEffect(() => {
+    if (!newlyCreatedOrderId) return;
+    for (const year of Object.keys(grouped)) {
+      for (const month of Object.keys(grouped[year])) {
+        if (grouped[year][month].some(o => o.order_id === newlyCreatedOrderId)) {
+          setOpenYears(p => ({ ...p, [year]: true }));
+          setOpenMonths(p => ({ ...p, [`${year}-${month}`]: true }));
+          return;
+        }
+      }
+    }
+  }, [grouped, newlyCreatedOrderId]);
+
   if (orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center text-muted-foreground py-12">
@@ -318,13 +332,14 @@ function YearMonthFolderView({
                                 <TableRow
                                   key={order.order_id}
                                   className={[
-                                    order.order_id === newlyCreatedOrderId ? 'bg-green-50 dark:bg-green-950/20' : '',
+                                    order.order_id === newlyCreatedOrderId ? 'animate-new-row-flash' : '',
                                     order.factory === 'laser' ? 'bg-violet-50 dark:bg-violet-950/30' : '',
                                     order.factory === 'factory1' ? 'bg-sky-50 dark:bg-sky-950/30' : '',
                                     order.factory === 'factory2' ? 'bg-emerald-50 dark:bg-emerald-950/30' : '',
                                     order.factory === 'machine' ? 'bg-amber-50 dark:bg-amber-950/30' : '',
                                     order.factory === 'outsource' ? 'bg-gray-50 dark:bg-gray-900/30' : '',
                                   ].filter(Boolean).join(' ')}
+                                  data-order-row={order.order_id}
                                 >
                                   <TableCell className="font-medium">#{order.order_id}</TableCell>
                                   <TableCell>{formatDate(order.order_date)}</TableCell>
@@ -423,7 +438,7 @@ export default function Projects() {
   const [invoiceMonthFrom, setInvoiceMonthFrom] = useState("");
   const [invoiceMonthTo, setInvoiceMonthTo] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "folder">("folder");
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'due_date', order: 'asc' });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'order_id', order: 'desc' });
   const [newlyCreatedOrderId, setNewlyCreatedOrderId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   
@@ -603,6 +618,20 @@ export default function Projects() {
 
     return sorted;
   }, [orders, sortConfig, factoryFilter, deliveredFilter, invoicedFilter, dueFrom, dueTo, invoiceMonthFrom, invoiceMonthTo]);
+
+  // 登録した受注の行が一覧に出たら、そこまで移動する（全件の再取得が終わってから出てくる）
+  // 一度移動したら、他の行のバッジを押した時などに引き戻さない
+  const scrolledToOrderIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!newlyCreatedOrderId || scrolledToOrderIdRef.current === newlyCreatedOrderId) return;
+    const timer = setTimeout(() => {
+      const row = document.querySelector(`[data-order-row="${newlyCreatedOrderId}"]`);
+      if (!row) return;
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      scrolledToOrderIdRef.current = newlyCreatedOrderId;
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [newlyCreatedOrderId, filteredAndSortedOrders, viewMode]);
 
   // Clear highlight when search query changes
   useEffect(() => {
@@ -1086,7 +1115,7 @@ export default function Projects() {
                 <TableRow 
                   key={order.order_id}
                   className={[
-                    order.order_id === newlyCreatedOrderId ? 'bg-green-50 dark:bg-green-950/20' : '',
+                    order.order_id === newlyCreatedOrderId ? 'animate-new-row-flash' : '',
                     order.factory === 'laser' ? 'bg-violet-50 dark:bg-violet-950/30' : '',
                     order.factory === 'factory1' ? 'bg-sky-50 dark:bg-sky-950/30' : '',
                     order.factory === 'factory2' ? 'bg-emerald-50 dark:bg-emerald-950/30' : '',
@@ -1094,6 +1123,7 @@ export default function Projects() {
                     order.factory === 'outsource' ? 'bg-gray-50 dark:bg-gray-900/30' : '',
                   ].filter(Boolean).join(' ')}
                   data-testid={`row-order-${order.order_id}`}
+                  data-order-row={order.order_id}
                 >
                   {/* Order ID */}
                   <TableCell className="font-medium" data-testid={`cell-order-id-${order.order_id}`}>
