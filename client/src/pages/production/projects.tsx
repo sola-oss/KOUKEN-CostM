@@ -76,10 +76,10 @@ function InvoiceMonthCell({ value }: { value: string | null | undefined }) {
   const label = formatInvoiceMonth(value);
   if (!label) return <span className="text-muted-foreground text-sm">-</span>;
   return (
-    <div className="leading-tight" data-testid="cell-invoice-month-value">
-      <div className="text-sm">{label}</div>
-      <div className="text-xs text-muted-foreground">{value?.slice(0, 4)}年</div>
-    </div>
+    <span data-testid="cell-invoice-month-value">
+      <span className="text-xs text-muted-foreground mr-1">{value?.slice(0, 4)}年</span>
+      <span className="text-sm">{label}</span>
+    </span>
   );
 }
 
@@ -390,10 +390,10 @@ function YearMonthFolderView({
                                   </TableCell>
                                   <TableCell className="text-right">
                                     <div className="flex items-center justify-end gap-1">
-                                      <Button variant="ghost" size="sm" onClick={(e) => onEdit(order, e)}>
+                                      <Button variant="ghost" size="sm" className="h-7 px-2" onClick={(e) => onEdit(order, e)}>
                                         <Edit className="h-4 w-4" />
                                       </Button>
-                                      <Button variant="ghost" size="sm" onClick={(e) => { onRowClick(order.order_id); e.stopPropagation(); }}>
+                                      <Button variant="ghost" size="sm" className="h-7 px-2" onClick={(e) => { onRowClick(order.order_id); e.stopPropagation(); }}>
                                         <Search className="h-4 w-4" />
                                       </Button>
                                     </div>
@@ -431,8 +431,8 @@ function NoteCell({ note }: { note: string | null | undefined }) {
   return <span className="block max-w-[240px] truncate" title={note}>{note}</span>;
 }
 
-/** 得意先・品名などを折り返さず、はみ出た分は横スクロールにする */
-const NOWRAP_TABLE = "[&_th]:whitespace-nowrap [&_td]:whitespace-nowrap";
+/** 得意先・品名などを折り返さず、はみ出た分は横スクロールにする。行を低くするため上下の余白も詰める */
+const NOWRAP_TABLE = "[&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:h-9 [&_td]:py-1";
 
 // ========== MAIN COMPONENT ==========
 
@@ -1265,6 +1265,7 @@ export default function Projects() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-7 px-2"
                         onClick={(e) => handleEditOrder(order, e)}
                         data-testid={`button-edit-${order.order_id}`}
                       >
@@ -1274,6 +1275,7 @@ export default function Projects() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-7 px-2"
                         onClick={(e) => handleDelete(order.order_id, e)}
                         data-testid={`button-delete-${order.order_id}`}
                       >
