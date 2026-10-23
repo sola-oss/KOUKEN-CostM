@@ -58,7 +58,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     <SidebarProvider defaultOpen={true} style={style as CSSProperties}>
       <div className="flex h-screen w-full">
         <AppSidebar />
-        <div className="flex flex-col flex-1">
+        <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between px-4 py-3 border-b bg-background">
             <div className="flex items-center gap-3">
               <SidebarTrigger data-testid="button-sidebar-toggle" />

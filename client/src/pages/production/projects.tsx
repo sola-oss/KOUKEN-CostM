@@ -194,6 +194,7 @@ function YearMonthFolderView({
   formatCurrency,
   sortConfig,
   onSort,
+  masterContact,
 }: {
   orders: Order[];
   onRowClick: (id: string) => void;
@@ -206,6 +207,7 @@ function YearMonthFolderView({
   formatCurrency: (v: number | null) => string;
   sortConfig: SortConfig;
   onSort: (field: SortField) => void;
+  masterContact: (order: Order) => string | null;
 }) {
   const grouped = useMemo(() => {
     const map: Record<string, Record<string, Order[]>> = {};
@@ -302,7 +304,7 @@ function YearMonthFolderView({
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <div className="ml-4 mt-1 mb-2 border rounded-md overflow-hidden">
-                          <Table>
+                          <Table className={NOWRAP_TABLE}>
                             <TableHeader className="bg-muted/50">
                               <TableRow>
                                 <TableHead className="w-[110px]">
@@ -310,6 +312,7 @@ function YearMonthFolderView({
                                 </TableHead>
                                 <TableHead>受注日</TableHead>
                                 <TableHead>得意先</TableHead>
+                                <TableHead>担当者</TableHead>
                                 <TableHead>品名</TableHead>
                                 <TableHead className="whitespace-nowrap">
                                   <SortHeaderButton field="due_date" label="納期" sortConfig={sortConfig} onSort={onSort} />
@@ -325,6 +328,7 @@ function YearMonthFolderView({
                                 <TableHead>工事</TableHead>
                                 <TableHead className="text-center w-[88px] whitespace-nowrap">金額確定</TableHead>
                                 <TableHead className="text-right w-[80px]">操作</TableHead>
+                                <TableHead>備考</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -344,6 +348,7 @@ function YearMonthFolderView({
                                   <TableCell className="font-medium">#{order.order_id}</TableCell>
                                   <TableCell>{formatDate(order.order_date)}</TableCell>
                                   <TableCell>{order.client_name || '-'}</TableCell>
+                                  <TableCell><ManagerCell order={order} masterContact={masterContact} /></TableCell>
                                   <TableCell>{order.project_title || order.product_name || '-'}</TableCell>
                                   <TableCell>{formatDate(order.due_date)}</TableCell>
                                   <TableCell>
@@ -393,6 +398,7 @@ function YearMonthFolderView({
                                       </Button>
                                     </div>
                                   </TableCell>
+                                  <TableCell><NoteCell note={order.note} /></TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -410,6 +416,23 @@ function YearMonthFolderView({
     </div>
   );
 }
+
+/** 担当者。受注に入っていなければ得意先マスタの担当者を薄い字で出す */
+function ManagerCell({ order, masterContact }: { order: Order; masterContact: (order: Order) => string | null }) {
+  if (order.manager) return <>{order.manager}</>;
+  const fallback = masterContact(order);
+  if (fallback) return <span className="text-muted-foreground" title="得意先マスタの担当者">{fallback}</span>;
+  return <span className="text-muted-foreground">-</span>;
+}
+
+/** 備考。長いものは途中で切り、マウスを乗せると全文が出る */
+function NoteCell({ note }: { note: string | null | undefined }) {
+  if (!note) return <span className="text-muted-foreground">-</span>;
+  return <span className="block max-w-[240px] truncate" title={note}>{note}</span>;
+}
+
+/** 得意先・品名などを折り返さず、はみ出た分は横スクロールにする */
+const NOWRAP_TABLE = "[&_th]:whitespace-nowrap [&_td]:whitespace-nowrap";
 
 // ========== MAIN COMPONENT ==========
 
@@ -458,6 +481,21 @@ export default function Projects() {
       return res.json();
     }
   });
+
+  // 受注に担当者が無い時に出す、得意先マスタの担当者。コード→社名の順で探す
+  const masterContact = useMemo(() => {
+    const byCode = new Map<string, string>();
+    const byName = new Map<string, string>();
+    for (const c of customers) {
+      if (!c.contact_person) continue;
+      if (c.code) byCode.set(c.code, c.contact_person);
+      byName.set(c.name, c.contact_person);
+    }
+    return (order: Order) =>
+      (order.customer_code && byCode.get(order.customer_code)) ||
+      (order.client_name && byName.get(order.client_name)) ||
+      null;
+  }, [customers]);
 
   // Form hook
   const form = useForm<OrderFormValues>({
@@ -780,7 +818,8 @@ export default function Projects() {
       customer_zip: order.customer_zip || "",
       customer_address1: order.customer_address1 || "",
       customer_address2: order.customer_address2 || "",
-      manager: order.manager || "",
+      // 表に出している担当者と同じにする（空ならマスタの担当者）
+      manager: order.manager || masterContact(order) || "",
       project_title: order.project_title || order.product_name || "",
       due_date: order.due_date || "",
       delivery_date: order.delivery_date || "",
@@ -1068,13 +1107,14 @@ export default function Projects() {
               onToggleAmountConfirmed={(id, v) => toggleAmountConfirmedMutation.mutate({ orderId: id, value: v })}
               onToggleInvoiced={(id, v) => toggleInvoicedMutation.mutate({ orderId: id, value: v })}
               newlyCreatedOrderId={newlyCreatedOrderId}
+              masterContact={masterContact}
               sortConfig={sortConfig}
               onSort={handleSort}
               formatCurrency={formatCurrency}
             />
           </div>
         ) : (
-        <Table>
+        <Table className={NOWRAP_TABLE}>
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-[120px]">
@@ -1098,6 +1138,7 @@ export default function Projects() {
               <TableHead>工事</TableHead>
               <TableHead className="text-center w-[88px] whitespace-nowrap">金額確定</TableHead>
               <TableHead className="text-right w-[100px]">操作</TableHead>
+              <TableHead>備考</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1142,7 +1183,7 @@ export default function Projects() {
 
                   {/* Manager */}
                   <TableCell data-testid={`cell-manager-${order.order_id}`}>
-                    {order.manager || '-'}
+                    <ManagerCell order={order} masterContact={masterContact} />
                   </TableCell>
 
                   {/* Project Title */}
@@ -1239,6 +1280,11 @@ export default function Projects() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
+                  </TableCell>
+
+                  {/* Note */}
+                  <TableCell data-testid={`cell-note-${order.order_id}`}>
+                    <NoteCell note={order.note} />
                   </TableCell>
                 </TableRow>
               ))
@@ -1369,6 +1415,7 @@ export default function Projects() {
                                             form.setValue("customer_zip", customer.zip || "");
                                             form.setValue("customer_address1", customer.address1 || "");
                                             form.setValue("customer_address2", customer.address2 || "");
+                                            form.setValue("manager", customer.contact_person || "");
                                             setCustomerComboOpen(false);
                                           }}
                                           data-testid={`customer-option-${customer.id}`}
