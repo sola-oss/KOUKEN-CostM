@@ -46,13 +46,13 @@ export const GanttFilters = ({
           size="icon"
           onClick={() => onShiftPeriod(-1)}
           data-testid="button-gantt-prev"
-          title="前月"
+          title="前へ（約1か月）"
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
 
         {currentMonth && (
-          <span className="text-sm font-medium min-w-[100px] text-center" data-testid="text-current-month">
+          <span className="text-sm font-medium min-w-[220px] text-center" data-testid="text-current-month">
             {currentMonth}
           </span>
         )}
@@ -62,7 +62,7 @@ export const GanttFilters = ({
           size="icon"
           onClick={() => onShiftPeriod(1)}
           data-testid="button-gantt-next"
-          title="翌月"
+          title="次へ（約1か月）"
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -73,7 +73,7 @@ export const GanttFilters = ({
           onClick={onReset}
           data-testid="button-gantt-reset"
         >
-          今月
+          今日
         </Button>
 
         {onProjectFilterChange && (

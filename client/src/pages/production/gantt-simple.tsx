@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useMemo, useRef, useCallback } from "react";
 import { GanttFilters } from "../../components/gantt/GanttFilters";
 import { GanttTaskList } from "../../components/gantt/GanttTaskList";
 import { GanttGrid } from "../../components/gantt/GanttGrid";
@@ -15,22 +15,17 @@ const formatDateLocal = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-const getMonthDates = (year: number, month: number) => {
-  const normalizedDate = new Date(year, month, 1);
-  const normalizedYear = normalizedDate.getFullYear();
-  const normalizedMonth = normalizedDate.getMonth();
-  const start = new Date(normalizedYear, normalizedMonth, 1);
-  const end = new Date(normalizedYear, normalizedMonth + 1, 0);
-  return {
-    start: formatDateLocal(start),
-    end: formatDateLocal(end),
-  };
-};
+// Month index = year * 12 + month(0-11)
+const toMonthIndex = (year: number, month: number) => year * 12 + month;
+const monthIndexStart = (idx: number) => new Date(Math.floor(idx / 12), idx % 12, 1);
+const monthIndexEnd = (idx: number) => new Date(Math.floor(idx / 12), (idx % 12) + 1, 0);
 
-const getCurrentMonthDates = () => {
-  const today = new Date();
-  return getMonthDates(today.getFullYear(), today.getMonth());
-};
+// How many months to add when scrolling near an edge
+const EXTEND_MONTHS = 2;
+// Pixels from the edge that trigger loading more months
+const EDGE_THRESHOLD = 300;
+
+const formatLabel = (d: Date) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
 
 interface ApiProject {
   orderId: string;
@@ -54,9 +49,14 @@ const GanttSimple = () => {
   const [factoryFilter, setFactoryFilter] = useState<string>("all");
   const [sortOrderId, setSortOrderId] = useState<'asc' | 'desc' | null>(null);
 
-  const today = new Date();
-  const [displayYear, setDisplayYear] = useState(today.getFullYear());
-  const [displayMonth, setDisplayMonth] = useState(today.getMonth());
+  // Loaded range (month indexes, inclusive). Starts at last month .. 2 months ahead.
+  const nowMonthIdx = useMemo(() => {
+    const t = new Date();
+    return toMonthIndex(t.getFullYear(), t.getMonth());
+  }, []);
+  const [rangeStartIdx, setRangeStartIdx] = useState(nowMonthIdx - 1);
+  const [rangeEndIdx, setRangeEndIdx] = useState(nowMonthIdx + 2);
+  const [visibleLabel, setVisibleLabel] = useState("");
 
   const gridRef = useRef<HTMLDivElement>(null);
   const listBodyRef = useRef<HTMLDivElement>(null);
@@ -65,38 +65,99 @@ const GanttSimple = () => {
   const isSyncingList = useRef(false);
   const isSyncingGrid = useRef(false);
 
-  const { start: startDate, end: endDate } = useMemo(() => {
-    return getMonthDates(displayYear, displayMonth);
-  }, [displayYear, displayMonth]);
+  // Columns added on the left that still need a scroll correction
+  const pendingLeftShift = useRef(0);
+  // True while a range extension is waiting to be rendered
+  const extending = useRef(false);
+  const fetchSeq = useRef(0);
+  const didInitialScroll = useRef(false);
 
-  // Re-fetch whenever the display month changes
+  const startDate = useMemo(() => formatDateLocal(monthIndexStart(rangeStartIdx)), [rangeStartIdx]);
+  const endDate = useMemo(() => formatDateLocal(monthIndexEnd(rangeEndIdx)), [rangeEndIdx]);
+
+  // Re-fetch whenever the loaded range changes (keep showing old rows meanwhile)
   useEffect(() => {
-    setLoading(true);
-    const monthStr = `${displayYear}-${String(displayMonth + 1).padStart(2, '0')}`;
-    fetch(`/api/production/gantt/hierarchy?month=${monthStr}`)
+    const seq = ++fetchSeq.current;
+    fetch(`/api/production/gantt/hierarchy?from=${startDate}&to=${endDate}`)
       .then((res) => res.json())
       .then((data: ApiProject[]) => {
-        setRawProjects(data);
+        if (seq !== fetchSeq.current) return;
+        setRawProjects(Array.isArray(data) ? data : []);
         setLoading(false);
-
-        // Auto-scroll to today after data loads (only if showing current month)
-        const now = new Date();
-        if (displayYear === now.getFullYear() && displayMonth === now.getMonth()) {
-          setTimeout(() => {
-            if (gridRef.current) {
-              const todayColumn = gridRef.current.querySelector('.gantt-grid-day.today');
-              if (todayColumn) {
-                const columnRect = todayColumn.getBoundingClientRect();
-                const gridRect = gridRef.current.getBoundingClientRect();
-                const scrollLeft = gridRef.current.scrollLeft + (columnRect.left - gridRect.left) - (gridRect.width / 2);
-                gridRef.current.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
-              }
-            }
-          }, 100);
-        }
       })
-      .catch(() => setLoading(false));
-  }, [displayYear, displayMonth]);
+      .catch(() => {
+        if (seq === fetchSeq.current) setLoading(false);
+      });
+  }, [startDate, endDate]);
+
+  const scrollToDate = useCallback((dateStr: string, behavior: ScrollBehavior = 'smooth') => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const start = monthIndexStart(rangeStartIdx);
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const target = new Date(y, m - 1, d);
+    const days = Math.round((target.getTime() - start.getTime()) / 86400000);
+    const left = days * COLUMN_WIDTH - grid.clientWidth / 2 + COLUMN_WIDTH / 2;
+    grid.scrollTo({ left: Math.max(0, left), behavior });
+  }, [rangeStartIdx]);
+
+  const updateVisibleLabel = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const start = monthIndexStart(rangeStartIdx);
+    const firstIdx = Math.floor(grid.scrollLeft / COLUMN_WIDTH);
+    const lastIdx = Math.max(firstIdx, Math.floor((grid.scrollLeft + grid.clientWidth) / COLUMN_WIDTH) - 1);
+    const first = new Date(start.getFullYear(), start.getMonth(), start.getDate() + firstIdx);
+    const last = new Date(start.getFullYear(), start.getMonth(), start.getDate() + lastIdx);
+    const end = monthIndexEnd(rangeEndIdx);
+    setVisibleLabel(`${formatLabel(first)} 〜 ${formatLabel(last > end ? end : last)}`);
+  }, [rangeStartIdx, rangeEndIdx]);
+
+  // After months were added on the left, keep the same dates on screen
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (grid && pendingLeftShift.current > 0) {
+      grid.scrollLeft += pendingLeftShift.current * COLUMN_WIDTH;
+      pendingLeftShift.current = 0;
+    }
+    extending.current = false;
+    updateVisibleLabel();
+  }, [rangeStartIdx, rangeEndIdx, updateVisibleLabel]);
+
+  // First load: bring today into the middle
+  useEffect(() => {
+    if (loading || didInitialScroll.current || !gridRef.current) return;
+    didInitialScroll.current = true;
+    scrollToDate(formatDateLocal(new Date()), 'auto');
+    updateVisibleLabel();
+  }, [loading, scrollToDate, updateVisibleLabel]);
+
+  // Keep the period label right when the window size changes
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (loading || !grid || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => updateVisibleLabel());
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [loading, updateVisibleLabel]);
+
+  // Load more months when the user scrolls close to either edge
+  const maybeExtendRange = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid || extending.current || !didInitialScroll.current) return;
+    if (grid.scrollLeft < EDGE_THRESHOLD) {
+      extending.current = true;
+      const newStart = rangeStartIdx - EXTEND_MONTHS;
+      const addedDays = Math.round(
+        (monthIndexStart(rangeStartIdx).getTime() - monthIndexStart(newStart).getTime()) / 86400000
+      );
+      pendingLeftShift.current = addedDays;
+      setRangeStartIdx(newStart);
+    } else if (grid.scrollLeft + grid.clientWidth > grid.scrollWidth - EDGE_THRESHOLD) {
+      extending.current = true;
+      setRangeEndIdx(rangeEndIdx + EXTEND_MONTHS);
+    }
+  }, [rangeStartIdx, rangeEndIdx]);
 
   // Apply keyword filter on client side (fast, no re-fetch needed)
   const filteredProjects = useMemo((): GanttProject[] => {
@@ -167,54 +228,36 @@ const GanttSimple = () => {
       listBodyRef.current.scrollTop = gridRef.current.scrollTop;
     }
     isSyncingGrid.current = false;
-  }, []);
+    updateVisibleLabel();
+    maybeExtendRange();
+  }, [updateVisibleLabel, maybeExtendRange]);
 
+  // 「今日」: scroll back to today (filters stay as they are)
   const handleReset = useCallback(() => {
-    const now = new Date();
-    setDisplayYear(now.getFullYear());
-    setDisplayMonth(now.getMonth());
-    setProjectFilter("");
-    setFactoryFilter("all");
-    setSortOrderId(null);
-  }, []);
+    scrollToDate(formatDateLocal(new Date()));
+  }, [scrollToDate]);
 
+  // ◀ ▶: scroll by about one month
   const shiftPeriod = useCallback((direction: number) => {
-    let newMonth = displayMonth + direction;
-    let newYear = displayYear;
-    if (newMonth < 0) {
-      newMonth = 11;
-      newYear -= 1;
-    } else if (newMonth > 11) {
-      newMonth = 0;
-      newYear += 1;
-    }
-    setDisplayYear(newYear);
-    setDisplayMonth(newMonth);
-  }, [displayYear, displayMonth]);
+    gridRef.current?.scrollBy({ left: direction * 30 * COLUMN_WIDTH, behavior: 'smooth' });
+  }, []);
 
   const handleTaskClick = useCallback((taskId: string, orderId: string) => {
     console.log("Order clicked:", taskId, orderId);
   }, []);
-
-  const displayStartDate = startDate || getCurrentMonthDates().start;
-  const displayEndDate = endDate || getCurrentMonthDates().end;
-
-  const currentMonthLabel = useMemo(() => {
-    return `${displayYear}年${displayMonth + 1}月`;
-  }, [displayYear, displayMonth]);
 
   return (
     <div className="gantt-page-container" data-testid="page-gantt">
       <header className="gantt-page-header">
         <div className="gantt-page-title">
           <h1>受注別ガントチャート</h1>
-          <p>受注日〜納期のタイムライン表示（未出荷の受注のみ）</p>
+          <p>受注日〜納期のタイムライン表示（未出荷の受注のみ）。横にスクロールすると前後の月も見られます</p>
         </div>
 
         <GanttFilters
           onReset={handleReset}
           onShiftPeriod={shiftPeriod}
-          currentMonth={currentMonthLabel}
+          currentMonth={visibleLabel}
           projectFilter={projectFilter}
           onProjectFilterChange={setProjectFilter}
           factoryFilter={factoryFilter}
@@ -224,11 +267,13 @@ const GanttSimple = () => {
 
       {loading ? (
         <div className="gantt-loading">読み込み中...</div>
-      ) : filteredProjects.length === 0 ? (
-        <div className="gantt-empty-message">
-          該当する受注はありません
-        </div>
       ) : (
+        <>
+        {filteredProjects.length === 0 && (
+          <div className="gantt-empty-message" style={{ flex: 'none', padding: '0.5rem' }}>
+            この期間に該当する受注はありません
+          </div>
+        )}
         <div className="gantt-content">
           <GanttTaskList
             projects={filteredProjects}
@@ -240,8 +285,8 @@ const GanttSimple = () => {
           />
           <GanttGrid
             projects={filteredProjects}
-            startDate={displayStartDate}
-            endDate={displayEndDate}
+            startDate={startDate}
+            endDate={endDate}
             rowHeight={ROW_HEIGHT}
             columnWidth={COLUMN_WIDTH}
             onTaskClick={handleTaskClick}
@@ -249,6 +294,7 @@ const GanttSimple = () => {
             onScroll={handleGridScroll}
           />
         </div>
+        </>
       )}
     </div>
   );

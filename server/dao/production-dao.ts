@@ -801,26 +801,31 @@ export class ProductionDAO {
     return results;
   }
 
-  async getGanttHierarchy(month?: string): Promise<{
+  async getGanttHierarchy(month?: string, from?: string, to?: string): Promise<{
     orderId: string; projectName: string; factory?: string | null;
     tasks: { id: string; taskName: string; startDate: string; endDate: string; progress: number; type: 'task' | 'procurement'; actualHours: number }[];
   }[]> {
-    // Calculate month range — default to current month
-    let year: number, m: number;
-    if (month && /^\d{4}-\d{2}$/.test(month)) {
-      [year, m] = month.split('-').map(Number);
+    // Range: from/to (YYYY-MM-DD) if given, else one month (month=YYYY-MM or current month)
+    const isDate = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    let monthStartJST: string, monthEndJST: string;
+    if (isDate(from) && isDate(to) && from! <= to!) {
+      monthStartJST = from!;
+      monthEndJST = to!;
     } else {
-      const now = new Date();
-      year = now.getFullYear();
-      m = now.getMonth() + 1;
+      let year: number, m: number;
+      if (month && /^\d{4}-\d{2}$/.test(month)) {
+        [year, m] = month.split('-').map(Number);
+      } else {
+        const now = new Date();
+        year = now.getFullYear();
+        m = now.getMonth() + 1;
+      }
+      const lastDay = new Date(year, m, 0).getDate();
+      monthStartJST = `${year}-${String(m).padStart(2, '0')}-01`;
+      monthEndJST = `${year}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     }
 
-    // Convert JST month boundaries to UTC ISO strings for Supabase comparison
-    // JST midnight on first of month → UTC prev day 15:00
-    // JST 23:59:59 on last of month → UTC same day 14:59:59
-    const monthStartJST = `${year}-${String(m).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, m, 0).getDate();
-    const monthEndJST = `${year}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    // Convert JST boundaries to UTC ISO strings for Supabase comparison
     const monthStartUTC = new Date(`${monthStartJST}T00:00:00+09:00`).toISOString();
     const monthEndUTC = new Date(`${monthEndJST}T23:59:59+09:00`).toISOString();
 
