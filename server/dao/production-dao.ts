@@ -803,7 +803,7 @@ export class ProductionDAO {
 
   async getGanttHierarchy(month?: string, from?: string, to?: string): Promise<{
     orderId: string; projectName: string; factory?: string | null;
-    tasks: { id: string; taskName: string; startDate: string; endDate: string; progress: number; type: 'task' | 'procurement'; actualHours: number }[];
+    tasks: { id: string; taskName: string; startDate: string; endDate: string; orderDate: string | null; workStartDate: string | null; progress: number; type: 'task' | 'procurement'; actualHours: number }[];
   }[]> {
     // Range: from/to (YYYY-MM-DD) if given, else one month (month=YYYY-MM or current month)
     const isDate = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -840,8 +840,9 @@ export class ProductionDAO {
       project_title: string | null;
       product_name: string | null;
       factory: string | null;
+      work_start_date: string | null;
     };
-    type OrderRowBase = Omit<OrderRowWithFactory, 'factory'>;
+    type OrderRowBase = Omit<OrderRowWithFactory, 'factory' | 'work_start_date'>;
 
     let orderList: OrderRowWithFactory[] = [];
 
@@ -857,7 +858,7 @@ export class ProductionDAO {
 
     try {
       orderList = await fetchAllRows<OrderRowWithFactory>(
-        () => buildOrderQuery('order_id, order_date, due_date, client_name, project_title, product_name, factory'),
+        () => buildOrderQuery('order_id, order_date, due_date, client_name, project_title, product_name, factory, work_start_date'),
         'getGanttHierarchy'
       );
     } catch (e: any) {
@@ -867,7 +868,7 @@ export class ProductionDAO {
         () => buildOrderQuery('order_id, order_date, due_date, client_name, project_title, product_name'),
         'getGanttHierarchy'
       );
-      orderList = baseRows.map((r) => ({ ...r, factory: null }));
+      orderList = baseRows.map((r) => ({ ...r, factory: null, work_start_date: null }));
     }
 
     const orderIds = orderList.map(o => o.order_id);
@@ -898,8 +899,11 @@ export class ProductionDAO {
         tasks: [{
           id: `order-${order.order_id}`,
           taskName: order.project_title || order.product_name || order.order_id,
-          startDate: order.order_date || order.due_date,
+          // Bar starts at 着工日 (work_start_date, YYYY-MM-DD JST) if set, else 受注日
+          startDate: (order.work_start_date ? `${order.work_start_date}T00:00:00+09:00` : null) || order.order_date || order.due_date,
           endDate: order.due_date || order.order_date,
+          orderDate: order.order_date,
+          workStartDate: order.work_start_date ?? null,
           progress: 0,
           type: 'task' as const,
           actualHours

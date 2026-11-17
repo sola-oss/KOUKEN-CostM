@@ -37,7 +37,7 @@ export const GanttTaskList = ({
       <div className="gantt-task-list-body" ref={listBodyRef} onScroll={onScroll}>
         {projects.map((project) => {
           const bar = project.tasks[0];
-          const startDateStr = bar?.startDate?.split('T')[0] || '-';
+          const startDateStr = bar?.orderDate?.split('T')[0] || '-';
           const endDateStr = bar?.endDate?.split('T')[0] || '-';
           const actualHours = bar?.actualHours ?? 0;
           const actualHoursStr = actualHours > 0
