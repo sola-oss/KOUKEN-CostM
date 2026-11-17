@@ -3,6 +3,10 @@ export interface GanttTaskItem {
   taskName: string;
   startDate: string;
   endDate: string;
+  /** 受注日 (does not change when the bar is dragged) */
+  orderDate: string | null;
+  /** 着工日 YYYY-MM-DD. null = bar starts at 受注日 */
+  workStartDate: string | null;
   progress: number;
   type: 'task' | 'procurement';
   actualHours: number;

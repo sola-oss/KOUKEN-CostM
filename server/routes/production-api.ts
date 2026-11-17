@@ -208,6 +208,8 @@ router.get('/api/production/gantt/hierarchy', async (req, res) => {
         taskName: task.taskName,
         startDate: task.startDate ? toJST(task.startDate) : null,
         endDate: task.endDate ? toJST(task.endDate) : null,
+        orderDate: task.orderDate ? toJST(task.orderDate) : null,
+        workStartDate: task.workStartDate,
         progress: task.progress,
         type: task.type,
         actualHours: task.actualHours
@@ -221,6 +223,33 @@ router.get('/api/production/gantt/hierarchy', async (req, res) => {
       error: 'Internal server error',
       message: 'Failed to fetch Gantt hierarchy data'
     });
+  }
+});
+
+// PATCH /api/production/gantt/work-start/:orderId - Set 着工日 (bar start on Gantt). null = back to 受注日
+// Does not touch order_date (受注日) or due_date (納期).
+router.patch('/api/production/gantt/work-start/:orderId', async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+    const value = (req.body ?? {}).workStartDate;
+    if (value !== null && !(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value))) {
+      return res.status(400).json({ error: 'workStartDate must be YYYY-MM-DD or null' });
+    }
+    const { data: order, error: fetchErr } = await supabase
+      .from('orders').select('order_id, due_date').eq('order_id', orderId).maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (value && order.due_date) {
+      const dueJST = dayjs(order.due_date).utc().tz('Asia/Tokyo').format('YYYY-MM-DD');
+      if (value > dueJST) return res.status(400).json({ error: '着工日は納期より後にできません' });
+    }
+    const { error: updErr } = await supabase
+      .from('orders').update({ work_start_date: value }).eq('order_id', orderId);
+    if (updErr) throw updErr;
+    res.json({ orderId, workStartDate: value });
+  } catch (error) {
+    console.error('Gantt work-start update error:', error);
+    res.status(500).json({ error: 'Internal server error', message: 'Failed to update work start date' });
   }
 });
 

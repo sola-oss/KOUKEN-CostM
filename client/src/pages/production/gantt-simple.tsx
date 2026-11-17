@@ -36,6 +36,8 @@ interface ApiProject {
     taskName: string;
     startDate: string | null;
     endDate: string | null;
+    orderDate: string | null;
+    workStartDate: string | null;
     progress: number;
     type: 'task' | 'procurement';
     actualHours: number;
@@ -185,6 +187,8 @@ const GanttSimple = () => {
             taskName: t.taskName,
             startDate: t.startDate!,
             endDate: t.endDate!,
+            orderDate: t.orderDate ?? null,
+            workStartDate: t.workStartDate ?? null,
             progress: t.progress,
             type: t.type,
             actualHours: t.actualHours ?? 0,
@@ -242,6 +246,33 @@ const GanttSimple = () => {
     gridRef.current?.scrollBy({ left: direction * 30 * COLUMN_WIDTH, behavior: 'smooth' });
   }, []);
 
+  // Bar left edge dragged (or double-clicked): save 着工日. null = back to 受注日.
+  // 受注日 and 納期 are not changed.
+  const handleWorkStartChange = useCallback(async (orderId: string, workStartDate: string | null) => {
+    const toBarStart = (p: ApiProject, w: string | null) => ({
+      ...p,
+      tasks: p.tasks.map((t) => ({
+        ...t,
+        workStartDate: w,
+        startDate: w ? `${w}T00:00:00+09:00` : (t.orderDate || t.endDate),
+      })),
+    });
+    const before = rawProjects.find((p) => p.orderId === orderId);
+    setRawProjects((prev) => prev.map((p) => (p.orderId === orderId ? toBarStart(p, workStartDate) : p)));
+    try {
+      const res = await fetch(`/api/production/gantt/work-start/${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workStartDate }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) {
+      console.error('着工日の保存に失敗:', e);
+      if (before) setRawProjects((prev) => prev.map((p) => (p.orderId === orderId ? before : p)));
+      alert('着工日を保存できませんでした。もう一度お試しください。');
+    }
+  }, [rawProjects]);
+
   const handleTaskClick = useCallback((taskId: string, orderId: string) => {
     console.log("Order clicked:", taskId, orderId);
   }, []);
@@ -251,7 +282,7 @@ const GanttSimple = () => {
       <header className="gantt-page-header">
         <div className="gantt-page-title">
           <h1>受注別ガントチャート</h1>
-          <p>受注日〜納期のタイムライン表示（未出荷の受注のみ）。横にスクロールすると前後の月も見られます</p>
+          <p>受注日（着工日）〜納期のタイムライン表示（未出荷の受注のみ）。横にスクロールすると前後の月も見られます。バーの左はしをつかんで動かすと着工日を決められます（ダブルクリックで受注日に戻る）</p>
         </div>
 
         <GanttFilters
@@ -290,6 +321,7 @@ const GanttSimple = () => {
             rowHeight={ROW_HEIGHT}
             columnWidth={COLUMN_WIDTH}
             onTaskClick={handleTaskClick}
+            onWorkStartChange={handleWorkStartChange}
             gridRef={gridRef}
             onScroll={handleGridScroll}
           />

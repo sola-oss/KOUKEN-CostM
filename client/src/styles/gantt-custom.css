@@ -386,3 +386,27 @@
     align-items: flex-start;
   }
 }
+
+/* Left edge of a bar: drag to set 着工日 */
+.gantt-bar-handle-left {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  z-index: 2;
+  touch-action: none;
+  border-left: 3px solid transparent;
+}
+
+.gantt-bar-wrapper:hover .gantt-bar-handle-left,
+.gantt-bar-wrapper.dragging .gantt-bar-handle-left {
+  border-left-color: rgba(0, 0, 0, 0.45);
+}
+
+.gantt-bar-wrapper.dragging {
+  transition: none;
+  z-index: 6;
+  opacity: 0.85;
+}

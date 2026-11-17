@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { GanttProject, DateColumn } from "../../types/gantt";
 
 interface GanttGridProps {
@@ -8,6 +8,8 @@ interface GanttGridProps {
   rowHeight: number;
   columnWidth: number;
   onTaskClick?: (taskId: string, orderId: string) => void;
+  /** Called after the bar's left edge is dragged. null = back to 受注日 */
+  onWorkStartChange?: (orderId: string, workStartDate: string | null) => void;
   gridRef: React.RefObject<HTMLDivElement>;
   onScroll?: () => void;
 }
@@ -40,9 +42,28 @@ export const GanttGrid = ({
   rowHeight,
   columnWidth,
   onTaskClick,
+  onWorkStartChange,
   gridRef,
   onScroll,
 }: GanttGridProps) => {
+  // Left-edge drag state: which order, where the pointer started, and the bar start at that time
+  const [drag, setDrag] = useState<{ orderId: string; startX: number; baseStart: string; deltaDays: number } | null>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
+  // Swallow the click that follows a drag
+  const justDragged = useRef(false);
+
+  const addDays = (dateStr: string, days: number): string => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + days);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
+  const daysBetween = (a: string, b: string): number => {
+    const [ay, am, ad] = a.split('-').map(Number);
+    const [by, bm, bd] = b.split('-').map(Number);
+    return Math.round((new Date(by, bm - 1, bd).getTime() - new Date(ay, am - 1, ad).getTime()) / 86400000);
+  };
+
   const todayStr = useMemo(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -183,7 +204,12 @@ export const GanttGrid = ({
             const bar = project.tasks[0];
             if (!bar) return null;
 
-            const pos = getBarPosition(bar.startDate, bar.endDate);
+            const barStartStr = bar.startDate.split('T')[0];
+            const barEndStr = bar.endDate.split('T')[0];
+            const orderDateStr = bar.orderDate?.split('T')[0] ?? null;
+            const isDragging = drag?.orderId === project.orderId;
+            const shownStart = isDragging ? addDays(drag!.baseStart, drag!.deltaDays) : barStartStr;
+            const pos = getBarPosition(shownStart, barEndStr);
             const progressClass = getProgressColorClass(bar.progress, bar.actualHours);
             const factoryStyle = getFactoryBarStyle(project.factory);
             const hasFactoryColor = !!project.factory;
@@ -201,14 +227,20 @@ export const GanttGrid = ({
                 }}
               >
                 <div
-                  className={`gantt-bar-wrapper ${hasFactoryColor ? 'factory-colored' : progressClass}`}
+                  className={`gantt-bar-wrapper ${hasFactoryColor ? 'factory-colored' : progressClass}${isDragging ? ' dragging' : ''}${bar.workStartDate ? ' has-work-start' : ''}`}
                   style={{
                     left: `${pos.left}px`,
                     width: `${pos.width}px`,
                     ...(hasFactoryColor ? factoryStyle : {}),
                   }}
-                  onClick={() => onTaskClick?.(bar.id, project.orderId)}
-                  title={`${project.projectName}\n受注日: ${bar.startDate?.split('T')[0]} → 納期: ${bar.endDate?.split('T')[0]}${bar.actualHours > 0 ? `\n実績: ${bar.actualHours.toFixed(1)}h` : ''}`}
+                  onClick={() => {
+                    if (justDragged.current) { justDragged.current = false; return; }
+                    onTaskClick?.(bar.id, project.orderId);
+                  }}
+                  onDoubleClick={() => {
+                    if (bar.workStartDate) onWorkStartChange?.(project.orderId, null);
+                  }}
+                  title={`${project.projectName}\n受注日: ${orderDateStr ?? '-'}${bar.workStartDate ? `\n着工日: ${bar.workStartDate}` : ''} → 納期: ${barEndStr}${bar.actualHours > 0 ? `\n実績: ${bar.actualHours.toFixed(1)}h` : ''}${onWorkStartChange ? `\n（左はしをつかんで着工日を変更${bar.workStartDate ? '・ダブルクリックで受注日に戻す' : ''}）` : ''}`}
                   data-testid={`gantt-bar-${project.orderId}`}
                 >
                   <div className="gantt-bar-plan" />
@@ -217,8 +249,44 @@ export const GanttGrid = ({
                     style={{ width: `${bar.progress}%` }}
                   />
                   <span className="gantt-bar-label">
-                    {project.projectName}{actualHoursLabel}
+                    {isDragging ? `着工 ${shownStart.slice(5).replace('-', '/')}　` : ''}{project.projectName}{actualHoursLabel}
                   </span>
+                  {onWorkStartChange && (
+                    <div
+                      className="gantt-bar-handle-left"
+                      data-testid={`gantt-bar-handle-${project.orderId}`}
+                      onPointerDown={(e) => {
+                        if (e.button !== 0) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        setDrag({ orderId: project.orderId, startX: e.clientX, baseStart: barStartStr, deltaDays: 0 });
+                      }}
+                      onPointerMove={(e) => {
+                        const cur = dragRef.current;
+                        if (!cur || cur.orderId !== project.orderId) return;
+                        let delta = Math.round((e.clientX - cur.startX) / columnWidth);
+                        // Start can't go past 納期
+                        const maxDelta = daysBetween(cur.baseStart, barEndStr);
+                        if (delta > maxDelta) delta = maxDelta;
+                        if (delta !== cur.deltaDays) setDrag({ ...cur, deltaDays: delta });
+                      }}
+                      onPointerUp={(e) => {
+                        const cur = dragRef.current;
+                        if (!cur || cur.orderId !== project.orderId) return;
+                        e.currentTarget.releasePointerCapture(e.pointerId);
+                        setDrag(null);
+                        if (cur.deltaDays === 0) return;
+                        justDragged.current = true;
+                        const newStart = addDays(cur.baseStart, cur.deltaDays);
+                        // Dropped back on 受注日 → clear 着工日
+                        onWorkStartChange(project.orderId, newStart === orderDateStr ? null : newStart);
+                      }}
+                      onPointerCancel={() => setDrag(null)}
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                    />
+                  )}
                 </div>
               </div>
             );
